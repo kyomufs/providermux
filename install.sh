@@ -123,5 +123,5 @@ install: done. Next:
   providermux axes                     every setting, its values, its default
   providermux mode local               adopt a setting (kept in config.json)
   providermux up --credential account  or try one for a single run
-  providermux tui                      watch it: keys, per-address matrix, log
+  providermux status                   watch it: addresses, keys, counters
 EOF

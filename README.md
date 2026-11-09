@@ -506,13 +506,10 @@ providermux up \
 providermux up --config ~/far-debug/config.json --state ~/far-debug/state.json \
   --listen 127.0.0.1:8799 &
 
-# 4. Watch it in another terminal.
-providermux tui --config ~/far-debug/config.json --state ~/far-debug/state.json
-
-# 5. Talk to it.
+# 4. Talk to it.
 curl http://127.0.0.1:8799/v1/models
 
-# 6. Stop it when done — the system daemon never noticed.
+# 5. Stop it when done — the system daemon never noticed.
 providermux stop --config ~/far-debug/config.json --state ~/far-debug/state.json
 ```
 
@@ -583,23 +580,8 @@ and flags own the *run*.
 
 ## Monitoring
 
-```sh
-providermux tui        # or: providermux tui --config <path> --state <path>
-```
-
-The monitor reads what the daemon wrote and never writes anything itself. Four
-blocks:
-
-- the active credential and the address it leaves from;
-- whether key rotation is on, and how many keys remain;
-- the log, scrollable, filterable, with wrap toggled on and off;
-- the per-address model matrix — one row per address, `OK` and `ERROR` columns.
-
-The matrix is the reason the TUI exists. Free tiers are counted per source
-address, so "which of my addresses has spent its allowance on which model" is
-the question you actually ask, and a single global counter cannot answer it.
-
-Without a terminal:
+Everything the daemon records is read back from the command line, and nothing
+below writes to it:
 
 ```sh
 providermux status          # mode, listen, addresses, per-provider counters
@@ -610,7 +592,13 @@ providermux keys            # the key pool
 providermux logs -n 50
 ```
 
-The same information is on the control surface, which is what the TUI reads:
+The per-address model matrix — one row per egress address with `OK` and
+`ERROR` columns — is `providermux stats --json`, under `by_address`. Free tiers
+are counted per source address, so "which of my addresses has spent its
+allowance on which model" is the question you actually ask, and a single global
+counter cannot answer it.
+
+The same information is on the control surface:
 
 ```sh
 curl http://127.0.0.1:8787/_control/status
@@ -663,7 +651,6 @@ model capabilities from this catalog.
 | `up [flags]` | start the daemon |
 | `status [--json]` | daemon state |
 | `stop` | stop it |
-| `tui` | the monitor |
 | `models [--json]` | the catalog |
 | `stats [--json]` | counters by day |
 | `keys [--json]` | the key pool |

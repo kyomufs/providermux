@@ -144,7 +144,6 @@ Usage:
   providermux up       [flags]     start the daemon
   providermux status   [--json]    daemon state
   providermux stop                 stop the daemon
-  providermux tui      [--scrollback] full-screen monitor
   providermux models   [--json]    catalog of models
   providermux stats    [--json]    counters by day
   providermux keys     [--json]    provider keys

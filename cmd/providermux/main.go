@@ -74,8 +74,6 @@ func run(args []string) error {
 		return cmdStatus(rest)
 	case "stop":
 		return cmdStop(rest)
-	case "tui":
-		return cmdTUI(rest)
 	case "models":
 		return cmdModels(context.Background(), rest)
 	case "stats":
