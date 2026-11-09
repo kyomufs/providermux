@@ -212,17 +212,47 @@ func TestNormalizeSchemaHandlesConstAndOneOf(t *testing.T) {
 	if _, hasOneOf := variant["oneOf"]; hasOneOf {
 		t.Fatal("oneOf was not stripped from variant")
 	}
-	anyOf, ok := variant["anyOf"].([]any)
-	if !ok || len(anyOf) != 2 {
-		t.Fatalf("variant anyOf = %v, want 2 branches", anyOf)
+	if _, hasAnyOf := variant["anyOf"]; hasAnyOf {
+		t.Fatal("anyOf was not flattened from variant")
 	}
-	branch0, _ := anyOf[0].(map[string]any)
-	if _, hasConst := branch0["const"]; hasConst {
-		t.Fatal("const was not stripped from anyOf branch")
+	if variant["type"] != "STRING" {
+		t.Fatalf("variant type = %v, want STRING", variant["type"])
 	}
-	branch0Enums, ok := branch0["enum"].([]any)
-	if !ok || len(branch0Enums) != 1 || branch0Enums[0] != "rrule" {
-		t.Fatalf("branch 0 enum = %v, want ['rrule']", branch0Enums)
+	variantEnums, ok := variant["enum"].([]any)
+	if !ok || len(variantEnums) != 2 {
+		t.Fatalf("variant enum = %v, want 2 enum values", variantEnums)
+	}
+
+	// Test object union flattening (e.g. generate_image references.items)
+	objRaw := []byte(`{
+		"type": "array",
+		"items": {
+			"oneOf": [
+				{"type": "object", "properties": {"kind": {"const": "session"}, "handle": {"type": "string"}}},
+				{"type": "object", "properties": {"kind": {"const": "workspace"}, "path": {"type": "string"}}}
+			]
+		}
+	}`)
+	objNorm, ok := geminiSchema(objRaw).(map[string]any)
+	if !ok {
+		t.Fatalf("geminiSchema returned %T", objNorm)
+	}
+	items, ok := objNorm["items"].(map[string]any)
+	if !ok {
+		t.Fatalf("items = %T, want map[string]any", objNorm["items"])
+	}
+	if _, hasOneOf := items["oneOf"]; hasOneOf {
+		t.Fatal("oneOf was not stripped from items")
+	}
+	if _, hasAnyOf := items["anyOf"]; hasAnyOf {
+		t.Fatal("anyOf was not stripped from items")
+	}
+	if items["type"] != "OBJECT" {
+		t.Fatalf("items type = %v, want OBJECT", items["type"])
+	}
+	itemProps, ok := items["properties"].(map[string]any)
+	if !ok || itemProps["kind"] == nil || itemProps["handle"] == nil || itemProps["path"] == nil {
+		t.Fatalf("itemProps = %v, want kind, handle, and path", itemProps)
 	}
 }
 

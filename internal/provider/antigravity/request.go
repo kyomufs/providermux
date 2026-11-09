@@ -3,6 +3,7 @@ package antigravity
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -211,7 +212,7 @@ var allowedGeminiSchemaFields = map[string]bool{
 }
 
 // normalizeSchema walks a schema and applies the rewrites required by the
-// service: upper-case types, const -> enum, oneOf -> anyOf, and filtering
+// service: upper-case types, const -> enum, union flattening, and filtering
 // of unknown fields rejected by Gemini's protobuf Schema validator.
 func normalizeSchema(v any) any {
 	switch node := v.(type) {
@@ -230,11 +231,8 @@ func normalizeSchema(v any) any {
 					}
 				}
 				continue
-			case "oneOf":
-				// Gemini protobuf Schema uses anyOf instead of oneOf.
-				if _, hasAnyOf := node["anyOf"]; !hasAnyOf {
-					out["anyOf"] = normalizeSchema(value)
-				}
+			case "oneOf", "anyOf":
+				// Handled below by union flattening.
 				continue
 			case "properties":
 				if props, ok := value.(map[string]any); ok {
@@ -270,6 +268,19 @@ func normalizeSchema(v any) any {
 				}
 			}
 		}
+
+		// If the node defines a union (oneOf / anyOf), flatten it into a single non-polymorphic
+		// schema so that both Gemini and Claude on Vertex AI accept it without schema validation errors.
+		var unionBranches []any
+		if rawOneOf, ok := node["oneOf"].([]any); ok && len(rawOneOf) > 0 {
+			unionBranches = rawOneOf
+		} else if rawAnyOf, ok := node["anyOf"].([]any); ok && len(rawAnyOf) > 0 {
+			unionBranches = rawAnyOf
+		}
+		if len(unionBranches) > 0 {
+			return flattenUnion(unionBranches, out)
+		}
+
 		return out
 	case []any:
 		out := make([]any, len(node))
@@ -280,6 +291,116 @@ func normalizeSchema(v any) any {
 	default:
 		return v
 	}
+}
+
+// flattenUnion collapses anyOf/oneOf branches into a single schema.
+// Anthropic Claude on Vertex AI converts functionDeclarations into its own schema
+// and strictly rejects anyOf/oneOf unions (especially inside array items, e.g. generate_image).
+func flattenUnion(branches []any, base map[string]any) map[string]any {
+	var nonNull []map[string]any
+	for _, b := range branches {
+		bm, ok := normalizeSchema(b).(map[string]any)
+		if !ok {
+			continue
+		}
+		if t, ok := bm["type"].(string); ok && strings.EqualFold(t, "NULL") {
+			base["nullable"] = true
+			continue
+		}
+		nonNull = append(nonNull, bm)
+	}
+
+	if len(nonNull) == 0 {
+		return base
+	}
+
+	// Case 1: All branches are string enums / constants -> combine into a single STRING enum.
+	allEnums := true
+	var enumValues []any
+	for _, b := range nonNull {
+		enums, hasEnum := b["enum"].([]any)
+		if !hasEnum || b["properties"] != nil || b["items"] != nil {
+			allEnums = false
+			break
+		}
+		enumValues = append(enumValues, enums...)
+	}
+	if allEnums && len(enumValues) > 0 {
+		base["type"] = "STRING"
+		base["enum"] = dedupeAny(enumValues)
+		return base
+	}
+
+	// Case 2: Object branches -> merge their properties into a single OBJECT schema.
+	allObjects := true
+	for _, b := range nonNull {
+		t, _ := b["type"].(string)
+		if t != "OBJECT" && b["properties"] == nil {
+			allObjects = false
+			break
+		}
+	}
+	if allObjects {
+		base["type"] = "OBJECT"
+		mergedProps := make(map[string]any)
+		for _, b := range nonNull {
+			if props, ok := b["properties"].(map[string]any); ok {
+				for pk, pv := range props {
+					if existing, exists := mergedProps[pk]; exists {
+						if em, ok := existing.(map[string]any); ok {
+							if pm, ok := pv.(map[string]any); ok {
+								if ee, ok1 := em["enum"].([]any); ok1 {
+									if pe, ok2 := pm["enum"].([]any); ok2 {
+										em["enum"] = dedupeAny(append(ee, pe...))
+									}
+								}
+							}
+						}
+					} else {
+						mergedProps[pk] = pv
+					}
+				}
+			}
+		}
+		base["properties"] = mergedProps
+		return base
+	}
+
+	// Case 3: Mixed types -> choose highest priority branch (object > array > primitive).
+	score := func(b map[string]any) int {
+		if b["properties"] != nil || b["type"] == "OBJECT" {
+			return 3
+		}
+		if b["items"] != nil || b["type"] == "ARRAY" {
+			return 2
+		}
+		return 1
+	}
+	best := nonNull[0]
+	for _, b := range nonNull[1:] {
+		if score(b) > score(best) {
+			best = b
+		}
+	}
+	for k, v := range best {
+		if _, exists := base[k]; !exists {
+			base[k] = v
+		}
+	}
+	return base
+}
+
+func dedupeAny(in []any) []any {
+	seen := make(map[string]bool, len(in))
+	var out []any
+	for _, item := range in {
+		s := fmt.Sprint(item)
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 // generationConfig assembles the model's answer settings.
