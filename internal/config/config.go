@@ -244,6 +244,13 @@ type ProviderConfig struct {
 	// one. Empty means "inherit".
 	KeyRotation string `json:"key_rotation,omitempty"`
 
+	// Transport — this provider's transport identifier, overriding the global one.
+	// Empty means inherit the global transport.
+	Transport string `json:"transport,omitempty"`
+	// TransportConfig — this provider's transport settings, overriding the global ones.
+	// Nil means inherit the global transport settings.
+	TransportConfig map[string]any `json:"transport_settings,omitempty"`
+
 	// Settings — everything else a specific provider type understands.
 	Settings map[string]any `json:"settings,omitempty"`
 }
@@ -260,6 +267,22 @@ func (p ProviderConfig) EffectiveCredential(global string) string {
 func (p ProviderConfig) EffectiveRotation(global string) string {
 	if p.KeyRotation != "" {
 		return p.KeyRotation
+	}
+	return global
+}
+
+// EffectiveTransport returns the transport in force for the provider.
+func (p ProviderConfig) EffectiveTransport(global string) string {
+	if p.Transport != "" {
+		return p.Transport
+	}
+	return global
+}
+
+// EffectiveTransportConfig returns the transport settings in force for the provider.
+func (p ProviderConfig) EffectiveTransportConfig(global map[string]any) map[string]any {
+	if p.TransportConfig != nil {
+		return p.TransportConfig
 	}
 	return global
 }
@@ -938,6 +961,16 @@ func (c *Config) CredentialFor(id string) string {
 // RotationFor returns the key rotation axis in force for the provider.
 func (c *Config) RotationFor(id string) string {
 	return c.Providers[id].EffectiveRotation(c.KeyRotation.Val)
+}
+
+// TransportFor returns the transport in force for the provider.
+func (c *Config) TransportFor(id string) string {
+	return c.Providers[id].EffectiveTransport(c.Transport.Val)
+}
+
+// TransportConfigFor returns the transport settings in force for the provider.
+func (c *Config) TransportConfigFor(id string) map[string]any {
+	return c.Providers[id].EffectiveTransportConfig(c.TransportConfig)
 }
 
 // RotatesFor reports whether the provider rotates its credential on a refusal.

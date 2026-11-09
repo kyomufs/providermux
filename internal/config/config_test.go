@@ -470,6 +470,57 @@ func TestProviderOverridesTheGlobalAxes(t *testing.T) {
 	}
 }
 
+// TestProviderEffectiveTransport verifies that transport and transport settings
+// fall back to global when empty, and use per-provider values when set.
+func TestProviderEffectiveTransport(t *testing.T) {
+	pDefault := ProviderConfig{}
+	if got := pDefault.EffectiveTransport("direct"); got != "direct" {
+		t.Fatalf("pDefault EffectiveTransport = %q, want 'direct'", got)
+	}
+	defaultGlobalCfg := map[string]any{"timeout_ms": 1000}
+	if got := pDefault.EffectiveTransportConfig(defaultGlobalCfg); got["timeout_ms"] != 1000 {
+		t.Fatalf("pDefault EffectiveTransportConfig = %v, want %v", got, defaultGlobalCfg)
+	}
+
+	pCustom := ProviderConfig{
+		Transport: "custom",
+		TransportConfig: map[string]any{"proxy": "http://127.0.0.1:8080"},
+	}
+	if got := pCustom.EffectiveTransport("direct"); got != "custom" {
+		t.Fatalf("pCustom EffectiveTransport = %q, want 'custom'", got)
+	}
+	if got := pCustom.EffectiveTransportConfig(defaultGlobalCfg); got["proxy"] != "http://127.0.0.1:8080" {
+		t.Fatalf("pCustom EffectiveTransportConfig = %v, want proxy setting", got)
+	}
+
+	paths := writeConfig(t, `{
+		"transport": "direct",
+		"providers": {
+			"custom-tp": {"type": "stub", "transport": "custom", "transport_settings": {"proxy": "http://10.0.0.1:8080"}},
+			"plain-tp": {"type": "stub"}
+		}
+	}`)
+	c, err := LoadFrom(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.TransportFor("custom-tp"); got != "custom" {
+		t.Fatalf("custom-tp transport = %q, want 'custom'", got)
+	}
+	if got := c.TransportFor("plain-tp"); got != "direct" {
+		t.Fatalf("plain-tp transport = %q, want 'direct'", got)
+	}
+	if got := c.TransportFor("absent"); got != "direct" {
+		t.Fatalf("absent transport = %q, want 'direct'", got)
+	}
+	if got := c.TransportConfigFor("custom-tp")["proxy"]; got != "http://10.0.0.1:8080" {
+		t.Fatalf("custom-tp transport_settings = %v, want proxy setting", got)
+	}
+	if got := c.TransportConfigFor("plain-tp"); len(got) != 0 {
+		t.Fatalf("plain-tp transport_settings = %v, want empty", got)
+	}
+}
+
 // TestRotationIsInertWithoutACredential — with nothing sent there is nothing to
 // rotate, and the monitor must not claim a mechanism that cannot run.
 func TestRotationIsInertWithoutACredential(t *testing.T) {
