@@ -38,7 +38,7 @@ import (
 	"sync"
 	"time"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // Default ID. Overridden by configuration: the section name is the provider name.

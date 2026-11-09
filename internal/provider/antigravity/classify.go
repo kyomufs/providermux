@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // Refusal classification.

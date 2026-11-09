@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"free-ai-router/internal/provider"
-	"free-ai-router/internal/state"
+	"providermux/internal/provider"
+	"providermux/internal/state"
 )
 
 // translatingProvider is a provider whose service answers in a dialect of its own.

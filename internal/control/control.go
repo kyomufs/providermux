@@ -25,10 +25,10 @@ import (
 	"net/http"
 	"strings"
 
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/gateway"
-	"free-ai-router/internal/provider"
-	"free-ai-router/internal/state"
+	"providermux/internal/config"
+	"providermux/internal/gateway"
+	"providermux/internal/provider"
+	"providermux/internal/state"
 )
 
 // Prefix — the prefix of all management routes.

@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 const (

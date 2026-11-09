@@ -1,4 +1,4 @@
-# AGENTS.md — free-ai-router
+# AGENTS.md — providermux
 
 Правила работы с этим репозиторием. Дополняют общие инструкции; при расхождении
 действуют они.
@@ -34,10 +34,10 @@ CGO_ENABLED=0 go test ./... -count=1
 # Версия берётся из последнего коммита, поэтому воспроизводима.
 CGO_ENABLED=0 go build \
   -ldflags "-X main.buildVersion=$(git rev-parse --short HEAD)" \
-  -o ~/.local/bin/free-ai-router ./cmd/free-ai-router
+  -o ~/.local/bin/providermux ./cmd/providermux
 
 # 4. Живая проверка — «собралось» не доказательство
-/tmp/free-ai-router up --listen 127.0.0.1:8795 &
+/tmp/providermux up --listen 127.0.0.1:8795 &
 sleep 1
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8795/v1/models   # 200
 curl -s http://127.0.0.1:8795/_control/status | head -c 120
@@ -50,7 +50,7 @@ git diff --cached --stat
 
 ### Где лежит установленный бинарь
 
-`~/.local/bin/free-ai-router` — и он на `PATH`. После каждой сборки его надо
+`~/.local/bin/providermux` — и он на `PATH`. После каждой сборки его надо
 обновлять: иначе CLI останется прежним, а запущенный демон — новым, и это
 запутает при первой же отладке.
 
@@ -64,7 +64,7 @@ git -c user.name="kyomufs" -c user.email="kyomufsdev@gmail.com" commit -F - <<'E
 EOF
 
 TOKEN=$(grep -o 'ghp_[A-Za-z0-9]*' /home/kyomufs/.dsh/profiles/web/cordis.patch.yml | head -1)
-git push "https://kyomufs:$TOKEN@github.com/kyomufs/free-ai-router.git" HEAD:main \
+git push "https://kyomufs:$TOKEN@github.com/kyomufs/providermux.git" HEAD:main \
   2>&1 | sed 's/ghp_[A-Za-z0-9]*/***/g'
 ```
 
@@ -113,7 +113,7 @@ docs: describe the provider axes
 изменений, затрагивающих провод или поверхности, — **живая проверка**:
 
 ```sh
-/tmp/free-ai-router up &
+/tmp/providermux up &
 curl -s http://127.0.0.1:8787/_control/status
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8787/v1/models
 ```

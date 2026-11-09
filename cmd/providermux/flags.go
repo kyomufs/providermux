@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"free-ai-router/internal/config"
+	"providermux/internal/config"
 )
 
 // flags — the parsed command-line arguments.
@@ -65,7 +65,7 @@ type flags struct {
 // need.
 func parseFlags(args []string) (*flags, error) {
 	f := &flags{}
-	fs := flag.NewFlagSet("free-ai-router", flag.ContinueOnError)
+	fs := flag.NewFlagSet("providermux", flag.ContinueOnError)
 	// We print the errors ourselves: flag has its own message, and it would
 	// duplicate ours.
 	fs.SetOutput(io.Discard)

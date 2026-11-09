@@ -1,4 +1,4 @@
-// The free-ai-router command is a gateway that aggregates free AI providers.
+// The providermux command is a gateway that aggregates free AI providers.
 //
 // WHAT THE ENTRY POINT DOES. It assembles a working daemon out of parts: reads
 // the configuration, builds the provider registry, brings up the transport and
@@ -59,7 +59,7 @@ func run(args []string) error {
 	// FLAGS WITHOUT A COMMAND. Exactly one flag means something on its own:
 	// --print-config answers a question and exits, so it needs no verb, and
 	// demanding `up` in front of it makes the documented form
-	// (`free-ai-router --config X --print-config`) fail with "unknown command".
+	// (`providermux --config X --print-config`) fail with "unknown command".
 	// Every other flag on its own would START A DAEMON, and one started by
 	// accident — because someone typed `--json` alone — is not something to
 	// guess at: those still fall through to the usage error below.

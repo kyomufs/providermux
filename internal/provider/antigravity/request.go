@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // buildContents translates the neutral messages into the service's `contents`.

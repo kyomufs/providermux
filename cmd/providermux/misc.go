@@ -8,8 +8,8 @@ import (
 	"strings"
 	"syscall"
 
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/state"
+	"providermux/internal/config"
+	"providermux/internal/state"
 )
 
 // cmdStop stops the daemon.

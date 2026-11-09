@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"free-ai-router/internal/state"
-	"free-ai-router/internal/tui"
+	"providermux/internal/state"
+	"providermux/internal/tui"
 )
 
 // TestDaemonUptimeComesFromThePIDFile checks the counter in the banner's corner.

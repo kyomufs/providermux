@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // listPath is where the catalog is asked for. The path itself is not what is

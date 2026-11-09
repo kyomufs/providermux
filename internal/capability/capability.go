@@ -37,7 +37,7 @@ const (
 
 // Info describes a mechanism for the interfaces and the help text.
 //
-// The description exists so that `free-ai-router capabilities` and the TUI can
+// The description exists so that `providermux capabilities` and the TUI can
 // show what the system has at all, without knowing a single implementation.
 type Info struct {
 	// Kind — the sort of mechanism.

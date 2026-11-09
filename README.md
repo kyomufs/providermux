@@ -1,4 +1,4 @@
-# free-ai-router
+# providermux
 
 A gateway that puts several free AI providers behind one OpenAI-compatible
 endpoint.
@@ -10,7 +10,7 @@ is doing: which credential is in play, whether keys are being rotated, which
 address the traffic left from.
 
 ```
-client ──▶ free-ai-router ──▶ provider
+client ──▶ providermux ──▶ provider
            (request shape, keys, transport)
 ```
 
@@ -47,7 +47,7 @@ The module is `nix/module.nix` in this repository. A complete setup is two files
         ./configuration.nix
         # The module is fetched as a flake input of its own repository, so a
         # `nix flake update` moves it together with nixpkgs.
-        ./free-ai-router.nix
+        ./providermux.nix
       ];
     };
   };
@@ -59,10 +59,10 @@ add that flake as an input:
 
 ```nix
 {
-  inputs.free-ai-router.url = "github:kyomufs/free-ai-router";
+  inputs.providermux.url = "github:kyomufs/providermux";
   # ...
   modules = [
-    "${inputs.free-ai-router}/nix/module.nix"
+    "${inputs.providermux}/nix/module.nix"
     # ...
   ];
 }
@@ -74,7 +74,7 @@ add that flake as an input:
 { ... }:
 
 {
-  services.free-ai-router = {
+  services.providermux = {
     enable = true;
     # Everything below is a default, shown so that you know what is in force.
     # It is a complete configuration as it stands.
@@ -100,13 +100,13 @@ curl http://127.0.0.1:8787/v1/models
 | Piece | What it does |
 |---|---|
 | `environment.systemPackages` | puts the binary on PATH. No wrapper and no extra packages — the monitor is inside the binary |
-| `system.activationScripts.free-ai-router-config` | writes `~/.config/free-ai-router/config.json` from your options on every activation |
-| `systemd.user.services.free-ai-router` | a **user** unit, `Restart=on-failure`, XDG roots pointed at your home |
+| `system.activationScripts.providermux-config` | writes `~/.config/providermux/config.json` from your options on every activation |
+| `systemd.user.services.providermux` | a **user** unit, `Restart=on-failure`, XDG roots pointed at your home |
 
 Two details are worth knowing before they surprise you.
 
 `config.json` is an ordinary file, not a symlink into `/nix/store`. The CLI and
-the daemon **write** to it — `free-ai-router cred account` rewrites it — and a
+the daemon **write** to it — `providermux cred account` rewrites it — and a
 symlink into the read-only store would break on the first write. Editing it by
 hand is still pointless on a machine that uses this module: the next `switch`
 overwrites the edit. To change a setting, change the declaration; to try one
@@ -115,9 +115,9 @@ without a rebuild, see [Debugging](#debugging-without-a-rebuild).
 The unit is a **user** unit, so it runs with your session:
 
 ```sh
-systemctl --user status free-ai-router
-systemctl --user restart free-ai-router
-journalctl --user -u free-ai-router -f
+systemctl --user status providermux
+systemctl --user restart providermux
+journalctl --user -u providermux -f
 ```
 
 It starts when you log in. To have it up before that, enable lingering for the
@@ -135,10 +135,10 @@ listener on a reachable address spends your quota on behalf of anyone who finds
 the port:
 
 ```nix
-services.free-ai-router = {
+services.providermux = {
   mode = "server";
   listen = "0.0.0.0:8787";
-  tokenFile = "/run/secrets/free-ai-router-token";
+  tokenFile = "/run/secrets/providermux-token";
   providers.opencode.type = "opencode";
 };
 ```
@@ -160,14 +160,14 @@ If you already manage secrets with sops-nix, point `tokenFile` at the decrypted
 path and declare the secret in the usual way:
 
 ```nix
-sops.secrets.free-ai-router-token = {
+sops.secrets.providermux-token = {
   sopsFile = ./secrets.yaml;
   owner = "myuser";
   mode = "0400";
 };
 
-services.free-ai-router.tokenFile =
-  config.sops.secrets.free-ai-router-token.path;
+services.providermux.tokenFile =
+  config.sops.secrets.providermux-token.path;
 ```
 
 The module does not depend on sops-nix in any way; this is only where the two
@@ -179,7 +179,7 @@ meet.
 supplies it:
 
 ```nix
-services.free-ai-router = {
+services.providermux = {
   enable = true;
   credential = "account";           # a key is presented on every request
 
@@ -207,13 +207,13 @@ the full table.
 ### Checking the deployment
 
 ```sh
-systemctl --user status free-ai-router     # the unit
-free-ai-router config                      # what is in force, and from where
-free-ai-router status                      # providers, addresses, counters
+systemctl --user status providermux     # the unit
+providermux config                      # what is in force, and from where
+providermux status                      # providers, addresses, counters
 curl http://127.0.0.1:8787/_control/status # the same, for the monitor
 ```
 
-`free-ai-router config` is the quickest sanity check after a switch: it prints
+`providermux config` is the quickest sanity check after a switch: it prints
 every axis with its source, so a value that reached the daemon and one that did
 not are told apart immediately.
 
@@ -223,8 +223,8 @@ No Nix, no module, no declaration: `install.sh` in this repository builds the
 binary, puts it on PATH, and optionally writes a systemd **user** unit.
 
 ```sh
-git clone https://github.com/kyomufs/free-ai-router
-cd free-ai-router
+git clone https://github.com/kyomufs/providermux
+cd providermux
 ./install.sh                 # build and install into ~/.local/bin
 ./install.sh --unit          # also write the systemd user unit
 ```
@@ -233,7 +233,7 @@ Other forms:
 
 ```sh
 PREFIX=/opt/far ./install.sh            # a different prefix, still no sudo
-./install.sh --no-build                 # install an existing ./free-ai-router
+./install.sh --no-build                 # install an existing ./providermux
 ```
 
 What it deliberately does not do:
@@ -248,7 +248,7 @@ What it deliberately does not do:
 If you built with `--no-build`, the binary must sit next to the script:
 
 ```sh
-CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o free-ai-router ./cmd/free-ai-router
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o providermux ./cmd/providermux
 ./install.sh --no-build
 ```
 
@@ -257,7 +257,7 @@ decision about this machine's boot belongs to its owner):
 
 ```sh
 systemctl --user daemon-reload
-systemctl --user enable --now free-ai-router
+systemctl --user enable --now providermux
 ```
 
 ### By hand
@@ -265,9 +265,9 @@ systemctl --user enable --now free-ai-router
 `install.sh` is a convenience, not magic. The whole install is:
 
 ```sh
-CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o ~/.local/bin/free-ai-router ./cmd/free-ai-router
+CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o ~/.local/bin/providermux ./cmd/providermux
 mkdir -p ~/.config/systemd/user
-free-ai-router systemd --install          # writes the unit, prints the next two commands
+providermux systemd --install          # writes the unit, prints the next two commands
 ```
 
 `CGO_ENABLED=0` is not optional: the result is a static binary with no runtime
@@ -286,20 +286,20 @@ Every setting has all three. `axes` prints the complete table, and it is
 generated from the same source the validation uses, so it cannot go stale:
 
 ```sh
-free-ai-router axes            # human-readable, with the environment variable name
-free-ai-router axes --json     # machine-readable
+providermux axes            # human-readable, with the environment variable name
+providermux axes --json     # machine-readable
 ```
 
 ### Two ways to change something
 
 ```sh
 # Adopt a value: writes config.json, survives a restart.
-free-ai-router cred anonymous
-free-ai-router rotate off
-free-ai-router family v4
+providermux cred anonymous
+providermux rotate off
+providermux family v4
 
 # Try a value: writes nothing, applies to this run.
-free-ai-router up --rotate off --family v4
+providermux up --rotate off --family v4
 ```
 
 The one-axis commands write the value even when the result could not run, and
@@ -310,9 +310,9 @@ case to know about — it is accepted, it is written, and the **daemon refuses t
 start** until a key appears:
 
 ```sh
-$ free-ai-router cred account && free-ai-router up
+$ providermux cred account && providermux up
 credential: account
-written to ~/.config/free-ai-router/config.json
+written to ~/.config/providermux/config.json
 error: config: provider "opencode": credential "account" requires a key, and none
 is configured: set api_key, api_key_env, or settings.keys — or switch the
 credential to "anonymous"
@@ -335,7 +335,7 @@ Without a value, an axis command reports what is in force **and where it came
 from** — the question worth asking while debugging a merge:
 
 ```sh
-$ free-ai-router credential
+$ providermux credential
 credential: anonymous (config.json)
 allowed: anonymous | account
 ```
@@ -443,29 +443,29 @@ There are three ways out, in increasing order of isolation.
 touching the declaration — and drop-ins live in your home, outside the repo:
 
 ```sh
-systemctl --user edit free-ai-router
+systemctl --user edit providermux
 ```
 
 ```ini
 [Service]
 # Try a value for real, against the live system.
 ExecStart=
-ExecStart=/run/current-system/sw/bin/free-ai-router up --listen 127.0.0.1:8787 --family v4 --rotate off
+ExecStart=/run/current-system/sw/bin/providermux up --listen 127.0.0.1:8787 --family v4 --rotate off
 ```
 
 ```sh
 systemctl --user daemon-reload
-systemctl --user restart free-ai-router
+systemctl --user restart providermux
 ```
 
-To go back: `rm ~/.config/systemd/user/free-ai-router.service.d/*.conf`, then
+To go back: `rm ~/.config/systemd/user/providermux.service.d/*.conf`, then
 `daemon-reload` and `restart`. Nothing in the declaration changed, so the next
 `switch` re-lands the module's `ExecStart` anyway.
 
 Env variables work the same way and are often tidier:
 
 ```sh
-systemctl --user edit free-ai-router
+systemctl --user edit providermux
 # [Service]
 # Environment=FREE_AI_ROUTER_FAMILY=v4
 ```
@@ -495,7 +495,7 @@ cat > ~/far-debug/config.json <<'JSON'
 JSON
 
 # 2. See what would run, without starting anything.
-free-ai-router up \
+providermux up \
   --config ~/far-debug/config.json \
   --state ~/far-debug/state.json \
   --listen 127.0.0.1:8799 \
@@ -503,17 +503,17 @@ free-ai-router up \
 
 # 3. Start it. The daemon lives in the foreground, so put it in its own
 #    terminal, or background it in this one.
-free-ai-router up --config ~/far-debug/config.json --state ~/far-debug/state.json \
+providermux up --config ~/far-debug/config.json --state ~/far-debug/state.json \
   --listen 127.0.0.1:8799 &
 
 # 4. Watch it in another terminal.
-free-ai-router tui --config ~/far-debug/config.json --state ~/far-debug/state.json
+providermux tui --config ~/far-debug/config.json --state ~/far-debug/state.json
 
 # 5. Talk to it.
 curl http://127.0.0.1:8799/v1/models
 
 # 6. Stop it when done — the system daemon never noticed.
-free-ai-router stop --config ~/far-debug/config.json --state ~/far-debug/state.json
+providermux stop --config ~/far-debug/config.json --state ~/far-debug/state.json
 ```
 
 Two details make this safe, and both are easy to get wrong:
@@ -533,13 +533,13 @@ every axis and where its value came from — and exits without starting anything
 writing a file:
 
 ```sh
-$ free-ai-router up --rotate off --family v4 --print-config
+$ providermux up --rotate off --family v4 --print-config
 family                  v4                           (flag)
 key_rotation            off                          (flag)
 credential              anonymous                    (default)
 ...
-file:      /home/you/.config/free-ai-router/config.json
-state:     /home/you/.local/state/free-ai-router/state.json
+file:      /home/you/.config/providermux/config.json
+state:     /home/you/.local/state/providermux/state.json
 ```
 
 ### 3. A source build instead of the packaged binary
@@ -548,7 +548,7 @@ While changing the code, use your own build — nothing about the install matter
 for that:
 
 ```sh
-CGO_ENABLED=0 go build -trimpath -o /tmp/far ./cmd/free-ai-router
+CGO_ENABLED=0 go build -trimpath -o /tmp/far ./cmd/providermux
 /tmp/far up --config ~/far-debug/config.json --listen 127.0.0.1:8799 --print-config
 ```
 
@@ -559,9 +559,9 @@ On NixOS there is a second way, and it is the one to use when the build has to b
 the build the *service* runs: point the module at your package.
 
 ```nix
-services.free-ai-router.package =
-  pkgs.callPackage /path/to/free-ai-router/nix/package.nix { };
-# or any derivation of your own, as long as it has bin/free-ai-router
+services.providermux.package =
+  pkgs.callPackage /path/to/providermux/nix/package.nix { };
+# or any derivation of your own, as long as it has bin/providermux
 ```
 
 The unit, the configuration and the state stay exactly as they are and only the
@@ -584,7 +584,7 @@ and flags own the *run*.
 ## Monitoring
 
 ```sh
-free-ai-router tui        # or: free-ai-router tui --config <path> --state <path>
+providermux tui        # or: providermux tui --config <path> --state <path>
 ```
 
 The monitor reads what the daemon wrote and never writes anything itself. Four
@@ -602,12 +602,12 @@ the question you actually ask, and a single global counter cannot answer it.
 Without a terminal:
 
 ```sh
-free-ai-router status          # mode, listen, addresses, per-provider counters
-free-ai-router status --json
-free-ai-router models          # the catalog the gateway serves
-free-ai-router stats           # counters by day
-free-ai-router keys            # the key pool
-free-ai-router logs -n 50
+providermux status          # mode, listen, addresses, per-provider counters
+providermux status --json
+providermux models          # the catalog the gateway serves
+providermux stats           # counters by day
+providermux keys            # the key pool
+providermux logs -n 50
 ```
 
 The same information is on the control surface, which is what the TUI reads:
@@ -650,7 +650,7 @@ levels. A capacity nobody declared is **omitted rather than zeroed**, so a clien
 can tell "unknown" from "nothing" and does not have to invent a limit.
 
 For DeepSeek Harness there is a companion plugin,
-[free-ai-router-dshplugin](https://github.com/kyomufs/free-ai-router-dshplugin),
+[providermux-dshplugin](https://github.com/kyomufs/providermux-dshplugin),
 which registers every provider the gateway serves as its own route and takes the
 model capabilities from this catalog.
 
@@ -700,12 +700,12 @@ model capabilities from this catalog.
 
 | Path | What |
 |---|---|
-| `~/.config/free-ai-router/config.json` | the configuration (or `$XDG_CONFIG_HOME`) |
-| `~/.local/state/free-ai-router/state.json` | counters and per-address history |
-| `~/.local/state/free-ai-router/app.log` | the log |
+| `~/.config/providermux/config.json` | the configuration (or `$XDG_CONFIG_HOME`) |
+| `~/.local/state/providermux/state.json` | counters and per-address history |
+| `~/.local/state/providermux/app.log` | the log |
 
-`free-ai-router data` prints them all with their sizes, and
-`free-ai-router data clear` empties the log or the counters. It never touches the
+`providermux data` prints them all with their sizes, and
+`providermux data clear` empties the log or the counters. It never touches the
 configuration: deleting the file that describes the daemon's design is not
 maintenance but the loss of a deployment.
 

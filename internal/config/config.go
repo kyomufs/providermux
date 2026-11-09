@@ -32,7 +32,7 @@ import (
 )
 
 // AppName — the name of the application's directories under the XDG roots.
-const AppName = "free-ai-router"
+const AppName = "providermux"
 
 // Paths — all the places on disk that the daemon uses.
 type Paths struct {
@@ -625,33 +625,50 @@ func (c *Config) applyFile(path string) error {
 // nested provider settings are set by file only, because their shape depends on
 // the provider type.
 const (
-	EnvMode      = "FREE_AI_ROUTER_MODE"
-	EnvListen    = "FREE_AI_ROUTER_LISTEN"
-	EnvToken     = "FREE_AI_ROUTER_TOKEN"
-	EnvTransport = "FREE_AI_ROUTER_TRANSPORT"
-	EnvUpstream  = "FREE_AI_ROUTER_UPSTREAM"
+	EnvMode      = "PROVIDERMUX_MODE"
+	EnvListen    = "PROVIDERMUX_LISTEN"
+	EnvToken     = "PROVIDERMUX_TOKEN"
+	EnvTransport = "PROVIDERMUX_TRANSPORT"
+	EnvUpstream  = "PROVIDERMUX_UPSTREAM"
 	// EnvCredential and EnvRotation are the two halves of one mechanism,
 	// EnvModelFallback is the model axis of the same kind, EnvFamily is the
 	// addressing axis.
-	EnvCredential    = "FREE_AI_ROUTER_CREDENTIAL"
-	EnvRotation      = "FREE_AI_ROUTER_KEY_ROTATION"
-	EnvFamily        = "FREE_AI_ROUTER_FAMILY"
-	EnvModelFallback = "FREE_AI_ROUTER_MODEL_FALLBACK"
+	EnvCredential    = "PROVIDERMUX_CREDENTIAL"
+	EnvRotation      = "PROVIDERMUX_KEY_ROTATION"
+	EnvFamily        = "PROVIDERMUX_FAMILY"
+	EnvModelFallback = "PROVIDERMUX_MODEL_FALLBACK"
 	// The timeout variables. They exist so that every setting the file has can
 	// also be set without a file — the daemon has to be testable on a machine
 	// where the configuration belongs to something else.
-	EnvFirstEventTimeout    = "FREE_AI_ROUTER_FIRST_EVENT_TIMEOUT"
-	EnvIdleTimeout          = "FREE_AI_ROUTER_IDLE_TIMEOUT"
-	EnvReasoningIdleTimeout = "FREE_AI_ROUTER_REASONING_IDLE_TIMEOUT"
+	EnvFirstEventTimeout    = "PROVIDERMUX_FIRST_EVENT_TIMEOUT"
+	EnvIdleTimeout          = "PROVIDERMUX_IDLE_TIMEOUT"
+	EnvReasoningIdleTimeout = "PROVIDERMUX_REASONING_IDLE_TIMEOUT"
 	// EnvConfig moves the configuration file itself.
 	//
 	// It is not an ordinary setting: the file decides which file is read, so
 	// this one is resolved before the file is opened.
-	EnvConfig = "FREE_AI_ROUTER_CONFIG"
+	EnvConfig = "PROVIDERMUX_CONFIG"
 	// EnvState overrides the state file — so that a one-off run does not touch
 	// the working state.
-	EnvState = "FREE_AI_ROUTER_STATE"
+	EnvState = "PROVIDERMUX_STATE"
+
+	// Legacy environment variable prefix for backward compatibility.
+	legacyEnvPrefix = "FREE_AI_ROUTER_"
 )
+
+// envGet reads an environment variable, falling back to the legacy FREE_AI_ROUTER_* name.
+func envGet(name string) string {
+	if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+		return v
+	}
+	if strings.HasPrefix(name, "PROVIDERMUX_") {
+		legacy := legacyEnvPrefix + strings.TrimPrefix(name, "PROVIDERMUX_")
+		if v := strings.TrimSpace(os.Getenv(legacy)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 // applyEnv layers the environment over the file.
 //
@@ -672,7 +689,7 @@ func (c *Config) applyEnv() error {
 		{EnvFamily, &c.Family},
 		{EnvModelFallback, &c.ModelFallback},
 	} {
-		if v := strings.TrimSpace(os.Getenv(e.name)); v != "" {
+		if v := envGet(e.name); v != "" {
 			e.dst.Set(v, SourceEnv)
 		}
 	}
@@ -685,7 +702,7 @@ func (c *Config) applyEnv() error {
 		{EnvIdleTimeout, &c.IdleTimeout},
 		{EnvReasoningIdleTimeout, &c.ReasoningIdleTimeout},
 	} {
-		v := strings.TrimSpace(os.Getenv(e.name))
+		v := envGet(e.name)
 		if v == "" {
 			continue
 		}
@@ -713,8 +730,8 @@ type PathOverrides struct {
 // EnvPathOverrides reads the path overrides from the environment.
 func EnvPathOverrides() PathOverrides {
 	return PathOverrides{
-		ConfigFile: strings.TrimSpace(os.Getenv(EnvConfig)),
-		StateFile:  strings.TrimSpace(os.Getenv(EnvState)),
+		ConfigFile: envGet(EnvConfig),
+		StateFile:  envGet(EnvState),
 	}
 }
 

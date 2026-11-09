@@ -3,7 +3,7 @@ package antigravity
 import (
 	"context"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // tier is one route of the service's model table: the name that goes into the

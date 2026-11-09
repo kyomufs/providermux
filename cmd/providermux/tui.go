@@ -8,9 +8,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/state"
-	"free-ai-router/internal/tui"
+	"providermux/internal/config"
+	"providermux/internal/state"
+	"providermux/internal/tui"
 )
 
 // cmdTUI starts the terminal monitor.

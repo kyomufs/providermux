@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // Collecting a stream into a single response.

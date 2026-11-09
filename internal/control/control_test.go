@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/provider"
-	"free-ai-router/internal/state"
+	"providermux/internal/config"
+	"providermux/internal/provider"
+	"providermux/internal/state"
 )
 
 // stubProvider — a stand-in provider for control API checks.

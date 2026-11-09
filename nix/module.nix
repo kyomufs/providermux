@@ -1,4 +1,4 @@
-# free-ai-router — a NixOS module for a gateway that aggregates free AI
+# providermux — a NixOS module for a gateway that aggregates free AI
 # providers.
 #
 # WHAT THIS IS. A single, self-contained module for a machine running plain
@@ -17,19 +17,19 @@
 # outrank the file. A systemd drop-in is the way to try a value on a live daemon
 # without touching the declaration:
 #
-#   systemctl --user edit free-ai-router
+#   systemctl --user edit providermux
 #   # [Service]
 #   # ExecStart=
-#   # ExecStart=%h/.local/bin/free-ai-router up --listen 127.0.0.1:8787 --family v4
+#   # ExecStart=%h/.local/bin/providermux up --listen 127.0.0.1:8787 --family v4
 #
 # The empty ExecStart= is not optional: systemd appends to the list rather than
 # replacing it, and a unit with two ExecStart lines is invalid.
 #
 # USAGE
 #
-#   imports = [ ./free-ai-router.nix ];
+#   imports = [ ./providermux.nix ];
 #
-#   services.free-ai-router = {
+#   services.providermux = {
 #     enable = true;
 #     providers.opencode.type = "opencode";
 #   };
@@ -39,7 +39,7 @@
 { config, lib, pkgs, ... }:
 
 let
-  cfg = config.services.free-ai-router;
+  cfg = config.services.providermux;
   inherit (lib) mkIf mkOption mkEnableOption types optional optionalString;
 
   # The gateway is built from a tagged release of its own repository. The
@@ -64,7 +64,7 @@ let
   # by nature — the file is written, the daemon starts, the value never applies —
   # which is why the daemon rejects an unknown key instead of ignoring it, and a
   # typo surfaces at startup rather than as a setting that quietly does nothing.
-  configFile = pkgs.writeText "free-ai-router-config.json" (
+  configFile = pkgs.writeText "providermux-config.json" (
     builtins.toJSON {
       mode = cfg.mode;
       listen = cfg.listen;
@@ -115,8 +115,8 @@ let
   );
 in
 {
-  options.services.free-ai-router = {
-    enable = mkEnableOption "the free-ai-router gateway for free AI providers";
+  options.services.providermux = {
+    enable = mkEnableOption "the providermux gateway for free AI providers";
 
     package = mkOption {
       type = types.package;
@@ -127,7 +127,7 @@ in
 
         Set this to run a binary you built yourself — a source checkout, a
         patched build, a test of a fix — without touching the rest of the
-        declaration. The module only needs {file}`bin/free-ai-router` from it.
+        declaration. The module only needs {file}`bin/providermux` from it.
       '';
     };
 
@@ -194,7 +194,7 @@ in
     tokenFile = mkOption {
       type = types.nullOr types.path;
       default = null;
-      example = "/run/secrets/free-ai-router-token";
+      example = "/run/secrets/providermux-token";
       description = ''
         A file holding the token, read by the service at start time through an
         `EnvironmentFile`.
@@ -425,22 +425,22 @@ in
     # mean the file is only ever right while the service is being started.
     #
     # It is COPIED rather than linked into the store. The CLI and the daemon WRITE
-    # to this file — `free-ai-router cred account` rewrites it — and a symlink
+    # to this file — `providermux cred account` rewrites it — and a symlink
     # into the read-only store would break on the first write. This is also why
     # the file is not managed by an option that produces a link.
     #
     # The guard is what keeps a switch quiet: an unchanged file is not rewritten,
     # so its timestamp stays put and nothing downstream reacts to a no-op.
-    system.activationScripts.free-ai-router-config = ''
-      cfgDir="/home/${cfg.user}/.config/free-ai-router"
+    system.activationScripts.providermux-config = ''
+      cfgDir="/home/${cfg.user}/.config/providermux"
       install -d -m 700 -o ${cfg.user} -g ${cfg.user} "$cfgDir"
       if ! cmp -s ${configFile} "$cfgDir/config.json"; then
         install -m 600 -o ${cfg.user} -g ${cfg.user} ${configFile} "$cfgDir/config.json"
       fi
     '';
 
-    systemd.user.services.free-ai-router = {
-      description = "free-ai-router — a gateway aggregating free AI providers";
+    systemd.user.services.providermux = {
+      description = "providermux — a gateway aggregating free AI providers";
       wantedBy = [ "default.target" ];
 
       after = [ "network-online.target" ];
@@ -448,7 +448,7 @@ in
 
       serviceConfig = {
         Type = "simple";
-        ExecStart = "${cfg.package}/bin/free-ai-router up --listen ${cfg.listen}";
+        ExecStart = "${cfg.package}/bin/providermux up --listen ${cfg.listen}";
 
         # Restart on failure: the gateway is meant to be up continuously, and a
         # crash caused by a provider hiccup should not need a human.

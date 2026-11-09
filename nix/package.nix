@@ -1,4 +1,4 @@
-# free-ai-router — the package, as a standalone derivation.
+# providermux — the package, as a standalone derivation.
 #
 # This is what the NixOS module builds when no package is supplied. It is kept
 # beside the module rather than inside it so that the same file can be used from
@@ -9,10 +9,10 @@
 #   version = "1.3.0";
 #   # then:
 #   nix-prefetch-url --unpack \
-#     https://github.com/kyomufs/free-ai-router/archive/refs/tags/v1.2.0.tar.gz
+#     https://github.com/kyomufs/providermux/archive/refs/tags/v1.2.0.tar.gz
 #   nix-hash --to-sri --type sha256 <the base32 output>
 #   # and vendorHash, if the dependencies changed:
-#   nix build .#free-ai-router 2>&1 | grep 'got:'
+#   nix build .#providermux 2>&1 | grep 'got:'
 #
 # The `rev` is a tag rather than a commit on purpose: a name a human can check
 # against the release list. The hashes are what make the build reproducible —
@@ -23,12 +23,12 @@
 }:
 
 buildGoModule rec {
-  pname = "free-ai-router";
+  pname = "providermux";
   version = "1.3.0";
 
   src = fetchFromGitHub {
     owner = "kyomufs";
-    repo = "free-ai-router";
+    repo = "providermux";
     rev = "v${version}";
     hash = "sha256-kPKXmXoxyH8fQ/38MGMnP2ezbZbXHCmB0UgXT7twHS8=";
   };
@@ -52,9 +52,9 @@ buildGoModule rec {
 
   meta = {
     description = "OpenAI-compatible gateway aggregating free AI providers";
-    homepage = "https://github.com/kyomufs/free-ai-router";
+    homepage = "https://github.com/kyomufs/providermux";
     license = lib.licenses.mit;
-    mainProgram = "free-ai-router";
+    mainProgram = "providermux";
     platforms = lib.platforms.unix;
   };
 }

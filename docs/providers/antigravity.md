@@ -249,7 +249,7 @@ Source: `dist/fingerprint.js` (`buildAntigravityHarnessUserAgent`,
 ## Configuration
 
 ```nix
-services.free-ai-router = {
+services.providermux = {
   credential = "account";
   key_rotation = "on";
 

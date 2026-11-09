@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // Parsing the client request into the neutral form.

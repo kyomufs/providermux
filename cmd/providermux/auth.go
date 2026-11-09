@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"free-ai-router/internal/config"
+	"providermux/internal/config"
 )
 
 // requireToken wraps a handler with a shared-secret check.

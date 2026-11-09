@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // conversationRequest builds a request the way the gateway does for a client

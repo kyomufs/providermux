@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"free-ai-router/internal/catalog"
+	"providermux/internal/catalog"
 )
 
 // cmdModels shows the catalog of models.

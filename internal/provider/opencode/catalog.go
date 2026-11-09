@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"free-ai-router/internal/provider"
-	"free-ai-router/internal/provider/modelcat"
+	"providermux/internal/provider"
+	"providermux/internal/provider/modelcat"
 )
 
 // A source of model properties.

@@ -1,8 +1,8 @@
 package gateway
 
 import (
-	"free-ai-router/internal/capability"
-	"free-ai-router/internal/provider"
+	"providermux/internal/capability"
+	"providermux/internal/provider"
 )
 
 // Issuing credentials.

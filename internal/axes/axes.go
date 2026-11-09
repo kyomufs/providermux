@@ -22,7 +22,7 @@ import (
 	"sort"
 	"strings"
 
-	"free-ai-router/internal/config"
+	"providermux/internal/config"
 )
 
 // Version is the schema version of the printed document.

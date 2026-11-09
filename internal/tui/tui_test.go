@@ -356,7 +356,7 @@ func TestTheGeometryMatchesTheDrawnFrame(t *testing.T) {
 	m := resize(t, monitor(observation()), 120, 40)
 	g := m.geom
 
-	if got := rowOf(m, "free-ai-router"); got != g.Banner.Y {
+	if got := rowOf(m, "providermux"); got != g.Banner.Y {
 		t.Errorf("the banner is drawn on row %d, the geometry says %d", got, g.Banner.Y)
 	}
 	if got := rowOf(m, "dashboard"); got != g.Tabs.Y {
@@ -474,7 +474,7 @@ func TestTheBannerCarriesTheDaemonPulse(t *testing.T) {
 	m := monitor(obs)
 
 	got := draw(m)
-	for _, want := range []string{"free-ai-router", "live", "08:12:59"} {
+	for _, want := range []string{"providermux", "live", "08:12:59"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the banner does not say %q:\n%s", want, got)
 		}
@@ -566,7 +566,7 @@ func TestTheShortTerminalCollapsesTheBanner(t *testing.T) {
 	if got, want := m.geom.Banner.H, 1; got != want {
 		t.Errorf("the banner takes %d rows on a short terminal, want %d", got, want)
 	}
-	if got := strings.Count(draw(m), "free-ai-router"); got != 1 {
+	if got := strings.Count(draw(m), "providermux"); got != 1 {
 		t.Errorf("the banner is drawn %d times:\n%s", got, draw(m))
 	}
 	// The bands under it still start where the geometry says.
@@ -585,7 +585,7 @@ func TestTheLoadingStateSaysWhatItWaitsFor(t *testing.T) {
 	}
 	// The chrome is drawn in the state as well: the frame must not reflow when
 	// the first reading lands.
-	if !strings.Contains(got, "free-ai-router") || !strings.Contains(got, "dashboard") {
+	if !strings.Contains(got, "providermux") || !strings.Contains(got, "dashboard") {
 		t.Errorf("the chrome is missing from the loading state:\n%s", got)
 	}
 }
@@ -1265,7 +1265,7 @@ func TestTheDetailsModalOpensOnTheSelectedLine(t *testing.T) {
 	}
 	// The row it was opened on is still visible behind it: the modal is
 	// composited over the frame, not drawn into it.
-	if !strings.Contains(draw(m), "free-ai-router") {
+	if !strings.Contains(draw(m), "providermux") {
 		t.Errorf("the frame is gone from behind the modal:\n%s", draw(m))
 	}
 }
@@ -1569,7 +1569,7 @@ func TestAReadingFailureIsShownAndTheFrameSurvives(t *testing.T) {
 	if !strings.Contains(draw(failed), "no route to host") {
 		t.Errorf("the reason is not drawn:\n%s", draw(failed))
 	}
-	if !strings.Contains(draw(failed), "free-ai-router") {
+	if !strings.Contains(draw(failed), "providermux") {
 		t.Errorf("the chrome was dropped along with the reading:\n%s", draw(failed))
 	}
 

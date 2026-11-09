@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"free-ai-router/internal/provider"
-	"free-ai-router/internal/provider/modelcat"
+	"providermux/internal/provider"
+	"providermux/internal/provider/modelcat"
 )
 
 // newTestProvider creates a provider with predictable substitutions, so that the

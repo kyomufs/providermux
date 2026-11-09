@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/provider"
+	"providermux/internal/config"
+	"providermux/internal/provider"
 )
 
 // TestBudgetsMatchTheConfigurationDefaults holds the gateway's fallbacks to the

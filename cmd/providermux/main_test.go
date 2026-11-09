@@ -50,7 +50,7 @@ func writeConfig(t *testing.T) string {
 // TestPrintConfigNeedsNoCommand.
 //
 // The usage text documents --print-config as a flag, not as a subcommand, so the
-// documented form is `free-ai-router --config X --print-config`. It used to
+// documented form is `providermux --config X --print-config`. It used to
 // answer `unknown command "--config"`: the first argument was read as a verb and
 // a flag read as a verb fails. The flag answers a question and exits, which is
 // exactly what a verb-less invocation should do.

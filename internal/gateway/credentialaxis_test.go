@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // THE CREDENTIAL AXIS DECIDES THE SOURCE, and the pool only supplies the value.

@@ -6,7 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"free-ai-router/internal/tui/presets"
+	"providermux/internal/tui/presets"
 )
 
 // View implements tea.Model.
@@ -44,7 +44,7 @@ func (m Model) View() tea.View {
 	// footer is the difference between a window and a printout.
 	v := tea.NewView(presets.Fit(frame, m.geom.Width, m.geom.Height))
 	v.AltScreen = !m.Scrollback
-	v.WindowTitle = "free-ai-router · monitor"
+	v.WindowTitle = "providermux · monitor"
 	// THE MOUSE IS OPTIONAL AND NEVER THE ONLY PATH. Every action here is
 	// reachable from the keyboard; the wheel and the click only spare the reader
 	// from reaching for the arrow keys while reading.
@@ -117,7 +117,7 @@ func (m Model) frame() string {
 // learning the keys rather than skipped as part of a heading.
 func (m Model) banner() string {
 	w := m.geom.Banner.W
-	title := m.pal.GradientTitle("free-ai-router")
+	title := m.pal.GradientTitle("providermux")
 	right := m.liveCell()
 
 	// THE PULSE KEEPS ITS CELLS, the title gives way: the pulse is fixed-width by

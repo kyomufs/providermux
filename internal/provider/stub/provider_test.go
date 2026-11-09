@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // newTestProvider builds a stub from a whole config, so that each check states

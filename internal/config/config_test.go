@@ -849,3 +849,31 @@ func TestTheFileEditingLoaderDoesNotApplyTheKeyCheck(t *testing.T) {
 		t.Fatal("the validating loader accepted the same file")
 	}
 }
+
+// TestLegacyEnvFallback verifies backward compatibility with FREE_AI_ROUTER_* variables.
+func TestLegacyEnvFallback(t *testing.T) {
+	paths := writeConfig(t, `{"mode": "local", "listen": "127.0.0.1:8000"}`)
+
+	t.Setenv("FREE_AI_ROUTER_LISTEN", "127.0.0.1:9191")
+
+	c, err := LoadFrom(paths)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if c.Listen.Val != "127.0.0.1:9191" {
+		t.Fatalf("Listen = %q, want legacy env value", c.Listen.Val)
+	}
+	if c.Listen.From != SourceEnv {
+		t.Fatalf("Listen source = %q, want %q", c.Listen.From, SourceEnv)
+	}
+
+	// When both are set, PROVIDERMUX_* wins.
+	t.Setenv("PROVIDERMUX_LISTEN", "127.0.0.1:9292")
+	c2, err := LoadFrom(paths)
+	if err != nil {
+		t.Fatalf("LoadFrom: %v", err)
+	}
+	if c2.Listen.Val != "127.0.0.1:9292" {
+		t.Fatalf("Listen = %q, want primary env value", c2.Listen.Val)
+	}
+}

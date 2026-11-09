@@ -3,7 +3,7 @@ package opencode
 import (
 	"time"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // jsonSchemaDialect is the schema dialect the client declares in tool

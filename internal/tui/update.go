@@ -8,7 +8,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
-	"free-ai-router/internal/tui/presets"
+	"providermux/internal/tui/presets"
 )
 
 // refreshInterval is how often the monitor re-reads the state.

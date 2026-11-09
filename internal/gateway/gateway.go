@@ -40,9 +40,9 @@ import (
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
 
-	"free-ai-router/internal/capability"
-	"free-ai-router/internal/provider"
-	"free-ai-router/internal/state"
+	"providermux/internal/capability"
+	"providermux/internal/provider"
+	"providermux/internal/state"
 )
 
 // Limits. The request body is bounded, because the client can send anything,

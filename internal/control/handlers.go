@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"sort"
 
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/egress"
-	"free-ai-router/internal/provider"
-	"free-ai-router/internal/state"
+	"providermux/internal/config"
+	"providermux/internal/egress"
+	"providermux/internal/provider"
+	"providermux/internal/state"
 )
 
 // Status — a snapshot of the daemon's state.

@@ -397,7 +397,7 @@ the team can review the flag, tell you whether it expires, or lift it". The flag
 is not about the request, and it is not about the account either: "This isn't
 related to your account".
 
-Measured 2026-10-19, `~/.local/state/free-ai-router/app.log`: one burst was 21
+Measured 2026-10-19, `~/.local/state/providermux/app.log`: one burst was 21
 refusals in a minute and 8 in four seconds. The bursts were this gateway
 repeating a request, not the provider counting them — the repeat is the client's
 mistake, and it is why the client-side retry policy below matters.

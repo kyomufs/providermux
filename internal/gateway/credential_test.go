@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // Which credential goes into the header, and under which name.

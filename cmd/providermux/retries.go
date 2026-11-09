@@ -1,9 +1,9 @@
 package main
 
 import (
-	"free-ai-router/internal/capability"
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/provider"
+	"providermux/internal/capability"
+	"providermux/internal/config"
+	"providermux/internal/provider"
 )
 
 // retryPolicies builds the retry mechanisms from the configuration.

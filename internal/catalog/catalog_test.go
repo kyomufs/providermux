@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/provider"
+	"providermux/internal/config"
+	"providermux/internal/provider"
 )
 
 // cfgWith builds a configuration with a single provider section.

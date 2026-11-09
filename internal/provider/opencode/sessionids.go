@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // Session identifiers as the admission check sees them.

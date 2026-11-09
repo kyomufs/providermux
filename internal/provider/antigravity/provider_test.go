@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // newTestProvider builds a provider that does not need a network.

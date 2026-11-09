@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"free-ai-router/internal/config"
+	"providermux/internal/config"
 )
 
 // The registries are passed in, so the test supplies its own: the catalog must
@@ -137,7 +137,7 @@ func TestGlobalAxesHaveBothWaysToSetThem(t *testing.T) {
 		if a.Env == "" {
 			t.Errorf("%s: no environment variable", a.Name)
 		}
-		if !strings.HasPrefix(a.Env, "FREE_AI_ROUTER_") {
+		if !strings.HasPrefix(a.Env, "PROVIDERMUX_") {
 			t.Errorf("%s: variable %q is outside the application's namespace", a.Name, a.Env)
 		}
 	}

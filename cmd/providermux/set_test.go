@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/transport"
+	"providermux/internal/config"
+	"providermux/internal/transport"
 )
 
 // TestWriteConfigKeyKeepsTheRestOfTheFile.

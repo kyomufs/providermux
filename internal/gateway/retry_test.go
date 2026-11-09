@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"free-ai-router/internal/capability"
-	"free-ai-router/internal/provider"
+	"providermux/internal/capability"
+	"providermux/internal/provider"
 )
 
 // The strategies, and the loop that applies them.

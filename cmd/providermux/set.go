@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"free-ai-router/internal/config"
+	"providermux/internal/config"
 )
 
 // THE SECOND WAY TO SET AN AXIS.

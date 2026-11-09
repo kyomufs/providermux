@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/state"
+	"providermux/internal/config"
+	"providermux/internal/state"
 )
 
 // Read commands work LOCALLY — against the configuration, state and log.

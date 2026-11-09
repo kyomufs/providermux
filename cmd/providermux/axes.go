@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"free-ai-router/internal/axes"
-	"free-ai-router/internal/catalog"
+	"providermux/internal/axes"
+	"providermux/internal/catalog"
 )
 
 // dictionaryRegistries returns the registries the dictionary is filled from.

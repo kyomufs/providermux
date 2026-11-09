@@ -12,14 +12,14 @@ import (
 	"syscall"
 	"time"
 
-	"free-ai-router/internal/catalog"
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/control"
-	"free-ai-router/internal/egress"
-	"free-ai-router/internal/gateway"
-	"free-ai-router/internal/provider"
-	"free-ai-router/internal/state"
-	"free-ai-router/internal/transport"
+	"providermux/internal/catalog"
+	"providermux/internal/config"
+	"providermux/internal/control"
+	"providermux/internal/egress"
+	"providermux/internal/gateway"
+	"providermux/internal/provider"
+	"providermux/internal/state"
+	"providermux/internal/transport"
 )
 
 // daemon — the assembled daemon with all its parts.

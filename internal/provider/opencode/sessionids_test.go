@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // TestRejectedHeaderPrefixesAreReplaced — the two header values the service

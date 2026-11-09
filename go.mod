@@ -1,4 +1,4 @@
-module free-ai-router
+module providermux
 
 go 1.26.0
 

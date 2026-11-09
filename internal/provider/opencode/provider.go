@@ -43,8 +43,8 @@ import (
 	"strings"
 	"time"
 
-	"free-ai-router/internal/provider"
-	"free-ai-router/internal/provider/modelcat"
+	"providermux/internal/provider"
+	"providermux/internal/provider/modelcat"
 )
 
 // ID is the provider identifier. It is visible in configuration, in the CLI and

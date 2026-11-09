@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"free-ai-router/internal/config"
+	"providermux/internal/config"
 )
 
 // newServerConfig returns a configuration in server mode with a token.

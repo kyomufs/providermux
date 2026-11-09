@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"free-ai-router/internal/config"
+	"providermux/internal/config"
 )
 
 // printEffectiveConfig prints the result of merging the three levels.
@@ -138,30 +138,30 @@ func printJSON(v any) error {
 
 // usage prints the help.
 func usage() {
-	fmt.Fprint(os.Stderr, `free-ai-router — a gateway that aggregates free AI providers
+	fmt.Fprint(os.Stderr, `providermux — a gateway that aggregates free AI providers
 
 Usage:
-  free-ai-router up       [flags]     start the daemon
-  free-ai-router status   [--json]    daemon state
-  free-ai-router stop                 stop the daemon
-  free-ai-router tui      [--scrollback] full-screen monitor
-  free-ai-router models   [--json]    catalog of models
-  free-ai-router stats    [--json]    counters by day
-  free-ai-router keys     [--json]    provider keys
-  free-ai-router logs     [-n N]      log
-  free-ai-router data     [clear]     what lies on disk, and clearing
-  free-ai-router config   [--json]    effective configuration
-  free-ai-router axes     [--json]    every setting, its values and its defaults
-  free-ai-router systemd  [--install] the systemd user unit, printed or written
-  free-ai-router version              version
+  providermux up       [flags]     start the daemon
+  providermux status   [--json]    daemon state
+  providermux stop                 stop the daemon
+  providermux tui      [--scrollback] full-screen monitor
+  providermux models   [--json]    catalog of models
+  providermux stats    [--json]    counters by day
+  providermux keys     [--json]    provider keys
+  providermux logs     [-n N]      log
+  providermux data     [clear]     what lies on disk, and clearing
+  providermux config   [--json]    effective configuration
+  providermux axes     [--json]    every setting, its values and its defaults
+  providermux systemd  [--install] the systemd user unit, printed or written
+  providermux version              version
 
 One axis at a time, kept in the file:
-  free-ai-router mode                     [local|server]      deployment form
-  free-ai-router cred | credential        [anonymous|account] what is presented to the provider
-  free-ai-router rotate | key_rotation    [on|off]            spend the pool on a refusal
-  free-ai-router fallback | model_fallback [on|off]           answer with another free model
-  free-ai-router family                   [auto|v4|v6]        address family the traffic leaves from
-  free-ai-router <axis>                                       without a value: what is in force, and from where
+  providermux mode                     [local|server]      deployment form
+  providermux cred | credential        [anonymous|account] what is presented to the provider
+  providermux rotate | key_rotation    [on|off]            spend the pool on a refusal
+  providermux fallback | model_fallback [on|off]           answer with another free model
+  providermux family                   [auto|v4|v6]        address family the traffic leaves from
+  providermux <axis>                                       without a value: what is in force, and from where
 
 Startup flags:
   --mode                  local | server      deployment form

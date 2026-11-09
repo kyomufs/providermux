@@ -6,7 +6,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/exp/charmtone"
 
-	"free-ai-router/internal/tui/presets"
+	"providermux/internal/tui/presets"
 )
 
 // palette holds the styles in use.

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // TestTheVerdictOfARefusal — which lever the gateway should pull.

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // defaultSystemPrompt is the chat system prompt of the reference client.

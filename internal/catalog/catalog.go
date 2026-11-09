@@ -20,11 +20,11 @@ import (
 	"strings"
 	"time"
 
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/provider"
-	"free-ai-router/internal/provider/antigravity"
-	"free-ai-router/internal/provider/opencode"
-	"free-ai-router/internal/provider/stub"
+	"providermux/internal/config"
+	"providermux/internal/provider"
+	"providermux/internal/provider/antigravity"
+	"providermux/internal/provider/opencode"
+	"providermux/internal/provider/stub"
 )
 
 // Builder creates a provider from the configuration settings.

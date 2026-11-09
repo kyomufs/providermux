@@ -39,7 +39,7 @@ import (
 	"strings"
 	"time"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // DefaultBaseURL is the address of the model endpoints.

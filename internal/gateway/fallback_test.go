@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"free-ai-router/internal/provider"
-	"free-ai-router/internal/state"
+	"providermux/internal/provider"
+	"providermux/internal/state"
 )
 
 // modelStub is a provider whose catalog and whose answer both depend on the

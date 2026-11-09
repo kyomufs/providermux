@@ -3,10 +3,10 @@ package main
 import (
 	"os"
 
-	"free-ai-router/internal/capability"
-	"free-ai-router/internal/config"
-	"free-ai-router/internal/gateway"
-	"free-ai-router/internal/provider"
+	"providermux/internal/capability"
+	"providermux/internal/config"
+	"providermux/internal/gateway"
+	"providermux/internal/provider"
 )
 
 // keyRegistry holds the key rotation mechanisms per provider.

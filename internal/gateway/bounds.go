@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"free-ai-router/internal/provider"
+	"providermux/internal/provider"
 )
 
 // The budgets of one attempt at the provider.
