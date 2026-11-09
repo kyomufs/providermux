@@ -43,7 +43,7 @@ const jsonSchemaDialect = "https://json-schema.org/draft/2020-12/schema"
 // batch is noise. Fresh sessions per batch are what make the table above
 // meaningful — and an earlier batch on this same lane, whose session headers
 // happened to be malformed, produced a UA table that no longer reproduces.
-const DefaultUserAgent = "opencode/latest/2.1.2/cli"
+const DefaultUserAgent = "opencode/latest/2.2.6/cli"
 
 // The free-lane admission conditions, measured one request at a time.
 //

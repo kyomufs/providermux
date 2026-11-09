@@ -184,7 +184,35 @@ func geminiSchema(raw []byte) any {
 	return normalizeSchema(schema)
 }
 
-// normalizeSchema walks a schema and applies the two rewrites above.
+// allowedGeminiSchemaFields defines the fields accepted by Gemini's protobuf Schema.
+var allowedGeminiSchemaFields = map[string]bool{
+	"type":             true,
+	"properties":       true,
+	"items":            true,
+	"required":         true,
+	"description":      true,
+	"format":           true,
+	"pattern":          true,
+	"title":            true,
+	"nullable":         true,
+	"propertyOrdering": true,
+	"example":          true,
+	"default":          true,
+	"enum":             true,
+	"anyOf":            true,
+	"minimum":          true,
+	"maximum":          true,
+	"minLength":        true,
+	"maxLength":        true,
+	"minItems":         true,
+	"maxItems":         true,
+	"minProperties":    true,
+	"maxProperties":    true,
+}
+
+// normalizeSchema walks a schema and applies the rewrites required by the
+// service: upper-case types, const -> enum, oneOf -> anyOf, and filtering
+// of unknown fields rejected by Gemini's protobuf Schema validator.
 func normalizeSchema(v any) any {
 	switch node := v.(type) {
 	case map[string]any:
@@ -194,6 +222,30 @@ func normalizeSchema(v any) any {
 			case "$schema", "additionalProperties", "$id", "$comment", "definitions", "$defs":
 				// Not part of the schema dialect the service validates.
 				continue
+			case "const":
+				// Gemini protobuf Schema has no "const" field; convert string const to enum.
+				if s, ok := value.(string); ok {
+					if _, hasEnum := node["enum"]; !hasEnum {
+						out["enum"] = []any{s}
+					}
+				}
+				continue
+			case "oneOf":
+				// Gemini protobuf Schema uses anyOf instead of oneOf.
+				if _, hasAnyOf := node["anyOf"]; !hasAnyOf {
+					out["anyOf"] = normalizeSchema(value)
+				}
+				continue
+			case "properties":
+				if props, ok := value.(map[string]any); ok {
+					normalizedProps := make(map[string]any, len(props))
+					for propName, propSchema := range props {
+						normalizedProps[propName] = normalizeSchema(propSchema)
+					}
+					out[key] = normalizedProps
+					continue
+				}
+				out[key] = normalizeSchema(value)
 			case "type":
 				if s, ok := value.(string); ok {
 					out[key] = strings.ToUpper(s)
@@ -213,7 +265,9 @@ func normalizeSchema(v any) any {
 				}
 				out[key] = value
 			default:
-				out[key] = normalizeSchema(value)
+				if allowedGeminiSchemaFields[key] {
+					out[key] = normalizeSchema(value)
+				}
 			}
 		}
 		return out

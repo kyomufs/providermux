@@ -161,6 +161,71 @@ func TestBuildFoldsTheToolResultIntoTheUserTurn(t *testing.T) {
 	}
 }
 
+// TestNormalizeSchemaHandlesConstAndOneOf verifies that const is rewritten to enum,
+// oneOf to anyOf, and unknown fields are stripped for Gemini protobuf compatibility.
+func TestNormalizeSchemaHandlesConstAndOneOf(t *testing.T) {
+	raw := []byte(`{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type": "object",
+		"properties": {
+			"action": {
+				"type": "string",
+				"const": "create",
+				"customMetadata": "discard_me"
+			},
+			"variant": {
+				"oneOf": [
+					{"type": "string", "const": "rrule"},
+					{"type": "string", "const": "cron"}
+				]
+			}
+		},
+		"additionalProperties": false
+	}`)
+
+	normalized, ok := geminiSchema(raw).(map[string]any)
+	if !ok {
+		t.Fatalf("geminiSchema returned %T, want map[string]any", normalized)
+	}
+
+	if _, ok := normalized["$schema"]; ok {
+		t.Fatal("$schema was not stripped")
+	}
+	if _, ok := normalized["additionalProperties"]; ok {
+		t.Fatal("additionalProperties was not stripped")
+	}
+
+	props, _ := normalized["properties"].(map[string]any)
+	action, _ := props["action"].(map[string]any)
+	if _, hasConst := action["const"]; hasConst {
+		t.Fatal("const was not stripped from action")
+	}
+	if _, hasCustom := action["customMetadata"]; hasCustom {
+		t.Fatal("customMetadata was not stripped from action")
+	}
+	enums, ok := action["enum"].([]any)
+	if !ok || len(enums) != 1 || enums[0] != "create" {
+		t.Fatalf("action enum = %v, want ['create']", enums)
+	}
+
+	variant, _ := props["variant"].(map[string]any)
+	if _, hasOneOf := variant["oneOf"]; hasOneOf {
+		t.Fatal("oneOf was not stripped from variant")
+	}
+	anyOf, ok := variant["anyOf"].([]any)
+	if !ok || len(anyOf) != 2 {
+		t.Fatalf("variant anyOf = %v, want 2 branches", anyOf)
+	}
+	branch0, _ := anyOf[0].(map[string]any)
+	if _, hasConst := branch0["const"]; hasConst {
+		t.Fatal("const was not stripped from anyOf branch")
+	}
+	branch0Enums, ok := branch0["enum"].([]any)
+	if !ok || len(branch0Enums) != 1 || branch0Enums[0] != "rrule" {
+		t.Fatalf("branch 0 enum = %v, want ['rrule']", branch0Enums)
+	}
+}
+
 // TestModelsAdvertiseTheLadderTheyHave — an effort the model has no route for must
 // not be advertised: it would be answered with the default and read as ignored.
 func TestModelsAdvertiseTheLadderTheyHave(t *testing.T) {
