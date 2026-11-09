@@ -24,13 +24,13 @@
 
 buildGoModule rec {
   pname = "providermux";
-  version = "1.6.3";
+  version = "1.6.4";
 
   src = fetchFromGitHub {
     owner = "kyomufs";
     repo = "providermux";
     rev = "v${version}";
-    hash = "sha256-9f5E18R+VFAOTVydLy18BtB/8ZtnvhqiWb0VnJtjE1I=";
+    hash = "sha256-OY/r6A1ImObXzcGz+5Z4XPgYgV7u9H8o2JDVrd9K+N0=";
   };
 
   # A static binary, so the unit needs neither LD_LIBRARY_PATH nor a wrapper, and
