@@ -330,19 +330,26 @@ type OptionsResponse struct {
 	Toggle []string `json:"toggle"`
 	// Scopes — the data-clearing scopes.
 	Scopes []string `json:"scopes"`
+	// Current — the live options in force.
+	Current *CurrentOptions `json:"current,omitempty"`
 }
 
-// handleOptions answers with the dictionaries of values.
+// handleOptions answers with the dictionaries of values or updates them.
 func (h *Handler) handleOptions(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		h.handleOptionsUpdate(w, r)
+		return
+	}
 	if r.Method != http.MethodGet {
 		methodNotAllowed(w, "options")
 		return
 	}
 
 	resp := OptionsResponse{
-		Modes:  []string{"local", "server"},
-		Toggle: []string{"on", "off"},
-		Scopes: []string{"logs", "stats", "all"},
+		Modes:   []string{"local", "server"},
+		Toggle:  []string{"on", "off"},
+		Scopes:  []string{"logs", "stats", "all"},
+		Current: h.currentOptions(),
 	}
 	if h.Providers != nil {
 		for _, id := range h.Providers.IDs() {

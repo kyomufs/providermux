@@ -53,7 +53,6 @@
       --md-sys-shape-corner-extra-large: 28px;
       --md-sys-shape-corner-full: 9999px;
 
-      /* Typography */
       --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
 
@@ -90,12 +89,7 @@
       --md-sys-color-inverse-on-surface: #f4eff4;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: var(--font-family);
       background-color: var(--md-sys-color-surface);
@@ -107,7 +101,7 @@
       transition: background-color var(--md-sys-motion-spring-default-effects), color var(--md-sys-motion-spring-default-effects);
     }
 
-    /* Top App Bar */
+    /* Header */
     header.app-bar {
       display: flex;
       align-items: center;
@@ -119,13 +113,7 @@
       top: 0;
       z-index: 100;
     }
-
-    .brand-section {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
+    .brand-section { display: flex; align-items: center; gap: 12px; }
     .brand-logo {
       width: 36px;
       height: 36px;
@@ -137,16 +125,8 @@
       color: var(--md-sys-color-on-primary);
       font-weight: 700;
       font-size: 18px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
-
-    .brand-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-      color: var(--md-sys-color-on-surface);
-    }
-
+    .brand-title { font-size: 1.25rem; font-weight: 600; color: var(--md-sys-color-on-surface); }
     .brand-badge {
       font-size: 0.75rem;
       padding: 2px 8px;
@@ -155,12 +135,7 @@
       color: var(--md-sys-color-on-primary-container);
       font-weight: 600;
     }
-
-    .app-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+    .app-actions { display: flex; align-items: center; gap: 8px; }
 
     /* Buttons */
     .btn {
@@ -177,46 +152,15 @@
       outline: none;
       transition: transform var(--md-sys-motion-spring-fast-spatial), background-color var(--md-sys-motion-spring-fast-effects), box-shadow var(--md-sys-motion-spring-fast-effects);
     }
-
-    .btn:active {
-      transform: scale(0.96);
-    }
-
-    .btn-primary {
-      background-color: var(--md-sys-color-primary);
-      color: var(--md-sys-color-on-primary);
-    }
-    .btn-primary:hover {
-      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-    }
-
-    .btn-tonal {
-      background-color: var(--md-sys-color-secondary-container);
-      color: var(--md-sys-color-on-secondary-container);
-    }
-    .btn-tonal:hover {
-      background-color: var(--md-sys-color-secondary);
-      color: var(--md-sys-color-on-secondary);
-    }
-
-    .btn-outlined {
-      background: transparent;
-      border: 1px solid var(--md-sys-color-outline);
-      color: var(--md-sys-color-on-surface);
-    }
-    .btn-outlined:hover {
-      background-color: var(--md-sys-color-surface-container-high);
-    }
-
-    .btn-danger {
-      background-color: var(--md-sys-color-error-container);
-      color: var(--md-sys-color-on-error-container);
-    }
-    .btn-danger:hover {
-      background-color: var(--md-sys-color-error);
-      color: var(--md-sys-color-on-error);
-    }
-
+    .btn:active { transform: scale(0.96); }
+    .btn-primary { background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+    .btn-primary:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
+    .btn-tonal { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
+    .btn-tonal:hover { background-color: var(--md-sys-color-secondary); color: var(--md-sys-color-on-secondary); }
+    .btn-outlined { background: transparent; border: 1px solid var(--md-sys-color-outline); color: var(--md-sys-color-on-surface); }
+    .btn-outlined:hover { background-color: var(--md-sys-color-surface-container-high); }
+    .btn-danger { background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
+    .btn-danger:hover { background-color: var(--md-sys-color-error); color: var(--md-sys-color-on-error); }
     .btn-icon {
       padding: 8px;
       border-radius: var(--md-sys-shape-corner-full);
@@ -229,23 +173,11 @@
       justify-content: center;
       transition: background-color var(--md-sys-motion-spring-fast-effects), transform var(--md-sys-motion-spring-fast-spatial);
     }
-    .btn-icon:hover {
-      background-color: var(--md-sys-color-surface-container-highest);
-      color: var(--md-sys-color-on-surface);
-    }
-    .btn-icon:active {
-      transform: scale(0.92);
-    }
+    .btn-icon:hover { background-color: var(--md-sys-color-surface-container-highest); color: var(--md-sys-color-on-surface); }
+    .btn-icon:active { transform: scale(0.92); }
 
-    /* Layout & Tabs */
-    .main-container {
-      max-width: 1200px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 24px 16px;
-      flex: 1;
-    }
-
+    /* Container & Tabs */
+    .main-container { max-width: 1240px; width: 100%; margin: 0 auto; padding: 24px 16px; flex: 1; }
     .tabs-bar {
       display: flex;
       gap: 8px;
@@ -256,7 +188,6 @@
       overflow-x: auto;
       border: 1px solid var(--md-sys-color-outline-variant);
     }
-
     .tab-btn {
       padding: 10px 20px;
       border-radius: var(--md-sys-shape-corner-medium);
@@ -270,33 +201,17 @@
       align-items: center;
       gap: 8px;
       white-space: nowrap;
-      transition: background-color var(--md-sys-motion-spring-fast-effects), color var(--md-sys-motion-spring-fast-effects), transform var(--md-sys-motion-spring-fast-spatial);
+      transition: background-color var(--md-sys-motion-spring-fast-effects), color var(--md-sys-motion-spring-fast-effects);
     }
-
-    .tab-btn:hover {
-      background-color: var(--md-sys-color-surface-container-high);
-      color: var(--md-sys-color-on-surface);
-    }
-
+    .tab-btn:hover { background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); }
     .tab-btn.active {
       background-color: var(--md-sys-color-primary-container);
       color: var(--md-sys-color-on-primary-container);
       box-shadow: 0 1px 3px rgba(0,0,0,0.15);
     }
-
-    /* Tab content panes */
-    .tab-pane {
-      display: none;
-      animation: fadeIn var(--md-sys-motion-spring-default-effects);
-    }
-    .tab-pane.active {
-      display: block;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(6px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    .tab-pane { display: none; animation: fadeIn var(--md-sys-motion-spring-default-effects); }
+    .tab-pane.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
     /* Cards */
     .card {
@@ -305,128 +220,65 @@
       border: 1px solid var(--md-sys-color-outline-variant);
       padding: 20px;
       margin-bottom: 20px;
-      transition: border-color var(--md-sys-motion-spring-fast-effects);
     }
+    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+    .card-title { font-size: 1.15rem; font-weight: 600; color: var(--md-sys-color-on-surface); display: flex; align-items: center; gap: 10px; }
 
-    .card-header {
+    /* Sub-nav pills (for provider tabs) */
+    .pill-nav {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      padding-bottom: 10px;
     }
-
-    .card-title {
-      font-size: 1.15rem;
+    .pill-btn {
+      padding: 8px 18px;
+      border-radius: var(--md-sys-shape-corner-full);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      background: var(--md-sys-color-surface-container-low);
+      color: var(--md-sys-color-on-surface-variant);
+      font-size: 0.9rem;
       font-weight: 600;
-      color: var(--md-sys-color-on-surface);
+      cursor: pointer;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
+      transition: all var(--md-sys-motion-spring-fast-effects);
+    }
+    .pill-btn:hover { background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); }
+    .pill-btn.active {
+      background-color: var(--md-sys-color-primary);
+      color: var(--md-sys-color-on-primary);
+      border-color: var(--md-sys-color-primary);
     }
 
-    /* Metrics Grid */
-    .metrics-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
+    /* Grid & Metrics */
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
     .metric-card {
       background-color: var(--md-sys-color-surface-container-high);
       border-radius: var(--md-sys-shape-corner-medium);
       padding: 16px;
       border: 1px solid var(--md-sys-color-outline-variant);
     }
+    .metric-label { font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; font-weight: 600; }
+    .metric-value { font-size: 1.75rem; font-weight: 700; color: var(--md-sys-color-primary); }
+    .metric-sub { font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 4px; }
 
-    .metric-label {
-      font-size: 0.8rem;
-      color: var(--md-sys-color-on-surface-variant);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 6px;
-      font-weight: 600;
-    }
-
-    .metric-value {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: var(--md-sys-color-primary);
-    }
-
-    .metric-sub {
-      font-size: 0.8rem;
-      color: var(--md-sys-color-on-surface-variant);
-      margin-top: 4px;
-    }
-
-    /* Progress bar */
-    .progress-container {
-      width: 100%;
-      height: 10px;
-      background-color: var(--md-sys-color-surface-container-highest);
-      border-radius: var(--md-sys-shape-corner-full);
-      overflow: hidden;
-      margin: 8px 0;
-    }
-
-    .progress-bar {
-      height: 100%;
-      border-radius: var(--md-sys-shape-corner-full);
-      transition: width var(--md-sys-motion-spring-default-spatial), background-color var(--md-sys-motion-spring-fast-effects);
-    }
-
-    .progress-bar.high {
-      background-color: var(--md-sys-color-tertiary);
-    }
-    .progress-bar.medium {
-      background-color: #f9ab00;
-    }
-    .progress-bar.low {
-      background-color: var(--md-sys-color-error);
-    }
-
-    /* Account Card */
-    .account-card {
-      background-color: var(--md-sys-color-surface-container-high);
-      border-radius: var(--md-sys-shape-corner-large);
+    /* Parameters Grid */
+    .params-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      background-color: var(--md-sys-color-surface-container-low);
+      padding: 18px;
+      border-radius: var(--md-sys-shape-corner-medium);
+      margin-bottom: 20px;
       border: 1px solid var(--md-sys-color-outline-variant);
-      padding: 20px;
-      margin-bottom: 16px;
-      transition: transform var(--md-sys-motion-spring-fast-spatial), box-shadow var(--md-sys-motion-spring-fast-effects);
     }
-    .account-card:hover {
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      border-color: var(--md-sys-color-outline);
-    }
+    .param-item { display: flex; flex-direction: column; gap: 6px; }
 
-    .account-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .account-info {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .account-email {
-      font-size: 1.05rem;
-      font-weight: 600;
-      color: var(--md-sys-color-on-surface);
-    }
-
-    .account-fp {
-      font-family: monospace;
-      font-size: 0.8rem;
-      color: var(--md-sys-color-on-surface-variant);
-    }
-
+    /* Badges & Progress */
     .badge {
       display: inline-flex;
       align-items: center;
@@ -436,155 +288,38 @@
       font-size: 0.75rem;
       font-weight: 600;
     }
+    .badge-success { background-color: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+    .badge-warning { background-color: #ffe082; color: #3e2723; }
+    .badge-error { background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
 
-    .badge-success {
-      background-color: var(--md-sys-color-tertiary-container);
-      color: var(--md-sys-color-on-tertiary-container);
+    .progress-container {
+      width: 100%;
+      height: 10px;
+      background-color: var(--md-sys-color-surface-container-highest);
+      border-radius: var(--md-sys-shape-corner-full);
+      overflow: hidden;
+      margin: 8px 0;
     }
-    .badge-warning {
-      background-color: #ffe082;
-      color: #3e2723;
+    .progress-bar {
+      height: 100%;
+      border-radius: var(--md-sys-shape-corner-full);
+      transition: width var(--md-sys-motion-spring-default-spatial), background-color var(--md-sys-motion-spring-fast-effects);
     }
-    .badge-error {
-      background-color: var(--md-sys-color-error-container);
-      color: var(--md-sys-color-on-error-container);
-    }
-
-    .quota-groups {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 12px;
-      margin-top: 14px;
-    }
-
-    .quota-group-card {
-      background-color: var(--md-sys-color-surface-container);
-      border-radius: var(--md-sys-shape-corner-medium);
-      padding: 14px;
-      border: 1px solid var(--md-sys-color-outline-variant);
-    }
-
-    .quota-group-name {
-      font-size: 0.9rem;
-      font-weight: 600;
-      color: var(--md-sys-color-primary);
-      text-transform: capitalize;
-      margin-bottom: 8px;
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .quota-window-row {
-      margin-bottom: 8px;
-    }
-    .quota-window-row:last-child {
-      margin-bottom: 0;
-    }
-
-    .quota-meta {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.8rem;
-      color: var(--md-sys-color-on-surface-variant);
-    }
+    .progress-bar.high { background-color: var(--md-sys-color-tertiary); }
+    .progress-bar.medium { background-color: #f9ab00; }
+    .progress-bar.low { background-color: var(--md-sys-color-error); }
 
     /* Tables */
-    .table-container {
-      overflow-x: auto;
-      border-radius: var(--md-sys-shape-corner-medium);
-      border: 1px solid var(--md-sys-color-outline-variant);
-    }
+    .table-container { overflow-x: auto; border-radius: var(--md-sys-shape-corner-medium); border: 1px solid var(--md-sys-color-outline-variant); }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
+    th { background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface-variant); padding: 12px 16px; font-weight: 600; border-bottom: 1px solid var(--md-sys-color-outline-variant); }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--md-sys-color-outline-variant); color: var(--md-sys-color-on-surface); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background-color: var(--md-sys-color-surface-container-high); }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 0.9rem;
-    }
-
-    th {
-      background-color: var(--md-sys-color-surface-container-high);
-      color: var(--md-sys-color-on-surface-variant);
-      padding: 12px 16px;
-      font-weight: 600;
-      border-bottom: 1px solid var(--md-sys-color-outline-variant);
-    }
-
-    td {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--md-sys-color-outline-variant);
-      color: var(--md-sys-color-on-surface);
-    }
-
-    tr:last-child td {
-      border-bottom: none;
-    }
-
-    tr:hover td {
-      background-color: var(--md-sys-color-surface-container-high);
-    }
-
-    /* Modal / Dialog */
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background-color: rgba(0, 0, 0, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 200;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity var(--md-sys-motion-spring-fast-effects);
-      padding: 16px;
-    }
-
-    .modal-backdrop.open {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .modal-sheet {
-      background-color: var(--md-sys-color-surface-container-high);
-      border-radius: var(--md-sys-shape-corner-extra-large);
-      border: 1px solid var(--md-sys-color-outline-variant);
-      max-width: 540px;
-      width: 100%;
-      padding: 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      transform: scale(0.92);
-      transition: transform var(--md-sys-motion-spring-default-spatial);
-    }
-
-    .modal-backdrop.open .modal-sheet {
-      transform: scale(1);
-    }
-
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 18px;
-    }
-
-    .modal-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-    }
-
-    /* Form inputs */
-    .form-group {
-      margin-bottom: 16px;
-    }
-
-    .form-label {
-      display: block;
-      font-size: 0.85rem;
-      font-weight: 600;
-      color: var(--md-sys-color-on-surface-variant);
-      margin-bottom: 6px;
-    }
-
+    /* Inputs */
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--md-sys-color-on-surface-variant); margin-bottom: 6px; }
     .form-input {
       width: 100%;
       padding: 10px 14px;
@@ -595,73 +330,44 @@
       font-family: inherit;
       font-size: 0.9rem;
       outline: none;
-      transition: border-color var(--md-sys-motion-spring-fast-effects), box-shadow var(--md-sys-motion-spring-fast-effects);
+      transition: border-color var(--md-sys-motion-spring-fast-effects);
     }
+    .form-input:focus { border-color: var(--md-sys-color-primary); box-shadow: 0 0 0 2px var(--md-sys-color-primary-container); }
+    .form-hint { font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); margin-top: 4px; }
 
-    .form-input:focus {
-      border-color: var(--md-sys-color-primary);
-      box-shadow: 0 0 0 2px var(--md-sys-color-primary-container);
+    /* Modals */
+    .modal-backdrop {
+      position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.6);
+      display: flex; align-items: center; justify-content: center; z-index: 200;
+      opacity: 0; pointer-events: none; transition: opacity var(--md-sys-motion-spring-fast-effects); padding: 16px;
     }
-
-    .form-hint {
-      font-size: 0.75rem;
-      color: var(--md-sys-color-on-surface-variant);
-      margin-top: 4px;
+    .modal-backdrop.open { opacity: 1; pointer-events: auto; }
+    .modal-sheet {
+      background-color: var(--md-sys-color-surface-container-high);
+      border-radius: var(--md-sys-shape-corner-extra-large);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      max-width: 540px; width: 100%; padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      transform: scale(0.92); transition: transform var(--md-sys-motion-spring-default-spatial);
     }
+    .modal-backdrop.open .modal-sheet { transform: scale(1); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+    .modal-title { font-size: 1.25rem; font-weight: 600; }
 
-    /* Notifications / Toast */
-    .toast-container {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 300;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
+    /* Toasts */
+    .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
     .toast {
-      padding: 12px 20px;
-      border-radius: var(--md-sys-shape-corner-medium);
-      font-size: 0.875rem;
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      padding: 12px 20px; border-radius: var(--md-sys-shape-corner-medium);
+      font-size: 0.875rem; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       animation: toastIn var(--md-sys-motion-spring-fast-spatial);
     }
-    .toast-success {
-      background-color: var(--md-sys-color-tertiary-container);
-      color: var(--md-sys-color-on-tertiary-container);
-    }
-    .toast-error {
-      background-color: var(--md-sys-color-error-container);
-      color: var(--md-sys-color-on-error-container);
-    }
+    .toast-success { background-color: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
+    .toast-error { background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
+    @keyframes toastIn { from { transform: translateY(20px) scale(0.9); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 
-    @keyframes toastIn {
-      from { transform: translateY(20px) scale(0.9); opacity: 0; }
-      to { transform: translateY(0) scale(1); opacity: 1; }
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 40px 20px;
-      color: var(--md-sys-color-on-surface-variant);
-    }
-    .empty-icon {
-      font-size: 2.5rem;
-      margin-bottom: 12px;
-      opacity: 0.6;
-    }
-
-    .spin {
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      100% { transform: rotate(360deg); }
-    }
+    .empty-state { text-align: center; padding: 32px 16px; color: var(--md-sys-color-on-surface-variant); }
+    .spin { animation: spin 1s linear infinite; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -677,63 +383,41 @@
     </div>
     <div class="app-actions">
       <button id="refresh-btn" class="btn-icon" title="Обновить данные">
-        <svg id="refresh-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-        </svg>
+        <svg id="refresh-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
       </button>
       <button id="token-btn" class="btn btn-outlined" title="Настройки токена доступа">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-        </svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         <span>Токен</span>
       </button>
       <button id="theme-toggle" class="btn-icon" title="Сменить тему">
-        <svg id="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="5"/>
-          <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>
-        </svg>
+        <svg id="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
       </button>
     </div>
   </header>
 
-  <!-- Main Content -->
   <main class="main-container">
 
-    <!-- Navigation Tabs -->
+    <!-- Primary Navigation Tabs -->
     <nav class="tabs-bar">
       <button class="tab-btn active" data-tab="overview">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="7"/>
-          <rect x="14" y="3" width="7" height="7"/>
-          <rect x="14" y="14" width="7" height="7"/>
-          <rect x="3" y="14" width="7" height="7"/>
-        </svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         <span>Обзор</span>
       </button>
-      <button class="tab-btn" data-tab="antigravity">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-        </svg>
-        <span>Antigravity (Квоты)</span>
+      <button class="tab-btn" data-tab="providers">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Провайдеры и Настройки</span>
       </button>
-      <button class="tab-btn" data-tab="keys">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-        </svg>
-        <span>Ключи и Ротация</span>
+      <button class="tab-btn" data-tab="global-settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Глобальные параметры</span>
       </button>
       <button class="tab-btn" data-tab="models">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-          <polyline points="2 17 12 22 22 17"/>
-          <polyline points="2 12 12 17 22 12"/>
-        </svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
         <span>Каталог моделей</span>
       </button>
     </nav>
 
-    <!-- TAB 1: OVERVIEW -->
+    <!-- 1. TAB: OVERVIEW -->
     <section id="pane-overview" class="tab-pane active">
       <div class="metrics-grid">
         <div class="metric-card">
@@ -749,21 +433,18 @@
         <div class="metric-card">
           <div class="metric-label">Токенов сегодня</div>
           <div id="stat-tokens" class="metric-value">0</div>
-          <div id="stat-tokens-sub" class="metric-sub">Вход / Выход</div>
+          <div id="stat-tokens-sub" class="metric-sub">0 вх / 0 вых</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">Провайдеры</div>
           <div id="stat-providers" class="metric-value">0</div>
-          <div id="stat-models-count" class="metric-sub">0 моделей доступно</div>
+          <div id="stat-models-count" class="metric-sub">0 моделей объявлено</div>
         </div>
       </div>
 
       <div class="card">
         <div class="card-header">
-          <h2 class="card-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-            Статус провайдеров
-          </h2>
+          <h2 class="card-title">Статус провайдеров</h2>
         </div>
         <div class="table-container">
           <table>
@@ -773,7 +454,7 @@
                 <th>Моделей</th>
                 <th>Бесплатных</th>
                 <th>Ключей</th>
-                <th>Режим авторизации</th>
+                <th>Режим</th>
                 <th>Ротация</th>
               </tr>
             </thead>
@@ -786,71 +467,83 @@
 
       <div class="card">
         <div class="card-header">
-          <h2 class="card-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
-            Исходящие IP-адреса (Egress)
-          </h2>
+          <h2 class="card-title">Исходящие адреса (Egress IP)</h2>
         </div>
-        <div id="egress-list" class="metrics-grid">
-          <div class="metric-card"><div class="empty-state">Нет данных</div></div>
-        </div>
+        <div id="egress-list" class="metrics-grid"></div>
       </div>
     </section>
 
-    <!-- TAB 2: ANTIGRAVITY QUOTA & ACCOUNTS -->
-    <section id="pane-antigravity" class="tab-pane">
+    <!-- 2. TAB: PROVIDERS (Dedicated separation by provider) -->
+    <section id="pane-providers" class="tab-pane">
+      <div class="pill-nav" id="providers-pill-nav">
+        <!-- Rendered dynamically: e.g. [Antigravity] [OpenCode] -->
+      </div>
+      <div id="provider-views-container">
+        <!-- Provider views rendered here -->
+      </div>
+    </section>
+
+    <!-- 3. TAB: GLOBAL SETTINGS -->
+    <section id="pane-global-settings" class="tab-pane">
       <div class="card">
         <div class="card-header">
-          <div>
-            <h2 class="card-title">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              Google Antigravity Аккаунты и Квоты
-            </h2>
-            <div id="ag-header-status" class="metric-sub" style="margin-top: 4px;">Загрузка информации...</div>
+          <h2 class="card-title">Глобальные параметры демона providermux</h2>
+        </div>
+        <p style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-bottom: 20px;">
+          Параметры применяются на лету для работающего демона и сохраняются в конфигурационный файл.
+        </p>
+
+        <div class="params-grid">
+          <div class="param-item">
+            <label class="form-label">Model Fallback (Резервные модели)</label>
+            <select id="global-opt-fallback" class="form-input">
+              <option value="off">off (отключен)</option>
+              <option value="on">on (включен)</option>
+            </select>
+            <div class="form-hint">Переключение на другую свободную модель при сбое</div>
           </div>
-          <button id="add-ag-account-btn" class="btn btn-primary">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span>Добавить аккаунт</span>
-          </button>
+
+          <div class="param-item">
+            <label class="form-label">IP Family (Сетевой стек)</label>
+            <select id="global-opt-family" class="form-input">
+              <option value="auto">auto (автовыбор)</option>
+              <option value="v4">v4 (только IPv4)</option>
+              <option value="v6">v6 (только IPv6)</option>
+            </select>
+            <div class="form-hint">Протокол для исходящих запросов к API</div>
+          </div>
+
+          <div class="param-item">
+            <label class="form-label">Глобальный транспорт</label>
+            <select id="global-opt-transport" class="form-input">
+              <option value="direct">direct</option>
+            </select>
+            <div class="form-hint">Транспорт по умолчанию для всех провайдеров</div>
+          </div>
+
+          <div class="param-item">
+            <label class="form-label">Режим шлюза (Mode)</label>
+            <select id="global-opt-mode" class="form-input">
+              <option value="local">local (локальный сокет)</option>
+              <option value="server">server (сервер с токеном)</option>
+            </select>
+            <div class="form-hint">При смене на server требуется заданный токен</div>
+          </div>
         </div>
 
-        <div id="ag-accounts-container">
-          <div class="empty-state">
-            <div class="empty-icon">⏳</div>
-            <div>Загрузка квот аккаунтов Antigravity...</div>
-          </div>
-        </div>
+        <button id="save-global-opts-btn" class="btn btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Применить глобальные параметры</span>
+        </button>
       </div>
     </section>
 
-    <!-- TAB 3: KEYS & ROTATION -->
-    <section id="pane-keys" class="tab-pane">
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5"/></svg>
-            Управление пулами ключей
-          </h2>
-          <button id="add-key-btn" class="btn btn-tonal">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            <span>Добавить ключ</span>
-          </button>
-        </div>
-        <div id="keys-providers-list">
-          <!-- Populated dynamically -->
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 4: MODELS -->
+    <!-- 4. TAB: ALL MODELS CATALOG -->
     <section id="pane-models" class="tab-pane">
       <div class="card">
-        <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
-          <h2 class="card-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/></svg>
-            Каталог моделей
-          </h2>
-          <input type="text" id="models-search" class="form-input" style="max-width: 300px;" placeholder="Поиск моделей...">
+        <div class="card-header">
+          <h2 class="card-title">Каталог всех объявленных моделей</h2>
+          <input type="text" id="models-search" class="form-input" style="max-width: 320px;" placeholder="Поиск по ID или провайдеру...">
         </div>
         <div class="table-container">
           <table>
@@ -883,47 +576,40 @@
       </div>
 
       <div class="tabs-bar" style="margin-bottom: 16px;">
-        <button id="tab-oauth-btn" class="tab-btn active" style="flex: 1; justify-content: center;">Google OAuth 2.0</button>
+        <button id="tab-oauth-btn" class="tab-btn active" style="flex: 1; justify-content: center;">Google OAuth 2.0 (PKCE)</button>
         <button id="tab-token-btn" class="tab-btn" style="flex: 1; justify-content: center;">Refresh Token</button>
       </div>
 
-      <!-- OAuth Subform -->
       <div id="subform-oauth">
         <p style="font-size: 0.85rem; color: var(--md-sys-color-on-surface-variant); margin-bottom: 16px;">
           Авторизуйтесь через Google с предоставлением offline-доступа (refresh token).
         </p>
-
         <div style="margin-bottom: 16px;">
           <button id="start-oauth-btn" class="btn btn-primary" style="width: 100%;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
             <span>1. Открыть авторизацию Google</span>
           </button>
         </div>
-
         <div class="form-group">
           <label class="form-label">2. Код авторизации (Authorization Code)</label>
           <input type="text" id="oauth-code-input" class="form-input" placeholder="4/0A...">
-          <div class="form-hint">Вставьте код, полученный после успешного входа в браузере.</div>
+          <div class="form-hint">Вставьте код со страницы Google после подтверждения</div>
         </div>
-
         <div class="form-group">
           <label class="form-label">Project ID (необязательно)</label>
           <input type="text" id="oauth-project-input" class="form-input" placeholder="custom-project-id">
         </div>
-
         <button id="submit-oauth-btn" class="btn btn-tonal" style="width: 100%; margin-top: 8px;">
-          Завершить и добавить аккаунт
+          Обменять код и добавить аккаунт
         </button>
       </div>
 
-      <!-- Token Subform -->
       <div id="subform-token" style="display: none;">
         <div class="form-group">
           <label class="form-label">Refresh Token (или refresh_token|project_id)</label>
           <input type="text" id="ag-token-input" class="form-input" placeholder="1//04...">
-          <div class="form-hint">Введите прямой Google Cloud Code / Antigravity refresh token.</div>
+          <div class="form-hint">Google Cloud Code refresh token</div>
         </div>
-
         <button id="submit-ag-token-btn" class="btn btn-primary" style="width: 100%;">
           Добавить в пул
         </button>
@@ -940,9 +626,7 @@
       </div>
       <div class="form-group">
         <label class="form-label">Провайдер</label>
-        <select id="generic-key-provider" class="form-input">
-          <!-- Populated dynamically -->
-        </select>
+        <select id="generic-key-provider" class="form-input"></select>
       </div>
       <div class="form-group">
         <label class="form-label">API Key / Token</label>
@@ -961,9 +645,6 @@
         <h3 class="modal-title">Токен доступа к providermux</h3>
         <button class="btn-icon close-modal">✕</button>
       </div>
-      <p style="font-size: 0.85rem; color: var(--md-sys-color-on-surface-variant); margin-bottom: 16px;">
-        Если демон providermux запущен с флагом авторизации (require-token), укажите токен для работы панели.
-      </p>
       <div class="form-group">
         <label class="form-label">Bearer Token</label>
         <input type="password" id="app-token-input" class="form-input" placeholder="Секретный токен">
@@ -974,25 +655,25 @@
     </div>
   </div>
 
-  <!-- Toast Notification Center -->
   <div id="toast-container" class="toast-container"></div>
 
   <script>
-    // State management
-    const state = {
+    const appState = {
       token: localStorage.getItem('pmux_token') || (new URLSearchParams(window.location.search).get('token') || ''),
       activeTab: 'overview',
+      activeProvider: 'antigravity',
       oauthVerifier: '',
       providers: [],
       models: [],
-      isRefreshing: false
+      options: null,
+      agQuota: null,
+      keys: null
     };
 
-    if (state.token) {
-      localStorage.setItem('pmux_token', state.token);
+    if (appState.token) {
+      localStorage.setItem('pmux_token', appState.token);
     }
 
-    // Helper: Toast alerts
     function showToast(msg, type = 'success') {
       const c = document.getElementById('toast-container');
       const t = document.createElement('div');
@@ -1006,39 +687,30 @@
       }, 4000);
     }
 
-    // API Client with automatic token injection
     async function apiRequest(path, options = {}) {
       const headers = options.headers || {};
-      if (state.token) {
-        headers['Authorization'] = `Bearer ${state.token}`;
-      }
+      if (appState.token) headers['Authorization'] = `Bearer ${appState.token}`;
       headers['Content-Type'] = 'application/json';
 
       let url = path;
-      if (state.token && !headers['Authorization']) {
+      if (appState.token && !headers['Authorization']) {
         const sep = url.includes('?') ? '&' : '?';
-        url = `${url}${sep}token=${encodeURIComponent(state.token)}`;
+        url = `${url}${sep}token=${encodeURIComponent(appState.token)}`;
       }
 
-      try {
-        const res = await fetch(url, { ...options, headers });
-        if (res.status === 401) {
-          showToast('Требуется авторизация (укажите токен)', 'error');
-          openModal('token-modal');
-          throw new Error('Unauthorized');
-        }
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `HTTP error ${res.status}`);
-        }
-        return await res.json();
-      } catch (err) {
-        console.error(`API Error ${path}:`, err);
-        throw err;
+      const res = await fetch(url, { ...options, headers });
+      if (res.status === 401) {
+        showToast('Требуется авторизация (укажите токен)', 'error');
+        openModal('token-modal');
+        throw new Error('Unauthorized');
       }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP error ${res.status}`);
+      }
+      return await res.json();
     }
 
-    // Modal Helpers
     function openModal(id) {
       const m = document.getElementById(id);
       if (m) m.classList.add('open');
@@ -1047,36 +719,26 @@
       const m = document.getElementById(id);
       if (m) m.classList.remove('open');
     }
-
     document.querySelectorAll('.close-modal').forEach(b => {
-      b.addEventListener('click', (e) => {
-        e.target.closest('.modal-backdrop').classList.remove('open');
-      });
+      b.addEventListener('click', (e) => e.target.closest('.modal-backdrop').classList.remove('open'));
     });
-
     document.querySelectorAll('.modal-backdrop').forEach(m => {
-      m.addEventListener('click', (e) => {
-        if (e.target === m) m.classList.remove('open');
-      });
+      m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('open'); });
     });
 
     // Theme toggle
-    const themeBtn = document.getElementById('theme-toggle');
-    themeBtn.addEventListener('click', () => {
-      const current = document.documentElement.getAttribute('data-theme');
-      const next = current === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      localStorage.setItem('pmux_theme', next);
+    document.getElementById('theme-toggle').addEventListener('click', () => {
+      const cur = document.documentElement.getAttribute('data-theme');
+      const nxt = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', nxt);
+      localStorage.setItem('pmux_theme', nxt);
     });
-
     const savedTheme = localStorage.getItem('pmux_theme');
     if (savedTheme) {
       document.documentElement.setAttribute('data-theme', savedTheme);
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-      document.documentElement.setAttribute('data-theme', 'light');
     }
 
-    // Tabs switching
+    // Tab Navigation
     document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
         const target = btn.getAttribute('data-tab');
@@ -1085,15 +747,11 @@
         document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
         const pane = document.getElementById(`pane-${target}`);
         if (pane) pane.classList.add('active');
-        state.activeTab = target;
-
-        if (target === 'antigravity') loadAntigravityQuota();
-        if (target === 'keys') loadKeys();
-        if (target === 'models') loadModels();
+        appState.activeTab = target;
+        refreshCurrentTab();
       });
     });
 
-    // Format Uptime
     function formatUptime(seconds) {
       if (!seconds) return '0s';
       const d = Math.floor(seconds / 86400);
@@ -1106,8 +764,8 @@
       return `${s}с`;
     }
 
-    // Load Overview Status
-    async function loadStatus() {
+    // 1. Overview Load
+    async function loadOverview() {
       try {
         const data = await apiRequest('/_control/status');
         document.getElementById('daemon-mode').textContent = data.mode || 'local';
@@ -1115,8 +773,8 @@
         document.getElementById('stat-listen').textContent = `Слушает: ${data.listen || '--'}`;
 
         const totals = data.totals_today || {};
-        document.getElementById('stat-requests').textContent = totals.requests || 0;
-        document.getElementById('stat-errors').textContent = `Ошибок: ${totals.errors || 0}`;
+        document.getElementById('stat-requests').textContent = totals.requests || totals.ok || 0;
+        document.getElementById('stat-errors').textContent = `Ошибок: ${totals.errors || totals.refused || 0}`;
 
         const inTokens = totals.input_tokens || 0;
         const outTokens = totals.output_tokens || 0;
@@ -1124,30 +782,27 @@
         document.getElementById('stat-tokens-sub').textContent = `${inTokens.toLocaleString()} вх / ${outTokens.toLocaleString()} вых`;
 
         const provs = data.providers || [];
-        state.providers = provs;
+        appState.providers = provs;
         document.getElementById('stat-providers').textContent = provs.length;
 
         let totalModels = 0;
         const tbody = document.getElementById('overview-providers-tbody');
         tbody.innerHTML = '';
-
         provs.forEach(p => {
           totalModels += p.models || 0;
           const tr = document.createElement('tr');
           tr.innerHTML = `
-            <td style="font-weight:600; color:var(--md-sys-color-primary);">${p.id}</td>
+            <td style="font-weight:600; color:var(--md-sys-color-primary); cursor:pointer;" onclick="selectProvider('${p.id}')">${p.id}</td>
             <td>${p.models || 0}</td>
             <td>${p.free_models || 0}</td>
             <td><span class="badge ${p.keys > 0 ? 'badge-success' : 'badge-warning'}">${p.keys}</span></td>
             <td>${p.credential || 'default'}</td>
-            <td>${p.key_rotation ? '✅ Включена' : '—'}</td>
+            <td>${p.key_rotation ? '✅ Вкл' : '—'}</td>
           `;
           tbody.appendChild(tr);
         });
-
         document.getElementById('stat-models-count').textContent = `${totalModels} моделей объявлено`;
 
-        // Egress addresses
         const egressCont = document.getElementById('egress-list');
         egressCont.innerHTML = '';
         if (data.addresses && data.addresses.length > 0) {
@@ -1155,53 +810,300 @@
             const el = document.createElement('div');
             el.className = 'metric-card';
             el.innerHTML = `
-              <div class="metric-label">${a.family || 'Address'}</div>
-              <div style="font-size:1.1rem; font-weight:600; font-family:monospace;">${a.address}</div>
+              <div class="metric-label">${a.family || 'IP'}</div>
+              <div style="font-size:1.1rem; font-weight:600; font-family:monospace;">${a.address || a.error || 'N/A'}</div>
             `;
             egressCont.appendChild(el);
           });
-        } else {
-          egressCont.innerHTML = '<div class="metric-card"><div class="metric-sub">Адреса не определены</div></div>';
         }
-
       } catch (err) {
-        console.warn('Failed to load status:', err);
+        console.warn('Overview err:', err);
       }
     }
 
-    // Load Antigravity Quota
-    async function loadAntigravityQuota() {
-      const container = document.getElementById('ag-accounts-container');
-      const headerStatus = document.getElementById('ag-header-status');
+    // 2. Options Load
+    async function loadOptions() {
+      try {
+        const data = await apiRequest('/_control/options');
+        appState.options = data;
+
+        // Populate global settings tab
+        if (data.current) {
+          document.getElementById('global-opt-fallback').value = data.current.model_fallback || 'off';
+          document.getElementById('global-opt-family').value = data.current.family || 'auto';
+          document.getElementById('global-opt-mode').value = data.current.mode || 'local';
+
+          const tSel = document.getElementById('global-opt-transport');
+          tSel.innerHTML = '';
+          (data.transports || ['direct']).forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t; opt.textContent = t;
+            if (t === data.current.transport) opt.selected = true;
+            tSel.appendChild(opt);
+          });
+        }
+      } catch (err) {
+        console.warn('Options load err:', err);
+      }
+    }
+
+    // Save Global Options
+    document.getElementById('save-global-opts-btn').addEventListener('click', async () => {
+      const fallback = document.getElementById('global-opt-fallback').value;
+      const family = document.getElementById('global-opt-family').value;
+      const transport = document.getElementById('global-opt-transport').value;
+      const mode = document.getElementById('global-opt-mode').value;
 
       try {
-        const data = await apiRequest('/_control/antigravity/quota');
-        headerStatus.textContent = `Провайдер: ${data.configured ? 'Активен' : 'Не настроен'} | Ротация: ${data.rotation ? 'Вкл' : 'Выкл'} | Ключи: ${data.key_used ? 'Используются' : 'Нет'}`;
+        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'model_fallback', value: fallback }) });
+        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'family', value: family }) });
+        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'transport', value: transport }) });
+        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'mode', value: mode }) });
+        showToast('Глобальные параметры успешно применены');
+        loadOptions();
+        loadOverview();
+      } catch (err) {
+        showToast('Ошибка сохранения параметров: ' + err.message, 'error');
+      }
+    });
 
+    // 3. Provider Dedicated View (Separation by Provider)
+    function renderProviderPills() {
+      const nav = document.getElementById('providers-pill-nav');
+      nav.innerHTML = '';
+      const list = (appState.options && appState.options.providers) || (appState.providers.map(p => p.id));
+      if (!list || list.length === 0) return;
+
+      if (!list.includes(appState.activeProvider)) {
+        appState.activeProvider = list[0];
+      }
+
+      list.forEach(pId => {
+        const btn = document.createElement('button');
+        btn.className = `pill-btn ${pId === appState.activeProvider ? 'active' : ''}`;
+        btn.textContent = pId;
+        btn.onclick = () => selectProvider(pId);
+        nav.appendChild(btn);
+      });
+    }
+
+    window.selectProvider = function(pId) {
+      appState.activeProvider = pId;
+      renderProviderPills();
+      renderActiveProviderView();
+      // Also switch to providers tab if from overview
+      document.querySelectorAll('.tab-btn[data-tab]').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-tab') === 'providers');
+      });
+      document.querySelectorAll('.tab-pane').forEach(p => {
+        p.classList.toggle('active', p.id === 'pane-providers');
+      });
+      appState.activeTab = 'providers';
+    };
+
+    async function renderActiveProviderView() {
+      const cont = document.getElementById('provider-views-container');
+      const pId = appState.activeProvider;
+      if (!pId) return;
+
+      const pStatus = appState.providers.find(p => p.id === pId) || {};
+      const currentOpts = (appState.options && appState.options.current && appState.options.current.providers && appState.options.current.providers[pId]) || {};
+      const curCred = currentOpts.credential || pStatus.credential || 'anonymous';
+      const curRot = currentOpts.key_rotation || (pStatus.key_rotation ? 'on' : 'off');
+      const curTrans = currentOpts.transport || 'direct';
+
+      let extraSectionHTML = '';
+
+      // If Antigravity -> render Quota & Google Accounts section
+      if (pId === 'antigravity') {
+        extraSectionHTML = `
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Google Antigravity Аккаунты и Квоты
+              </h3>
+              <button class="btn btn-primary" onclick="openModal('ag-modal')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Добавить аккаунт
+              </button>
+            </div>
+            <div id="ag-provider-quota-container">
+              <div class="empty-state">Загрузка квот...</div>
+            </div>
+          </div>
+        `;
+      }
+
+      cont.innerHTML = `
+        <!-- Parameters on the fly -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Параметры провайдера: <strong style="color:var(--md-sys-color-primary);">${pId}</strong></h3>
+            <span class="badge ${pStatus.keys > 0 ? 'badge-success' : 'badge-warning'}">
+              ${pStatus.keys || 0} ключей в пуле
+            </span>
+          </div>
+
+          <div class="params-grid">
+            <div class="param-item">
+              <label class="form-label">Режим учетных данных (Credential)</label>
+              <select id="prov-param-cred" class="form-input">
+                <option value="account" ${curCred === 'account' ? 'selected' : ''}>account (с ключом/аккаунтом)</option>
+                <option value="anonymous" ${curCred === 'anonymous' ? 'selected' : ''}>anonymous (анонимный)</option>
+              </select>
+              <div class="form-hint">Переключение авторизации на лету</div>
+            </div>
+
+            <div class="param-item">
+              <label class="form-label">Ротация ключей (Key Rotation)</label>
+              <select id="prov-param-rot" class="form-input">
+                <option value="on" ${curRot === 'on' ? 'selected' : ''}>on (ротация включена)</option>
+                <option value="off" ${curRot === 'off' ? 'selected' : ''}>off (отключена)</option>
+              </select>
+              <div class="form-hint">Замена ключа при исчерпании лимита</div>
+            </div>
+
+            <div class="param-item">
+              <label class="form-label">Транспорт (Transport)</label>
+              <select id="prov-param-trans" class="form-input">
+                ${(appState.options?.transports || ['direct']).map(t => `<option value="${t}" ${curTrans === t ? 'selected' : ''}>${t}</option>`).join('')}
+              </select>
+              <div class="form-hint">Сетевой выход для этого провайдера</div>
+            </div>
+          </div>
+
+          <button id="save-prov-params-btn" class="btn btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Применить параметры на лету</span>
+          </button>
+        </div>
+
+        ${extraSectionHTML}
+
+        <!-- Provider Keys Pool -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Пул ключей: ${pId}</h3>
+            <button class="btn btn-tonal" onclick="openKeyModalFor('${pId}')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Добавить ключ
+            </button>
+          </div>
+          <div id="prov-keys-container">
+            <div class="empty-state">Загрузка ключей...</div>
+          </div>
+        </div>
+
+        <!-- Provider Models -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Модели провайдера: ${pId}</h3>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr><th>ID модели</th><th>Контекст</th><th>Max Output</th><th>Параметры</th><th>Тип</th></tr>
+              </thead>
+              <tbody id="prov-models-tbody">
+                <tr><td colspan="5" class="empty-state">Загрузка моделей...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      // Event: Save provider params on the fly
+      document.getElementById('save-prov-params-btn').addEventListener('click', async () => {
+        const cred = document.getElementById('prov-param-cred').value;
+        const rot = document.getElementById('prov-param-rot').value;
+        const trans = document.getElementById('prov-param-trans').value;
+        try {
+          await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ provider: pId, axis: 'credential', value: cred }) });
+          await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ provider: pId, axis: 'key_rotation', value: rot }) });
+          await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ provider: pId, axis: 'transport', value: trans }) });
+          showToast(`Параметры провайдера ${pId} обновлены на лету!`);
+          loadOverview();
+          loadOptions();
+        } catch (err) {
+          showToast('Ошибка сохранения: ' + err.message, 'error');
+        }
+      });
+
+      // Load keys for this provider
+      loadProviderKeys(pId);
+      // Load models for this provider
+      renderProviderModels(pId);
+      // If antigravity -> load quota
+      if (pId === 'antigravity') {
+        loadAntigravityQuotaInProvider();
+      }
+    }
+
+    async function loadProviderKeys(pId) {
+      const cont = document.getElementById('prov-keys-container');
+      if (!cont) return;
+      try {
+        const data = await apiRequest('/_control/keys');
+        const pObj = (data.providers || []).find(p => p.provider === pId);
+        if (!pObj || !pObj.keys || pObj.keys.length === 0) {
+          cont.innerHTML = '<div class="empty-state">В пуле нет активных ключей</div>';
+          return;
+        }
+        cont.innerHTML = pObj.keys.map(k => `
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--md-sys-color-surface-container-high); border-radius:var(--md-sys-shape-corner-small); margin-bottom:8px; border:1px solid var(--md-sys-color-outline-variant);">
+            <div style="font-family:monospace; font-size:0.9rem;">${k}</div>
+            <button class="btn btn-danger btn-icon" title="Удалить ключ" onclick="removeAccount('${pId}', '${k}')">✕</button>
+          </div>
+        `).join('');
+      } catch (err) {
+        cont.innerHTML = `<div class="empty-state" style="color:var(--md-sys-color-error);">Ошибка: ${err.message}</div>`;
+      }
+    }
+
+    function renderProviderModels(pId) {
+      const tbody = document.getElementById('prov-models-tbody');
+      if (!tbody) return;
+      const provModels = (appState.models || []).filter(m => m.provider === pId);
+      if (provModels.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Модели не найдены</td></tr>';
+        return;
+      }
+      tbody.innerHTML = provModels.map(m => `
+        <tr>
+          <td style="font-weight:600;">${m.id}</td>
+          <td>${(m.context || 0).toLocaleString()}</td>
+          <td>${(m.max_output || 0).toLocaleString()}</td>
+          <td>
+            ${m.vision ? '<span class="badge badge-success" style="margin-right:4px;">Vision</span>' : ''}
+            ${m.reasoning ? '<span class="badge badge-warning">Reasoning</span>' : ''}
+          </td>
+          <td>${m.free ? '<span class="badge badge-success">Бесплатная</span>' : 'Стандартная'}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadAntigravityQuotaInProvider() {
+      const cont = document.getElementById('ag-provider-quota-container');
+      if (!cont) return;
+      try {
+        const data = await apiRequest('/_control/antigravity/quota');
         if (!data.accounts || data.accounts.length === 0) {
-          container.innerHTML = `
+          cont.innerHTML = `
             <div class="empty-state">
-              <div class="empty-icon">📂</div>
-              <div style="font-size:1.1rem; font-weight:600; margin-bottom:8px;">Нет зарегистрированных аккаунтов Antigravity</div>
-              <div style="margin-bottom:16px;">Добавьте аккаунт через Google OAuth или Refresh Token, чтобы использовать модели Google Cloud Code.</div>
-              <button class="btn btn-primary" onclick="openModal('ag-modal')">Добавить аккаунт</button>
+              <div>Нет добавленных аккаунтов Antigravity. Нажмите «Добавить аккаунт» выше.</div>
             </div>
           `;
           return;
         }
 
-        container.innerHTML = '';
-        data.accounts.forEach(acc => {
-          const card = document.createElement('div');
-          card.className = 'account-card';
-
-          const hasError = !!acc.error;
+        cont.innerHTML = data.accounts.map(acc => {
           let groupsHTML = '';
+          const hasError = !!acc.error;
 
           if (acc.groups && acc.groups.length > 0) {
-            acc.groups.forEach(g => {
-              let windowsHTML = '';
-              (g.windows || []).forEach(w => {
+            groupsHTML = acc.groups.map(g => {
+              const windowsHTML = (g.windows || []).map(w => {
                 const fraction = typeof w.remaining_fraction === 'number' ? w.remaining_fraction : 1;
                 const pct = Math.round(fraction * 100);
                 const barClass = pct > 50 ? 'high' : pct > 20 ? 'medium' : 'low';
@@ -1209,130 +1111,75 @@
                 if (w.reset_time) {
                   try {
                     const rDate = new Date(w.reset_time);
-                    resetStr = `Сброс: ${rDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                    resetStr = `Сброс: ${rDate.toLocaleString([], { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}`;
                   } catch (e) {
                     resetStr = `Сброс: ${w.reset_time}`;
                   }
                 }
 
-                windowsHTML += `
-                  <div class="quota-window-row">
-                    <div class="quota-meta">
+                return `
+                  <div style="margin-bottom: 10px;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px;">
                       <span>Окно: <strong>${w.window === '5h' ? '5 часов' : w.window === 'weekly' ? 'Неделя' : w.window}</strong></span>
                       <span><strong>${pct}%</strong> доступно</span>
                     </div>
                     <div class="progress-container">
                       <div class="progress-bar ${barClass}" style="width: ${pct}%;"></div>
                     </div>
-                    <div class="quota-meta" style="font-size:0.75rem;">
-                      <span>${resetStr}</span>
-                    </div>
+                    <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); text-align:right;">${resetStr}</div>
                   </div>
                 `;
-              });
+              }).join('');
 
-              groupsHTML += `
-                <div class="quota-group-card">
-                  <div class="quota-group-name">
+              return `
+                <div style="background:var(--md-sys-color-surface-container); border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--md-sys-shape-corner-medium); padding:14px; margin-top:10px;">
+                  <div style="font-weight:600; color:var(--md-sys-color-primary); margin-bottom:8px; display:flex; justify-content:space-between;">
                     <span>${g.group}</span>
                     <span style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">${g.model_count} моделей</span>
                   </div>
                   ${windowsHTML}
                 </div>
               `;
-            });
+            }).join('');
           } else {
-            groupsHTML = `<div class="empty-state" style="padding:12px;">Квоты не получены или группа отсутствует</div>`;
+            groupsHTML = `<div class="empty-state" style="padding:10px;">Квоты не получены</div>`;
           }
 
-          card.innerHTML = `
-            <div class="account-header">
-              <div class="account-info">
-                <div class="account-email">${acc.email || 'Google Account'}</div>
-                <div class="account-fp">ID: ${acc.account_id || '--'} ${acc.project ? `| Проект: ${acc.project}` : ''}</div>
+          return `
+            <div style="background:var(--md-sys-color-surface-container-high); border-radius:var(--md-sys-shape-corner-medium); border:1px solid var(--md-sys-color-outline-variant); padding:16px; margin-bottom:14px;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+                <div>
+                  <div style="font-weight:600; font-size:1.05rem;">${acc.email || 'Google Account'}</div>
+                  <div style="font-family:monospace; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">ID: ${acc.account_id} ${acc.project ? `| Проект: ${acc.project}` : ''}</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="badge ${hasError ? 'badge-error' : 'badge-success'}">${hasError ? 'Ошибка' : 'Активен'}</span>
+                  <button class="btn btn-danger btn-icon" title="Удалить аккаунт" onclick="removeAccount('antigravity', '${acc.account_id}')">✕</button>
+                </div>
               </div>
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span class="badge ${hasError ? 'badge-error' : 'badge-success'}">
-                  ${hasError ? 'Ошибка' : 'Активен'}
-                </span>
-                <button class="btn btn-danger btn-icon" title="Удалить аккаунт" onclick="removeAccount('antigravity', '${acc.account_id}')">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                </button>
-              </div>
+              ${hasError ? `<div style="color:var(--md-sys-color-error); font-size:0.85rem; margin-top:8px;">Ошибка: ${acc.error}</div>` : ''}
+              ${groupsHTML}
             </div>
-            ${hasError ? `<div style="color:var(--md-sys-color-error); font-size:0.85rem; margin-top:8px;">Ошибка: ${acc.error}</div>` : ''}
-            <div class="quota-groups">${groupsHTML}</div>
           `;
-          container.appendChild(card);
-        });
-
+        }).join('');
       } catch (err) {
-        container.innerHTML = `<div class="empty-state" style="color:var(--md-sys-color-error);">Не удалось загрузить квоты Antigravity: ${err.message}</div>`;
+        cont.innerHTML = `<div class="empty-state" style="color:var(--md-sys-color-error);">Ошибка: ${err.message}</div>`;
       }
     }
 
-    // Load Keys
-    async function loadKeys() {
-      const container = document.getElementById('keys-providers-list');
-      try {
-        const data = await apiRequest('/_control/keys');
-        const provs = data.providers || [];
-        container.innerHTML = '';
-
-        const select = document.getElementById('generic-key-provider');
-        select.innerHTML = '';
-
-        provs.forEach(p => {
-          const opt = document.createElement('option');
-          opt.value = p.provider;
-          opt.textContent = p.provider;
-          select.appendChild(opt);
-
-          const card = document.createElement('div');
-          card.className = 'card';
-          card.style.marginBottom = '12px';
-
-          let keysList = '';
-          if (p.keys && p.keys.length > 0) {
-            keysList = p.keys.map(k => `
-              <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--md-sys-color-surface-container-high); border-radius:var(--md-sys-shape-corner-small); margin-bottom:6px;">
-                <code style="font-size:0.85rem;">${k}</code>
-                <button class="btn-icon" style="color:var(--md-sys-color-error);" title="Удалить" onclick="removeAccount('${p.provider}', '${k}')">✕</button>
-              </div>
-            `).join('');
-          } else {
-            keysList = `<div class="metric-sub" style="margin-top:6px;">Ключи не зарегистрированы</div>`;
-          }
-
-          card.innerHTML = `
-            <div class="card-header" style="margin-bottom:8px;">
-              <h3 style="font-size:1.05rem; font-weight:600; color:var(--md-sys-color-primary);">${p.provider}</h3>
-              <span class="badge ${p.key_used ? 'badge-success' : 'badge-warning'}">
-                ${p.rotation ? 'Ротация включена' : 'Без ротации'}
-              </span>
-            </div>
-            <div style="margin-top:8px;">${keysList}</div>
-          `;
-          container.appendChild(card);
-        });
-      } catch (err) {
-        container.innerHTML = `<div class="empty-state" style="color:var(--md-sys-color-error);">Ошибка: ${err.message}</div>`;
-      }
-    }
-
-    // Load Models
+    // 4. Global Models Load
     async function loadModels() {
       const tbody = document.getElementById('models-tbody');
       try {
         const data = await apiRequest('/_control/models');
-        state.models = data.models || [];
-        renderModels(state.models);
+        appState.models = data.models || [];
+        renderModelsTable(appState.models);
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color:var(--md-sys-color-error);">Ошибка: ${err.message}</td></tr>`;
       }
     }
 
-    function renderModels(models) {
+    function renderModelsTable(models) {
       const tbody = document.getElementById('models-tbody');
       tbody.innerHTML = '';
       if (!models || models.length === 0) {
@@ -1343,7 +1190,7 @@
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td style="font-weight:600;">${m.id}</td>
-          <td><span class="badge" style="background:var(--md-sys-color-surface-container-highest);">${m.provider}</span></td>
+          <td><span class="badge" style="background:var(--md-sys-color-surface-container-highest); cursor:pointer;" onclick="selectProvider('${m.provider}')">${m.provider}</span></td>
           <td>${(m.context || 0).toLocaleString()}</td>
           <td>${(m.max_output || 0).toLocaleString()}</td>
           <td>
@@ -1358,182 +1205,152 @@
 
     document.getElementById('models-search').addEventListener('input', (e) => {
       const q = e.target.value.toLowerCase().trim();
-      if (!q) {
-        renderModels(state.models);
-        return;
-      }
-      const filtered = state.models.filter(m =>
+      if (!q) { renderModelsTable(appState.models); return; }
+      const filtered = appState.models.filter(m =>
         (m.id && m.id.toLowerCase().includes(q)) ||
-        (m.name && m.name.toLowerCase().includes(q)) ||
         (m.provider && m.provider.toLowerCase().includes(q))
       );
-      renderModels(filtered);
+      renderModelsTable(filtered);
     });
 
-    // Remove key / account
+    // Keys Modal
+    window.openKeyModalFor = function(prov) {
+      const sel = document.getElementById('generic-key-provider');
+      sel.innerHTML = '';
+      const list = (appState.options && appState.options.providers) || (appState.providers.map(p => p.id));
+      list.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p; opt.textContent = p;
+        if (p === prov) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      openModal('key-modal');
+    };
+
+    document.getElementById('submit-generic-key-btn').addEventListener('click', async () => {
+      const provider = document.getElementById('generic-key-provider').value;
+      const key = document.getElementById('generic-key-val').value.trim();
+      if (!key) { showToast('Введите ключ', 'error'); return; }
+      try {
+        await apiRequest('/_control/keys/add', { method: 'POST', body: JSON.stringify({ provider, key }) });
+        showToast('Ключ успешно добавлен');
+        closeModal('key-modal');
+        document.getElementById('generic-key-val').value = '';
+        loadOverview();
+        if (appState.activeTab === 'providers') renderActiveProviderView();
+      } catch (err) {
+        showToast('Ошибка: ' + err.message, 'error');
+      }
+    });
+
     window.removeAccount = async function(provider, fingerprint) {
       if (!confirm(`Удалить ключ ${fingerprint} для ${provider}?`)) return;
       try {
-        await apiRequest('/_control/keys/remove', {
-          method: 'POST',
-          body: JSON.stringify({ provider, key: fingerprint })
-        });
-        showToast('Ключ успешно удален');
-        if (state.activeTab === 'antigravity') loadAntigravityQuota();
-        if (state.activeTab === 'keys') loadKeys();
-        loadStatus();
+        await apiRequest('/_control/keys/remove', { method: 'POST', body: JSON.stringify({ provider, key: fingerprint }) });
+        showToast('Ключ удален');
+        loadOverview();
+        if (appState.activeTab === 'providers') renderActiveProviderView();
       } catch (err) {
         showToast('Ошибка удаления: ' + err.message, 'error');
       }
     };
 
-    // Generic Add Key
-    document.getElementById('add-key-btn').addEventListener('click', () => {
-      openModal('key-modal');
-    });
-
-    document.getElementById('submit-generic-key-btn').addEventListener('click', async () => {
-      const provider = document.getElementById('generic-key-provider').value;
-      const key = document.getElementById('generic-key-val').value.trim();
-      if (!key) {
-        showToast('Введите ключ', 'error');
-        return;
-      }
-      try {
-        await apiRequest('/_control/keys/add', {
-          method: 'POST',
-          body: JSON.stringify({ provider, key })
-        });
-        showToast('Ключ добавлен');
-        closeModal('key-modal');
-        document.getElementById('generic-key-val').value = '';
-        loadKeys();
-        loadStatus();
-      } catch (err) {
-        showToast('Ошибка добавления: ' + err.message, 'error');
-      }
-    });
-
-    // Antigravity OAuth and Token
-    document.getElementById('add-ag-account-btn').addEventListener('click', () => {
-      openModal('ag-modal');
-    });
-
+    // Antigravity OAuth PKCE flow
     const tabOAuth = document.getElementById('tab-oauth-btn');
     const tabToken = document.getElementById('tab-token-btn');
     const subOAuth = document.getElementById('subform-oauth');
     const subToken = document.getElementById('subform-token');
 
     tabOAuth.addEventListener('click', () => {
-      tabOAuth.classList.add('active');
-      tabToken.classList.remove('active');
-      subOAuth.style.display = 'block';
-      subToken.style.display = 'none';
+      tabOAuth.classList.add('active'); tabToken.classList.remove('active');
+      subOAuth.style.display = 'block'; subToken.style.display = 'none';
     });
-
     tabToken.addEventListener('click', () => {
-      tabToken.classList.add('active');
-      tabOAuth.classList.remove('active');
-      subToken.style.display = 'block';
-      subOAuth.style.display = 'none';
+      tabToken.classList.add('active'); tabOAuth.classList.remove('active');
+      subToken.style.display = 'block'; subOAuth.style.display = 'none';
     });
 
-    // Start OAuth flow
     document.getElementById('start-oauth-btn').addEventListener('click', async () => {
       try {
         const res = await apiRequest('/_control/antigravity/oauth/start', { method: 'POST' });
-        state.oauthVerifier = res.verifier;
+        appState.oauthVerifier = res.verifier;
         window.open(res.auth_url, '_blank');
-        showToast('Окно авторизации Google открыто');
+        showToast('Авторизация Google открыта в новой вкладке');
       } catch (err) {
-        showToast('Не удалось запустить OAuth: ' + err.message, 'error');
+        showToast('Ошибка запуска OAuth: ' + err.message, 'error');
       }
     });
 
-    // Submit OAuth code
     document.getElementById('submit-oauth-btn').addEventListener('click', async () => {
       const code = document.getElementById('oauth-code-input').value.trim();
       const projectId = document.getElementById('oauth-project-input').value.trim();
-
-      if (!code) {
-        showToast('Введите код авторизации Google', 'error');
-        return;
-      }
-      if (!state.oauthVerifier) {
-        showToast('Сначала нажмите шаг 1 для запуска OAuth', 'error');
-        return;
-      }
+      if (!code) { showToast('Введите код авторизации Google', 'error'); return; }
+      if (!appState.oauthVerifier) { showToast('Сначала нажмите шаг 1 для запуска OAuth', 'error'); return; }
 
       try {
         const res = await apiRequest('/_control/antigravity/oauth/exchange', {
           method: 'POST',
-          body: JSON.stringify({
-            code,
-            verifier: state.oauthVerifier,
-            project_id: projectId || undefined
-          })
+          body: JSON.stringify({ code, verifier: appState.oauthVerifier, project_id: projectId || undefined })
         });
-        showToast(`Аккаунт ${res.email || res.fingerprint} добавлен`);
+        showToast(`Аккаунт ${res.email || res.fingerprint} успешно добавлен!`);
         closeModal('ag-modal');
         document.getElementById('oauth-code-input').value = '';
-        state.oauthVerifier = '';
-        loadAntigravityQuota();
-        loadStatus();
+        appState.oauthVerifier = '';
+        loadOverview();
+        if (appState.activeTab === 'providers') renderActiveProviderView();
       } catch (err) {
         showToast('Ошибка обмена кода: ' + err.message, 'error');
       }
     });
 
-    // Submit direct Antigravity refresh token
     document.getElementById('submit-ag-token-btn').addEventListener('click', async () => {
       const token = document.getElementById('ag-token-input').value.trim();
-      if (!token) {
-        showToast('Введите refresh token', 'error');
-        return;
-      }
-
+      if (!token) { showToast('Введите refresh token', 'error'); return; }
       try {
-        await apiRequest('/_control/keys/add', {
-          method: 'POST',
-          body: JSON.stringify({
-            provider: 'antigravity',
-            key: token
-          })
-        });
+        await apiRequest('/_control/keys/add', { method: 'POST', body: JSON.stringify({ provider: 'antigravity', key: token }) });
         showToast('Аккаунт Antigravity добавлен');
         closeModal('ag-modal');
         document.getElementById('ag-token-input').value = '';
-        loadAntigravityQuota();
-        loadStatus();
+        loadOverview();
+        if (appState.activeTab === 'providers') renderActiveProviderView();
       } catch (err) {
-        showToast('Ошибка добавления: ' + err.message, 'error');
+        showToast('Ошибка: ' + err.message, 'error');
       }
     });
 
     // Token Modal
     document.getElementById('token-btn').addEventListener('click', () => {
-      document.getElementById('app-token-input').value = state.token;
+      document.getElementById('app-token-input').value = appState.token;
       openModal('token-modal');
     });
-
     document.getElementById('save-token-btn').addEventListener('click', () => {
       const val = document.getElementById('app-token-input').value.trim();
-      state.token = val;
+      appState.token = val;
       localStorage.setItem('pmux_token', val);
       closeModal('token-modal');
       showToast('Токен сохранен');
       refreshAll();
     });
 
-    // Refresh Action
+    async function refreshCurrentTab() {
+      if (appState.activeTab === 'overview') await loadOverview();
+      if (appState.activeTab === 'providers') {
+        renderProviderPills();
+        renderActiveProviderView();
+      }
+      if (appState.activeTab === 'global-settings') await loadOptions();
+      if (appState.activeTab === 'models') await loadModels();
+    }
+
     async function refreshAll() {
       const icon = document.getElementById('refresh-icon');
       icon.classList.add('spin');
       try {
-        await loadStatus();
-        if (state.activeTab === 'antigravity') await loadAntigravityQuota();
-        if (state.activeTab === 'keys') await loadKeys();
-        if (state.activeTab === 'models') await loadModels();
+        await loadOverview();
+        await loadOptions();
+        await loadModels();
+        renderProviderPills();
+        if (appState.activeTab === 'providers') renderActiveProviderView();
       } finally {
         setTimeout(() => icon.classList.remove('spin'), 400);
       }
@@ -1541,9 +1358,8 @@
 
     document.getElementById('refresh-btn').addEventListener('click', refreshAll);
 
-    // Initial Load
+    // Initial load
     refreshAll();
-    // Periodic background refresh every 20s
     setInterval(refreshAll, 20000);
   </script>
 </body>

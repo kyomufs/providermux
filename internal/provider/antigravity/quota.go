@@ -65,21 +65,41 @@ func NewQuotaFetcher(p *Provider) *QuotaFetcher {
 
 // rawQuotaResponse models the upstream JSON from /v1internal:retrieveUserQuotaSummary.
 type rawQuotaResponse struct {
+	Groups []struct {
+		DisplayName string `json:"displayName"`
+		Description string `json:"description"`
+		Buckets     []struct {
+			BucketID          string  `json:"bucketId"`
+			DisplayName       string  `json:"displayName"`
+			Window            string  `json:"window"`
+			WindowMinutes     int     `json:"windowMinutes"`
+			ResetTime         string  `json:"resetTime"`
+			Description       string  `json:"description"`
+			RemainingFraction float64 `json:"remainingFraction"`
+			Disabled          bool    `json:"disabled"`
+		} `json:"buckets"`
+	} `json:"groups"`
 	Buckets []struct {
-		WindowMinutes int     `json:"windowMinutes"`
-		Remaining     float64 `json:"remainingFraction"`
-		ResetTime     string  `json:"resetTime"`
-		AllowedModels []any   `json:"allowedModels"`
+		BucketID          string  `json:"bucketId"`
+		DisplayName       string  `json:"displayName"`
+		Window            string  `json:"window"`
+		WindowMinutes     int     `json:"windowMinutes"`
+		ResetTime         string  `json:"resetTime"`
+		AllowedModels     []any   `json:"allowedModels"`
+		RemainingFraction float64 `json:"remainingFraction"`
+		Disabled          bool    `json:"disabled"`
 	} `json:"buckets"`
-	Models []struct {
-		ID    string `json:"id"`
-		Group string `json:"group"`
-	} `json:"models"`
 }
 
 func accountFingerprint(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:8])
+}
+
+// Endpoints tried in order, matching @cortexkit/antigravity-auth-core.
+var quotaEndpoints = []string{
+	"https://cloudcode-pa.googleapis.com",
+	"https://daily-cloudcode-pa.googleapis.com",
 }
 
 // FetchQuota retrieves the quota summary for a specific refresh token.
@@ -98,36 +118,74 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 		client = &http.Client{Timeout: 15 * time.Second}
 	}
 
-	bodyData := map[string]string{}
-	if project != "" {
-		bodyData["project"] = project
+	// Prepare endpoints to try
+	endpoints := []string{}
+	if q.baseURL != "" && q.baseURL != DefaultBaseURL {
+		endpoints = append(endpoints, strings.TrimRight(q.baseURL, "/"))
 	}
-	bodyJSON, _ := json.Marshal(bodyData)
+	endpoints = append(endpoints, quotaEndpoints...)
 
-	endpoint := strings.TrimRight(q.baseURL, "/") + "/v1internal:retrieveUserQuotaSummary"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyJSON))
-	if err != nil {
-		return nil, err
+	var lastErr error
+	var respBody []byte
+
+	// Try each endpoint with project, with fallback to empty project on 403
+	for _, base := range endpoints {
+		url := base + "/v1internal:retrieveUserQuotaSummary"
+
+		bodyData := map[string]string{}
+		if project != "" {
+			bodyData["project"] = project
+		}
+		bJSON, _ := json.Marshal(bodyData)
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(bJSON))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Antigravity/1.18.3 Chrome/138.0.7204.235 Electron/37.3.1 Safari/537.36")
+		req.Header.Set("X-Goog-Api-Client", "google-cloud-sdk vscode_cloudshelleditor/0.1")
+		req.Header.Set("Client-Metadata", `{"ideType":"ANTIGRAVITY","platform":"MACOS","pluginType":"GEMINI"}`)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		// If 403 with project, retry with empty project
+		if resp.StatusCode == http.StatusForbidden && project != "" {
+			resp.Body.Close()
+			reqEmpty, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader([]byte("{}")))
+			reqEmpty.Header = req.Header.Clone()
+			resp, err = client.Do(reqEmpty)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+		}
+
+		b, readErr := io.ReadAll(io.LimitReader(resp.Body, 512<<10))
+		resp.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			respBody = b
+			lastErr = nil
+			break
+		}
+		lastErr = fmt.Errorf("status %d from %s: %s", resp.StatusCode, base, strings.TrimSpace(string(b)))
 	}
 
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", q.ua)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("quota request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 256<<10))
-	if err != nil {
-		return nil, fmt.Errorf("reading quota response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("quota endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	if lastErr != nil && len(respBody) == 0 {
+		return nil, fmt.Errorf("quota request failed: %w", lastErr)
 	}
 
 	email := fetchUserEmail(client, accessToken)
@@ -148,70 +206,119 @@ func parseRawQuota(data []byte, refreshToken, project string) (*AccountQuotaSumm
 		AccountID:   accountFingerprint(refreshToken),
 		Project:     project,
 		LastChecked: time.Now().UTC(),
+		Groups:      []QuotaGroupView{},
 	}
 
-	geminiWindows := []QuotaWindowView{}
-	nonGeminiWindows := []QuotaWindowView{}
+	// 1. First check nested groups (official Google Cloud Code API structure)
+	if len(raw.Groups) > 0 {
+		for _, g := range raw.Groups {
+			windows := []QuotaWindowView{}
+			for _, b := range g.Buckets {
+				if b.Disabled {
+					continue
+				}
+				win := Window5Hour
+				winStr := strings.ToLower(b.Window + " " + b.BucketID)
+				if strings.Contains(winStr, "week") || b.WindowMinutes > 300 {
+					win = WindowWeekly
+				}
 
-	// Upstream returns bucket windows in minutes (e.g. 300 = 5h, 10080 = 7d/weekly)
-	// or separated by allowedModels / groups
-	for _, b := range raw.Buckets {
-		win := Window5Hour
-		if b.WindowMinutes > 300 || b.WindowMinutes == 10080 {
-			win = WindowWeekly
-		}
+				windows = append(windows, QuotaWindowView{
+					Window:            win,
+					RemainingFraction: b.RemainingFraction,
+					ResetTime:         b.ResetTime,
+				})
+			}
 
-		view := QuotaWindowView{
-			Window:            win,
-			RemainingFraction: b.Remaining,
-			ResetTime:         b.ResetTime,
-		}
+			if len(windows) > 0 {
+				modelCount := countModelsFromDescription(g.Description)
+				if modelCount == 0 {
+					modelCount = len(windows)
+				}
+				groupTitle := g.DisplayName
+				if groupTitle == "" {
+					groupTitle = "Google Cloud Code"
+				}
 
-		isGemini := true
-		for _, m := range b.AllowedModels {
-			mStr := fmt.Sprint(m)
-			if strings.Contains(strings.ToLower(mStr), "claude") || strings.Contains(strings.ToLower(mStr), "gpt") {
-				isGemini = false
-				break
+				summary.Groups = append(summary.Groups, QuotaGroupView{
+					Group:      groupTitle,
+					ModelCount: modelCount,
+					Windows:    windows,
+				})
 			}
 		}
-
-		if isGemini {
-			geminiWindows = append(geminiWindows, view)
-		} else {
-			nonGeminiWindows = append(nonGeminiWindows, view)
-		}
 	}
 
-	// Fallback: if groups weren't split by allowedModels, provide what we got
-	if len(geminiWindows) == 0 && len(nonGeminiWindows) == 0 && len(raw.Buckets) > 0 {
+	// 2. Fallback if top-level buckets were returned
+	if len(summary.Groups) == 0 && len(raw.Buckets) > 0 {
+		geminiWindows := []QuotaWindowView{}
+		nonGeminiWindows := []QuotaWindowView{}
+
 		for _, b := range raw.Buckets {
+			if b.Disabled {
+				continue
+			}
 			win := Window5Hour
-			if b.WindowMinutes > 300 {
+			if b.WindowMinutes > 300 || strings.Contains(strings.ToLower(b.Window+" "+b.BucketID), "week") {
 				win = WindowWeekly
 			}
-			geminiWindows = append(geminiWindows, QuotaWindowView{
+
+			view := QuotaWindowView{
 				Window:            win,
-				RemainingFraction: b.Remaining,
+				RemainingFraction: b.RemainingFraction,
 				ResetTime:         b.ResetTime,
+			}
+
+			isGemini := true
+			for _, m := range b.AllowedModels {
+				mStr := fmt.Sprint(m)
+				if strings.Contains(strings.ToLower(mStr), "claude") || strings.Contains(strings.ToLower(mStr), "gpt") {
+					isGemini = false
+					break
+				}
+			}
+
+			if isGemini {
+				geminiWindows = append(geminiWindows, view)
+			} else {
+				nonGeminiWindows = append(nonGeminiWindows, view)
+			}
+		}
+
+		if len(geminiWindows) > 0 {
+			summary.Groups = append(summary.Groups, QuotaGroupView{
+				Group:      "Gemini",
+				ModelCount: 3,
+				Windows:    geminiWindows,
+			})
+		}
+		if len(nonGeminiWindows) > 0 {
+			summary.Groups = append(summary.Groups, QuotaGroupView{
+				Group:      "Claude & GPT (3P)",
+				ModelCount: 3,
+				Windows:    nonGeminiWindows,
 			})
 		}
 	}
 
-	if len(geminiWindows) > 0 {
-		summary.Groups = append(summary.Groups, QuotaGroupView{
-			Group:      "gemini",
-			ModelCount: 3,
-			Windows:    geminiWindows,
-		})
-	}
-	if len(nonGeminiWindows) > 0 {
-		summary.Groups = append(summary.Groups, QuotaGroupView{
-			Group:      "non-gemini",
-			ModelCount: 2,
-			Windows:    nonGeminiWindows,
-		})
-	}
-
 	return summary, nil
+}
+
+func countModelsFromDescription(desc string) int {
+	if desc == "" {
+		return 0
+	}
+	parts := strings.SplitN(desc, ":", 2)
+	target := desc
+	if len(parts) == 2 {
+		target = parts[1]
+	}
+	items := strings.Split(target, ",")
+	count := 0
+	for _, item := range items {
+		if strings.TrimSpace(item) != "" {
+			count++
+		}
+	}
+	return count
 }

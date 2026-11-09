@@ -9,25 +9,30 @@ import (
 )
 
 func TestQuotaFetcherParsing(t *testing.T) {
-	rawJSON := `{
-		"buckets": [
+	// 1. Nested Google Cloud Code real response structure
+	nestedJSON := `{
+		"groups": [
 			{
-				"windowMinutes": 300,
-				"remainingFraction": 0.85,
-				"resetTime": "2026-11-10T04:00:00Z",
-				"allowedModels": ["gemini-2.5-pro", "gemini-2.5-flash"]
-			},
-			{
-				"windowMinutes": 10080,
-				"remainingFraction": 0.95,
-				"resetTime": "2026-11-17T00:00:00Z",
-				"allowedModels": ["gemini-2.5-pro"]
-			},
-			{
-				"windowMinutes": 300,
-				"remainingFraction": 0.40,
-				"resetTime": "2026-11-10T02:30:00Z",
-				"allowedModels": ["claude-3-7-sonnet", "gpt-4o"]
+				"displayName": "Claude and GPT models",
+				"description": "Models within this group: Claude Opus, Claude Sonnet, GPT-OSS",
+				"buckets": [
+					{
+						"bucketId": "3p-weekly",
+						"displayName": "Weekly Limit Remaining",
+						"window": "weekly",
+						"resetTime": "2026-11-16T14:26:13Z",
+						"description": "Weekly limit refresh",
+						"remainingFraction": 0.4417
+					},
+					{
+						"bucketId": "3p-5h",
+						"displayName": "Five Hour Limit Remaining",
+						"window": "5h",
+						"resetTime": "2026-11-10T01:00:35Z",
+						"description": "5-hour limit refresh",
+						"remainingFraction": 0.05
+					}
+				]
 			}
 		]
 	}`
@@ -40,7 +45,7 @@ func TestQuotaFetcherParsing(t *testing.T) {
 			t.Errorf("unexpected auth header: %s", r.Header.Get("Authorization"))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(rawJSON))
+		w.Write([]byte(nestedJSON))
 	}))
 	defer server.Close()
 
@@ -67,29 +72,54 @@ func TestQuotaFetcherParsing(t *testing.T) {
 	if summary.Project != "my-project" {
 		t.Errorf("expected project 'my-project', got %q", summary.Project)
 	}
-	if len(summary.Groups) != 2 {
-		t.Fatalf("expected 2 groups, got %d", len(summary.Groups))
+	if len(summary.Groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(summary.Groups))
 	}
 
-	gemini := summary.Groups[0]
-	if gemini.Group != "gemini" {
-		t.Errorf("expected group 'gemini', got %q", gemini.Group)
+	g := summary.Groups[0]
+	if g.Group != "Claude and GPT models" {
+		t.Errorf("expected group 'Claude and GPT models', got %q", g.Group)
 	}
-	if len(gemini.Windows) != 2 {
-		t.Errorf("expected 2 gemini windows, got %d", len(gemini.Windows))
+	if g.ModelCount != 3 {
+		t.Errorf("expected 3 models in group, got %d", g.ModelCount)
 	}
-	if gemini.Windows[0].RemainingFraction != 0.85 {
-		t.Errorf("expected 0.85, got %f", gemini.Windows[0].RemainingFraction)
+	if len(g.Windows) != 2 {
+		t.Fatalf("expected 2 windows, got %d", len(g.Windows))
 	}
+	if g.Windows[0].Window != WindowWeekly || g.Windows[0].RemainingFraction != 0.4417 {
+		t.Errorf("unexpected window[0]: %+v", g.Windows[0])
+	}
+}
 
-	nonGemini := summary.Groups[1]
-	if nonGemini.Group != "non-gemini" {
-		t.Errorf("expected group 'non-gemini', got %q", nonGemini.Group)
+func TestQuotaFetcherFlatFallback(t *testing.T) {
+	flatJSON := `{
+		"buckets": [
+			{
+				"windowMinutes": 300,
+				"remainingFraction": 0.85,
+				"resetTime": "2026-11-10T04:00:00Z",
+				"allowedModels": ["gemini-2.5-pro", "gemini-2.5-flash"]
+			},
+			{
+				"windowMinutes": 10080,
+				"remainingFraction": 0.95,
+				"resetTime": "2026-11-17T00:00:00Z",
+				"allowedModels": ["gemini-2.5-pro"]
+			}
+		]
+	}`
+
+	summary, err := parseRawQuota([]byte(flatJSON), "token", "")
+	if err != nil {
+		t.Fatalf("parseRawQuota: %v", err)
 	}
-	if len(nonGemini.Windows) != 1 {
-		t.Errorf("expected 1 non-gemini window, got %d", len(nonGemini.Windows))
+	if len(summary.Groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(summary.Groups))
 	}
-	if nonGemini.Windows[0].RemainingFraction != 0.40 {
-		t.Errorf("expected 0.40, got %f", nonGemini.Windows[0].RemainingFraction)
+	if summary.Groups[0].Group != "Gemini" {
+		t.Errorf("expected Gemini, got %s", summary.Groups[0].Group)
+	}
+	if len(summary.Groups[0].Windows) != 2 {
+		t.Errorf("expected 2 windows, got %d", len(summary.Groups[0].Windows))
 	}
 }
