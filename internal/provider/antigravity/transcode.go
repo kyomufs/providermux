@@ -34,11 +34,12 @@ func (p *Provider) Transcode(upstream io.ReadCloser, model string) io.ReadCloser
 	scanner.Buffer(make([]byte, 64<<10), 4<<20)
 
 	return &eventStream{
-		src:     upstream,
-		scanner: scanner,
-		id:      "chatcmpl-" + mintID(),
-		model:   model,
-		created: time.Now().Unix(),
+		src:        upstream,
+		scanner:    scanner,
+		id:         "chatcmpl-" + mintID(),
+		model:      model,
+		created:    time.Now().Unix(),
+		signatures: p.signatures,
 	}
 }
 
@@ -69,6 +70,9 @@ type eventStream struct {
 	saw bool
 	// failure is the reason the upstream stopped early.
 	failure error
+	// signatures is where the thought signature of every emitted call is
+	// kept, so that the history can carry it back.
+	signatures *signatureStore
 }
 
 // Read hands out translated bytes, pulling events from the upstream as needed.
@@ -188,7 +192,10 @@ func (s *eventStream) event(payload string) {
 func (s *eventStream) parts(envelope map[string]any) {
 	for _, part := range collectParts(envelope) {
 		if call, ok := part["functionCall"].(map[string]any); ok {
-			s.functionCall(call)
+			// The signature sits BESIDE the call, not inside it: it is a field
+			// of the part, and the call is one field of the same part.
+			signature, _ := part["thoughtSignature"].(string)
+			s.functionCall(call, signature)
 			continue
 		}
 		text, ok := part["text"].(string)
@@ -216,12 +223,16 @@ func (s *eventStream) parts(envelope map[string]any) {
 // The arguments are JSON inside the event and a STRING on the OpenAI surface: a
 // client parses the string itself, and handing it the structure would give it
 // something no parser of that surface reads.
-func (s *eventStream) functionCall(call map[string]any) {
+//
+// The thought signature has no place on that surface at all, so it is kept here
+// and replayed when the client sends the call back in the history.
+func (s *eventStream) functionCall(call map[string]any, signature string) {
 	name, _ := call["name"].(string)
 	id, _ := call["id"].(string)
 	if id == "" {
 		id = "call_" + mintID()
 	}
+	s.signatures.put(id, signature)
 	args := "{}"
 	if raw, ok := call["args"]; ok && raw != nil {
 		if encoded, err := json.Marshal(raw); err == nil {

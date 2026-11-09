@@ -15,7 +15,7 @@ import (
 // message of its own role but a `functionResponse` part inside a user turn. The
 // service has three roles — user, model — and folds the tool role into user
 // parts, which is why consecutive user turns are merged instead of appended.
-func buildContents(req provider.Request, claude bool) []any {
+func buildContents(req provider.Request, claude bool, signatures *signatureStore) []any {
 	names := callNames(req.Messages)
 
 	out := make([]any, 0, len(req.Messages))
@@ -46,6 +46,17 @@ func buildContents(req provider.Request, claude bool) []any {
 			if text := msg.Text; text != "" {
 				parts = append(parts, map[string]any{"text": text})
 			}
+			// A replayed call has to carry the signature the service issued for
+			// it, and the OpenAI surface has no field to carry it in. Without
+			// one the request is refused: "Function call is missing a
+			// thought_signature in functionCall parts" (measured 2026-11-09).
+			// The signature of a call the service has already answered is
+			// replayed as it was; the sentinel covers the calls whose signature
+			// this process never saw.
+			//
+			// Claude takes the sentinel only on the first replayed call: the
+			// signature is its own field there and a run of them is refused.
+			sawClaudeCall := false
 			for _, call := range msg.ToolCalls {
 				fc := map[string]any{
 					"name": call.Name,
@@ -54,7 +65,12 @@ func buildContents(req provider.Request, claude bool) []any {
 				if claude && call.ID != "" {
 					fc["id"] = call.ID
 				}
-				parts = append(parts, map[string]any{"functionCall": fc})
+				part := map[string]any{"functionCall": fc}
+				if !claude || !sawClaudeCall {
+					part["thoughtSignature"] = signatures.signatureFor(call.ID)
+				}
+				sawClaudeCall = sawClaudeCall || claude
+				parts = append(parts, part)
 			}
 			appendContent("model", parts)
 

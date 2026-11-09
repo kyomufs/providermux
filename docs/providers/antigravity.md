@@ -206,8 +206,31 @@ Two failure modes are answered rather than hidden:
   complete;
 - a body with no events at all is an error for the same reason.
 
+### Thought signatures
+
+Gemini 3 signs what it produces, and the signature of a function call has to come
+back with that call when the client replays the history. Measured on 2026-11-09:
+a call answered by `gemini-3.8-flash` carried a 437-character `thoughtSignature`
+beside the `functionCall` part, and a replay without it was refused with
+
+```
+400 INVALID_ARGUMENT
+Function call is missing a thought_signature in functionCall parts. …
+Additional data, function call `default_api:skill`, position 2
+```
+
+The OpenAI surface has no field for it, so the provider keeps the signatures
+itself — keyed by the tool call id, which is the service's own id forwarded as
+`tool_calls[].id` — and puts the part field back when the same call comes home
+(`signature.go`). A call this process never saw answered, or one evicted from the
+bounded store, is replayed with the sentinel the vendor documents for exactly
+that case, `skip_thought_signature_validator`. For Claude the sentinel is used
+only on the first replayed call, because a run of them there is refused.
+
 A **refusal** is never translated. The status, body and headers reach the client
-verbatim, as for every other provider.
+verbatim, as for every other provider — with the single gateway-wide exception of
+`retry-after`, which is capped at a minute before it is handed over
+(`refusalHoldMax` in `internal/gateway/gateway.go`); see [Refusals](#refusals).
 
 ## Refusals
 
@@ -222,7 +245,12 @@ pull, not what to tell the client.
 | 403 naming a location or a country | address rejected, not retried | another account does not fix where the request comes from |
 | 503 `UNAVAILABLE`, 504 `DEADLINE_EXCEEDED`, 500 `INTERNAL` | upstream unavailable, retryable | another model of the same provider is another backend |
 
-`retry-after` is read in both spellings (seconds and an HTTP date).
+`retry-after` is read in both spellings (seconds and an HTTP date). It is not,
+however, forwarded as it stands: the gateway caps the hold it asks a client to
+sit out at one minute, because by the time a refusal reaches the client the
+gateway has already rotated keys and spent its own retries. Measured on
+2026-11-09: one 429 carried a ten-minute hold, the gateway passed it on verbatim,
+and the DSH proxy parked the whole session for those ten minutes.
 
 The wording matched here is the Google error model — `{"error": {"code",
 "message", "status"}}` with a gRPC status name. It is **not measured** against

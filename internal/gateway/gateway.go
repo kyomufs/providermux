@@ -10,6 +10,13 @@
 //     decides about a retry from them. Any repackaging would deprive it of
 //     those signals.
 //
+//     The one exception is the hold, and it is a declared one: retry-after is
+//     rewritten to the ceiling this gateway is willing to ask a client to wait
+//     (see refusalHoldMax). The body, the status and every other header still
+//     travel untouched, so the signals the client decides by are intact; what
+//     changes is the number that would otherwise park a whole session on a
+//     refusal another key could answer.
+//
 //  2. THE GATEWAY DOES NOT INVENT RETRIES. The client has its own retry
 //     policy, worked out in detail: an exponent with a ceiling, up to ten
 //     times, with a limit on timeouts. A second policy on top of it would give
@@ -34,6 +41,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -955,11 +963,23 @@ func excerpt(body []byte, n int) string {
 // call.
 func (h *Handler) writeRefusal(w http.ResponseWriter, resp *http.Response, body []byte, failure provider.Failure, p provider.Provider, model provider.Model, address, key string) {
 	// The headers that influence the client's decision are forwarded as they
-	// are. retry-after and retry-after-ms the client reads itself.
-	for _, name := range []string{"retry-after", "retry-after-ms", "content-type"} {
-		if v := resp.Header.Get(name); v != "" {
-			w.Header().Set(name, v)
+	// are, with one exception: the hold.
+	//
+	// retry-after names how long THE PROVIDER will stay shut, and the gateway
+	// has already spent its rotation and its retries on that answer. Handing
+	// the number to the client as it stands parks the whole client on one
+	// refusal that another key could answer, and a client that multiplies it by
+	// its own backoff parks for longer still: measured 2026-11-09, a single 429
+	// carried a ten-minute hold, and the DSH proxy honoured it verbatim.
+	// retry-after-ms is dropped rather than clamped — two spellings of the same
+	// hold, and the client reads whichever it finds first.
+	if v := resp.Header.Get("retry-after"); v != "" {
+		if clamped, ok := clampHold(v, time.Now()); ok {
+			w.Header().Set("retry-after", clamped)
 		}
+	}
+	if v := resp.Header.Get("content-type"); v != "" {
+		w.Header().Set("content-type", v)
 	}
 	if w.Header().Get("content-type") == "" {
 		w.Header().Set("content-type", "application/json")
@@ -971,6 +991,43 @@ func (h *Handler) writeRefusal(w http.ResponseWriter, resp *http.Response, body 
 	h.recordRefusal(model.ID, address, h.fingerprint(key))
 	h.warn("provider %q: refusal %d from %s, key rejected: %t: %s",
 		p.ID(), failure.Status, address, failure.KeyRejected, excerpt(body, refusalExcerpt))
+}
+
+// refusalHoldMax is the longest hold the gateway asks a client to sit out.
+//
+// The gateway is the party that owns retry policy: it rotates keys and repeats
+// a retryable refusal on its own before it gives up. What it hands over is
+// therefore an answer to "when should the client try again", not a copy of the
+// provider's outage. A minute is longer than any backoff this gateway itself
+// waits and short enough that a client which multiplies it stays usable.
+const refusalHoldMax = 60 * time.Second
+
+// clampHold renders a retry-after value as whole seconds, capped.
+//
+// Both spellings the service may use are accepted — seconds and an HTTP date —
+// because a provider picks one of them per refusal, and an unparsable value is
+// dropped rather than passed on: a hold nobody can read is a hold the client
+// invents for itself.
+func clampHold(value string, now time.Time) (string, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	var hold time.Duration
+	if seconds, err := strconv.Atoi(value); err == nil {
+		hold = time.Duration(seconds) * time.Second
+	} else if at, err := http.ParseTime(value); err == nil {
+		hold = at.Sub(now)
+	} else {
+		return "", false
+	}
+	if hold < 0 {
+		hold = 0
+	}
+	if hold > refusalHoldMax {
+		hold = refusalHoldMax
+	}
+	return strconv.Itoa(int((hold + time.Second - 1) / time.Second)), true
 }
 
 // do performs the request through the gateway's transport.

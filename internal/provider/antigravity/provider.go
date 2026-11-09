@@ -116,6 +116,9 @@ type Provider struct {
 	baseURL string
 	ua      string
 	tokens  *tokenCache
+	// signatures replays the thought signatures of earlier tool calls; see
+	// signature.go for why the client cannot carry them itself.
+	signatures *signatureStore
 }
 
 // New creates a provider from configuration.
@@ -134,6 +137,7 @@ func New(cfg Config) (*Provider, error) {
 		p.ua = DefaultUserAgent
 	}
 	p.tokens = newTokenCache(cfg)
+	p.signatures = newSignatureStore(signatureMemory)
 	return p, nil
 }
 
@@ -174,7 +178,7 @@ func (p *Provider) Build(req provider.Request) (provider.Prepared, error) {
 	}
 	route := def.route(req.ReasoningEffort)
 
-	contents := buildContents(req, def.claude)
+	contents := buildContents(req, def.claude, p.signatures)
 	// The conversation identifier is the client's own when it sent one: the
 	// service files the turns of one conversation under it, and a fresh value per
 	// request would start a conversation at every turn.
