@@ -187,12 +187,12 @@ func (p *Provider) Build(req provider.Request) (provider.Prepared, error) {
 	request := map[string]any{
 		"contents": contents,
 		"labels": map[string]any{
-			"last_step_index":          0,
+			"last_step_index":          "0",
 			"model_enum":               route.enum,
 			"trajectory_id":            trajectory,
-			"used_claude":              def.claude,
-			"used_claude_conservative": def.claude,
-			"used_non_gemini_model":    def.claude || strings.HasPrefix(route.wire, "gpt-oss"),
+			"used_claude":              fmt.Sprintf("%t", def.claude),
+			"used_claude_conservative": fmt.Sprintf("%t", def.claude),
+			"used_non_gemini_model":    fmt.Sprintf("%t", def.claude || strings.HasPrefix(route.wire, "gpt-oss")),
 		},
 		"generationConfig": generationConfig(req, def, route),
 		// The service files the conversation under this identifier and uses it

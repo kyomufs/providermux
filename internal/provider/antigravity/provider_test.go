@@ -174,7 +174,7 @@ func TestModelsAdvertiseTheLadderTheyHave(t *testing.T) {
 		t.Fatal("the catalog is empty")
 	}
 	for _, m := range models {
-		if m.ID == "gpt-oss-120b-medium" {
+		if m.ID == "gpt-oss-120b-medium" || m.ID == "claude-sonnet-4-6" {
 			if len(m.ReasoningOptions) != 1 || len(m.ReasoningOptions[0].Values) != 1 {
 				t.Fatalf("ladder of %q = %+v, want a single medium route", m.ID, m.ReasoningOptions)
 			}
