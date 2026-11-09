@@ -47,6 +47,9 @@ func requireToken(next http.Handler, cfg *config.Config) http.Handler {
 // length, not the content.
 func tokenMatches(r *http.Request, want string) bool {
 	presented := bearerToken(r)
+	if presented == "" {
+		presented = r.URL.Query().Get("token")
+	}
 	return subtle.ConstantTimeCompare([]byte(presented), []byte(want)) == 1
 }
 

@@ -29,6 +29,7 @@ import (
 	"providermux/internal/gateway"
 	"providermux/internal/provider"
 	"providermux/internal/state"
+	"providermux/internal/webui"
 )
 
 // Prefix — the prefix of all management routes.
@@ -92,14 +93,25 @@ func (h *Handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.handleKeyRemove(w, r)
 	case "options":
 		h.handleOptions(w, r)
+	case "antigravity/quota":
+		h.handleAntigravityQuota(w, r)
+	case "antigravity/oauth/start":
+		h.handleAntigravityOAuthStart(w, r)
+	case "antigravity/oauth/exchange":
+		h.handleAntigravityOAuthExchange(w, r)
+	case "ui":
+		h.handleUI(w, r)
 	default:
 		http.NotFound(w, r)
 	}
 }
 
+// handleUI serves the embedded web management panel.
+func (h *Handler) handleUI(w http.ResponseWriter, r *http.Request) {
+	webui.Handler().ServeHTTP(w, r)
+}
+
 // authorized checks the token.
-//
-// The comparison is no longer byte-by-byte with an early exit: a constant-time
 // comparison is used, because a byte-by-byte exit leaks the secret's prefix
 // through the response time.
 func (h *Handler) authorized(r *http.Request) bool {
@@ -115,6 +127,9 @@ func bearerToken(r *http.Request) string {
 	v := r.Header.Get("authorization")
 	if len(v) > 7 && strings.EqualFold(v[:7], "bearer ") {
 		return v[7:]
+	}
+	if v == "" {
+		return r.URL.Query().Get("token")
 	}
 	return v
 }

@@ -20,6 +20,7 @@ import (
 	"providermux/internal/provider"
 	"providermux/internal/state"
 	"providermux/internal/transport"
+	"providermux/internal/webui"
 )
 
 // daemon — the assembled daemon with all its parts.
@@ -194,6 +195,15 @@ func (d *daemon) buildHandler() http.Handler {
 		Egress:      d.egress,
 	}
 	ctrl.Routes(root)
+
+	// Serve the Web UI at root "/" when no API endpoint matched.
+	root.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			webui.Handler().ServeHTTP(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
 
 	// The access check on top of both surfaces.
 	//
