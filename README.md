@@ -424,6 +424,10 @@ README: [`docs/providers/`](docs/providers/) holds one file per provider.
 [`opencode_zen.md`](docs/providers/opencode_zen.md) records the request shape the
 `opencode` lane admits, the refusals it returns, and its free model list.
 
+`antigravity` is the other shape of a lane: its key is one Google refresh token,
+so one section is one account and a pool of them is multi-account failover rather
+than quota spreading — [`antigravity.md`](docs/providers/antigravity.md).
+
 ## Debugging without a rebuild
 
 On NixOS the module rewrites `config.json` on every activation, so anything you

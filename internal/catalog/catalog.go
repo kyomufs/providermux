@@ -22,6 +22,7 @@ import (
 
 	"free-ai-router/internal/config"
 	"free-ai-router/internal/provider"
+	"free-ai-router/internal/provider/antigravity"
 	"free-ai-router/internal/provider/opencode"
 	"free-ai-router/internal/provider/stub"
 )
@@ -70,6 +71,11 @@ type Defaults struct {
 var builders = map[string]Builder{
 	// A full-fledged provider with a contract of its own.
 	"opencode": buildOpenCode,
+
+	// A full-fledged provider whose service answers in another dialect: the
+	// provider translates the answer, the gateway reads the same chunks as
+	// always.
+	"antigravity": buildAntigravity,
 
 	// A provider that answers from inside the gateway, with no network at all.
 	// It exists so that the whole path — request, refusal, rotation, retry,
@@ -175,6 +181,36 @@ func buildOpenCode(id string, pc config.ProviderConfig, defaults Defaults) (prov
 		ShellName:    stringSetting(settings, "shell_name"),
 		OSName:       stringSetting(settings, "os_name"),
 		ClientName:   stringSetting(settings, "client_name"),
+		HTTP:         defaults.HTTP,
+		Log:          defaults.Log,
+
+		FirstEventTimeout:    defaults.FirstEventTimeout,
+		IdleTimeout:          defaults.IdleTimeout,
+		ReasoningIdleTimeout: defaults.ReasoningIdleTimeout,
+	})
+}
+
+// buildAntigravity assembles the Google Antigravity provider.
+//
+// The "key" of this section is a Google refresh token: the access token is minted
+// from it at send time and never configured. That is why the section belongs under
+// credential "account" — an anonymous call here has no account to file a request
+// under — and why a pool of keys is a pool of accounts.
+func buildAntigravity(id string, pc config.ProviderConfig, defaults Defaults) (provider.Provider, error) {
+	settings := copySettings(pc.Settings)
+
+	baseURL := pc.BaseURL
+	if baseURL == "" {
+		baseURL = antigravity.DefaultBaseURL
+	}
+
+	return antigravity.New(antigravity.Config{
+		ID:           provider.ID(id),
+		BaseURL:      baseURL,
+		Project:      stringSetting(settings, "project"),
+		UserAgent:    stringSetting(settings, "user_agent"),
+		ClientID:     stringSetting(settings, "client_id"),
+		ClientSecret: stringSetting(settings, "client_secret"),
 		HTTP:         defaults.HTTP,
 		Log:          defaults.Log,
 

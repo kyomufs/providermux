@@ -33,6 +33,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"time"
@@ -359,6 +360,28 @@ type IdentifierSource interface {
 	// SessionIDs derives the identifiers for one request from the client's own
 	// headers, replacing the values the service would refuse.
 	SessionIDs(r *http.Request) SessionIDs
+}
+
+// Transcoder is what a provider implements when its service does not answer in
+// the OpenAI shape.
+//
+// Optional, on the same reasoning as Local and Polling: a service that speaks
+// OpenAI chunks must not be made to answer for a translation it does not perform.
+// A provider that implements it says "the body I get back is my own dialect —
+// rewrite it into the chunks the client reads", and the gateway does exactly that
+// and nothing else: the rewritten body goes through the same pass-through, the
+// same watchdog and the same collection as any other answer. What is exercised is
+// the real path.
+//
+// The translation happens on the BODY and only on a successful answer. A refusal
+// is not translated: it reaches the client verbatim, as it does for every other
+// provider, because the client parses the service's own error there.
+//
+// Model is the identifier the client asked for, so the chunks can be labelled with
+// it — a client that reads the model off the answer must see the one it named.
+type Transcoder interface {
+	// Transcode wraps the upstream body, returning the OpenAI event stream.
+	Transcode(upstream io.ReadCloser, model string) io.ReadCloser
 }
 
 // Registry is the set of available providers, assembled from configuration.

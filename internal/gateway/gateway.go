@@ -619,7 +619,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 			wd.arm(idle, errNoAnswer)
 		}
 
-		resp, err := h.do(upstream, p)
+		resp, err := h.do(upstream, p, req.Model.ID)
 		if err != nil {
 			wd.stop()
 			cause := wd.fired()
@@ -974,7 +974,7 @@ func (h *Handler) writeRefusal(w http.ResponseWriter, resp *http.Response, body 
 }
 
 // do performs the request through the gateway's transport.
-func (h *Handler) do(req *http.Request, p provider.Provider) (*http.Response, error) {
+func (h *Handler) do(req *http.Request, p provider.Provider, model string) (*http.Response, error) {
 	client := *h.resolveClient()
 
 	// A provider that offers its own transport is answered by it. The order
@@ -984,7 +984,8 @@ func (h *Handler) do(req *http.Request, p provider.Provider) (*http.Response, er
 	if local, ok := p.(provider.Local); ok {
 		if rt := local.RoundTripper(); rt != nil {
 			client.Transport = rt
-			return decode(client.Do(req))
+			resp, err := decode(client.Do(req))
+			return translate(resp, err, p, model)
 		}
 	}
 
@@ -993,7 +994,41 @@ func (h *Handler) do(req *http.Request, p provider.Provider) (*http.Response, er
 			client.Transport = rt
 		}
 	}
-	return decode(client.Do(req))
+	resp, err := decode(client.Do(req))
+	return translate(resp, err, p, model)
+}
+
+// translate hands a successful answer of a non-OpenAI service to its provider.
+//
+// WHY IT IS HERE AND NOT INSIDE THE PROVIDER. The provider knows its own dialect,
+// but it does not own the response: the gateway passes the body through, watches
+// the silence, collects a single answer out of a stream and hands a refusal to the
+// client byte for byte. So the provider rewrites the body and everything else runs
+// unchanged — one translation point, one real path.
+//
+// A REFUSAL IS NOT TRANSLATED. The status, body and headers belong to the client,
+// which parses the service's own error there. Translation is for the answer that
+// the client is about to read as its own.
+func translate(resp *http.Response, err error, p provider.Provider, model string) (*http.Response, error) {
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		return resp, nil
+	}
+	t, ok := p.(provider.Transcoder)
+	if !ok {
+		return resp, nil
+	}
+	resp.Body = t.Transcode(resp.Body, model)
+	// The bytes are the client's shape now, not the upstream's: the length and
+	// the coding of the original no longer describe them, and a stale
+	// content-length would cut the translated stream at the first event.
+	resp.Header.Del("content-encoding")
+	resp.Header.Del("content-length")
+	resp.Header.Set("content-type", "text/event-stream")
+	resp.ContentLength = -1
+	return resp, nil
 }
 
 // decode undoes the compression the provider asked for.

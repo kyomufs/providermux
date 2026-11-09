@@ -1,0 +1,261 @@
+package antigravity
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"strconv"
+	"strings"
+
+	"free-ai-router/internal/provider"
+)
+
+// buildContents translates the neutral messages into the service's `contents`.
+//
+// The shape is Gemini's, with one difference that matters: a tool result is not a
+// message of its own role but a `functionResponse` part inside a user turn. The
+// service has three roles — user, model — and folds the tool role into user
+// parts, which is why consecutive user turns are merged instead of appended.
+func buildContents(req provider.Request, claude bool) []any {
+	names := callNames(req.Messages)
+
+	out := make([]any, 0, len(req.Messages))
+	appendContent := func(role string, parts []any) {
+		if len(parts) == 0 {
+			return
+		}
+		if n := len(out); n > 0 {
+			last, _ := out[n-1].(map[string]any)
+			if last != nil && last["role"] == role {
+				existing, _ := last["parts"].([]any)
+				last["parts"] = append(existing, parts...)
+				return
+			}
+		}
+		out = append(out, map[string]any{"role": role, "parts": parts})
+	}
+
+	for _, msg := range req.Messages {
+		switch msg.Role {
+		case "assistant":
+			parts := make([]any, 0, len(msg.ToolCalls)+1)
+			// The thinking of an earlier turn is not sent back. The service
+			// expects a signature beside a thought part and refuses a replayed
+			// one without it, and the signature is not part of the neutral
+			// message the gateway hands over. Thinking is not part of the
+			// conversation as the model sees it on the next turn.
+			if text := msg.Text; text != "" {
+				parts = append(parts, map[string]any{"text": text})
+			}
+			for _, call := range msg.ToolCalls {
+				fc := map[string]any{
+					"name": call.Name,
+					"args": toolArguments(call.Arguments),
+				}
+				if claude && call.ID != "" {
+					fc["id"] = call.ID
+				}
+				parts = append(parts, map[string]any{"functionCall": fc})
+			}
+			appendContent("model", parts)
+
+		case "tool":
+			name := names[msg.ToolCallID]
+			if name == "" {
+				// A result whose call is not in the conversation would name a
+				// function the model never called, and the service refuses the
+				// request. Skipping it loses nothing the model can use.
+				continue
+			}
+			fr := map[string]any{
+				"name":     name,
+				"response": map[string]any{"content": msg.Text},
+			}
+			if claude && msg.ToolCallID != "" {
+				fr["id"] = msg.ToolCallID
+			}
+			appendContent("user", []any{map[string]any{"functionResponse": fr}})
+
+		default:
+			parts := make([]any, 0, len(msg.Images)+1)
+			if msg.Text != "" {
+				parts = append(parts, map[string]any{"text": msg.Text})
+			}
+			for _, img := range msg.Images {
+				parts = append(parts, map[string]any{
+					"inlineData": map[string]any{
+						"mimeType": img.MediaType,
+						"data":     base64.StdEncoding.EncodeToString(img.Data),
+					},
+				})
+			}
+			appendContent("user", parts)
+		}
+	}
+	return out
+}
+
+// callNames indexes the tool calls of the conversation by their identifier, so
+// that a tool result can be answered under the name the model called.
+func callNames(messages []provider.Message) map[string]string {
+	out := make(map[string]string)
+	for _, msg := range messages {
+		for _, call := range msg.ToolCalls {
+			if call.ID != "" {
+				out[call.ID] = call.Name
+			}
+		}
+	}
+	return out
+}
+
+// toolArguments turns the serialized arguments into an object.
+//
+// The service takes the arguments as structure, not as a string: a function call
+// whose arguments are a JSON string is a call with one unnamed field. A body that
+// is not an object is replaced rather than refused — a client that sent an empty
+// or broken string meant a call with no arguments.
+func toolArguments(raw string) any {
+	if strings.TrimSpace(raw) == "" {
+		return map[string]any{}
+	}
+	var args map[string]any
+	if err := json.Unmarshal([]byte(raw), &args); err != nil || args == nil {
+		return map[string]any{}
+	}
+	return args
+}
+
+// buildTools translates the declared tools into the service's form.
+//
+// The wrapper is required: the service accepts `functionDeclarations` and refuses
+// the same entries written at the top level of the tool object.
+//
+// Source: dsh-tool-antigravity 0.5.3, src/llm-adapter.ts (buildFunctionDeclarations)
+// and @cortexkit/antigravity-auth-core 3.0.14, dist/transform/gemini.js
+// (wrapToolsAsFunctionDeclarations, toGeminiSchema).
+func buildTools(tools []provider.Tool) []any {
+	if len(tools) == 0 {
+		return nil
+	}
+	decls := make([]any, 0, len(tools))
+	for _, tool := range tools {
+		decl := map[string]any{
+			"name":        tool.Name,
+			"description": tool.Description,
+		}
+		if schema := geminiSchema(tool.Schema); schema != nil {
+			decl["parameters"] = schema
+		}
+		decls = append(decls, decl)
+	}
+	return []any{map[string]any{"functionDeclarations": decls}}
+}
+
+// geminiSchema rewrites a JSON schema into the form the service validates.
+//
+// The service's protobuf validation rejects the OpenAPI leftovers a client may
+// send (`$schema`, `additionalProperties`) and takes the type names in upper case,
+// so a schema passed through as-is is refused with an error naming a field nobody
+// wrote.
+func geminiSchema(raw []byte) any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var schema any
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		return nil
+	}
+	return normalizeSchema(schema)
+}
+
+// normalizeSchema walks a schema and applies the two rewrites above.
+func normalizeSchema(v any) any {
+	switch node := v.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(node))
+		for key, value := range node {
+			switch key {
+			case "$schema", "additionalProperties", "$id", "$comment", "definitions", "$defs":
+				// Not part of the schema dialect the service validates.
+				continue
+			case "type":
+				if s, ok := value.(string); ok {
+					out[key] = strings.ToUpper(s)
+					continue
+				}
+				// A union of types is expressed in this dialect as a list; the
+				// service takes the first named type, and the nullable marker
+				// carries the rest.
+				if list, ok := value.([]any); ok {
+					for _, item := range list {
+						if s, ok := item.(string); ok && s != "null" {
+							out[key] = strings.ToUpper(s)
+							break
+						}
+					}
+					continue
+				}
+				out[key] = value
+			default:
+				out[key] = normalizeSchema(value)
+			}
+		}
+		return out
+	case []any:
+		out := make([]any, len(node))
+		for i, item := range node {
+			out[i] = normalizeSchema(item)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+// generationConfig assembles the model's answer settings.
+func generationConfig(req provider.Request, def modelDef, route tier) map[string]any {
+	out := map[string]any{"maxOutputTokens": def.maxOutput}
+	if req.MaxTokens > 0 {
+		out["maxOutputTokens"] = req.MaxTokens
+	}
+	if req.Temperature != nil {
+		out["temperature"] = *req.Temperature
+	}
+
+	thinking := map[string]any{"includeThoughts": true}
+	if route.level != "" {
+		thinking["thinkingLevel"] = route.level
+	}
+	if route.budget > 0 {
+		thinking["thinkingBudget"] = route.budget
+	}
+	if def.claude {
+		// The adaptive Claude routes keep an explicit zero budget beside the
+		// level: a level alone is read as legacy thinking and ignored.
+		thinking["thinkingBudget"] = 0
+	}
+	out["thinkingConfig"] = thinking
+	return out
+}
+
+// signedSessionID hashes the workspace into the identifier the service files the
+// conversation under.
+//
+// It is FNV-1a 64 over the workspace URI, signed, in decimal: the service takes a
+// string of digits and the reference client sends the signed reading of the same
+// hash, so an unsigned one names a different conversation.
+func signedSessionID(workspace string) string {
+	if workspace == "" {
+		workspace = "file:///workspace"
+	}
+	const (
+		offset64 = 14695981039346656037
+		prime64  = 1099511628211
+	)
+	h := uint64(offset64)
+	for i := 0; i < len(workspace); i++ {
+		h ^= uint64(workspace[i])
+		h *= prime64
+	}
+	return strconv.FormatInt(int64(h), 10)
+}
