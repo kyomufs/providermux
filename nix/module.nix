@@ -108,6 +108,8 @@ let
             api_key_env = p.apiKeyEnv;
             credential = p.credential;
             key_rotation = p.keyRotation;
+            transport = p.transport;
+            transport_settings = p.transportSettings;
             settings = p.settings;
           })
         cfg.providers;
@@ -391,6 +393,18 @@ in
             type = types.nullOr (types.enum [ "on" "off" ]);
             default = null;
             description = "This provider's key rotation. `null` inherits the global one.";
+          };
+
+          transport = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = "This provider's transport identifier. `null` inherits the global transport.";
+          };
+
+          transportSettings = mkOption {
+            type = types.attrsOf types.anything;
+            default = { };
+            description = "This provider's transport settings. Empty inherits the global transport settings.";
           };
 
           settings = mkOption {
