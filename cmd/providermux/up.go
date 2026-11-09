@@ -24,12 +24,13 @@ import (
 
 // daemon — the assembled daemon with all its parts.
 type daemon struct {
-	cfg       *config.Config
-	providers *provider.Registry
-	transport transport.Transport
-	keys      *keyRegistry
-	state     *state.Store
-	log       *state.Logger
+	cfg        *config.Config
+	providers  *provider.Registry
+	transport  transport.Transport
+	transports map[provider.ID]transport.Transport
+	keys       *keyRegistry
+	state      *state.Store
+	log        *state.Logger
 	// egress observes the address this host's traffic leaves from. It may be
 	// nil, which means the daemon does not know its address and the counters are
 	// kept without one.
@@ -84,11 +85,27 @@ func build(cfg *config.Config) (*daemon, error) {
 	expandKeyPlaceholders(cfg)
 	d.keys = newKeyRegistry(cfg, d.providers)
 
-	tr, err := transport.NewRegistryWithDefaults().Build(transport.ID(cfg.Transport.Val), transportSettings(cfg))
+	tpReg := transport.NewRegistryWithDefaults()
+	tr, err := tpReg.Build(transport.ID(cfg.Transport.Val), transportSettings(cfg))
 	if err != nil {
 		return nil, fmt.Errorf("transport: %w", err)
 	}
 	d.transport = tr
+
+	providerTransports := make(map[provider.ID]transport.Transport)
+	for _, p := range d.providers.All() {
+		pid := string(p.ID())
+		if pc, ok := cfg.Providers[pid]; ok && pc.Transport != "" {
+			tID := transport.ID(pc.Transport)
+			tSettings := providerTransportSettings(cfg, pc)
+			ptr, err := tpReg.Build(tID, tSettings)
+			if err != nil {
+				return nil, fmt.Errorf("transport for provider %q: %w", pid, err)
+			}
+			providerTransports[p.ID()] = ptr
+		}
+	}
+	d.transports = providerTransports
 
 	// The egress address.
 	//
@@ -121,9 +138,15 @@ func (d *daemon) buildHandler() http.Handler {
 
 	// The OpenAI surface.
 	gw := &gateway.Handler{
-		Providers:       d.providers,
-		Transport:       d.transport,
-		State:           d.state,
+		Providers: d.providers,
+		Transport: d.transport,
+		TransportFor: func(id provider.ID) gateway.RoundTripperFactory {
+			if t, ok := d.transports[id]; ok && t != nil {
+				return t
+			}
+			return d.transport
+		},
+		State:       d.state,
 		Log:             d.log,
 		Addresses:       d.egress,
 		KeyRotation:     d.keys.rotationMap(),
@@ -186,6 +209,13 @@ func (d *daemon) serve(ctx context.Context) error {
 		return fmt.Errorf("starting the transport: %w", err)
 	}
 	defer d.transport.Stop()
+
+	for pid, t := range d.transports {
+		if err := t.Start(ctx); err != nil {
+			return fmt.Errorf("starting transport for provider %q: %w", pid, err)
+		}
+		defer t.Stop()
+	}
 
 	// The egress observation starts before the listener, on purpose: the first
 	// request must be attributable to an address, and an observation started
@@ -351,6 +381,19 @@ func transportSettings(cfg *config.Config) map[string]any {
 		settings[k] = v
 	}
 	settings["family"] = cfg.Family.Val
+	return settings
+}
+
+// providerTransportSettings assembles settings for a provider's own transport.
+func providerTransportSettings(cfg *config.Config, pc config.ProviderConfig) map[string]any {
+	src := pc.EffectiveTransportConfig(cfg.TransportConfig)
+	settings := make(map[string]any, len(src)+1)
+	for k, v := range src {
+		settings[k] = v
+	}
+	if _, ok := settings["family"]; !ok {
+		settings["family"] = cfg.Family.Val
+	}
 	return settings
 }
 

@@ -72,8 +72,11 @@ const (
 type Handler struct {
 	// Providers is the registry of the available providers.
 	Providers *provider.Registry
-	// Transport hands out the RoundTripper for requests.
+	// Transport hands out the RoundTripper for requests. Used as the global fallback.
 	Transport RoundTripperFactory
+	// TransportFor returns the RoundTripperFactory for a specific provider.
+	// When nil or when returning nil, Transport is used as the global fallback.
+	TransportFor func(provider.ID) RoundTripperFactory
 	// State is the counters.
 	State *state.Store
 	// Log is the log.
@@ -1046,8 +1049,16 @@ func (h *Handler) do(req *http.Request, p provider.Provider, model string) (*htt
 		}
 	}
 
-	if h.Transport != nil {
-		if rt, err := h.Transport.RoundTripper(); err == nil && rt != nil {
+	var tf RoundTripperFactory
+	if h.TransportFor != nil {
+		tf = h.TransportFor(p.ID())
+	}
+	if tf == nil {
+		tf = h.Transport
+	}
+
+	if tf != nil {
+		if rt, err := tf.RoundTripper(); err == nil && rt != nil {
 			client.Transport = rt
 		}
 	}

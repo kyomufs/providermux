@@ -100,6 +100,85 @@ type fixedAddress string
 
 func (f fixedAddress) Address() string { return string(f) }
 
+// TestGatewayDispatchesPerProviderTransport asserts that a request for Provider A
+// uses Provider A's designated transport while Provider B falls back or uses its own.
+func TestGatewayDispatchesPerProviderTransport(t *testing.T) {
+	var hitA, hitB bool
+	srvA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitA = true
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer srvA.Close()
+
+	srvB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitB = true
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer srvB.Close()
+
+	pA := &stubProvider{
+		id:     "prov-a",
+		models: []provider.Model{{ID: "test", Free: true}},
+		build: func(provider.Request) (provider.Prepared, error) {
+			return provider.Prepared{
+				URL:     srvA.URL + "/chat/completions",
+				Headers: http.Header{"content-type": []string{"application/json"}},
+				Body:    []byte(`{"model":"test"}`),
+			}, nil
+		},
+	}
+	pB := &stubProvider{
+		id:     "prov-b",
+		models: []provider.Model{{ID: "test", Free: true}},
+		build: func(provider.Request) (provider.Prepared, error) {
+			return provider.Prepared{
+				URL:     srvB.URL + "/chat/completions",
+				Headers: http.Header{"content-type": []string{"application/json"}},
+				Body:    []byte(`{"model":"test"}`),
+			}, nil
+		},
+	}
+
+	reg := provider.NewRegistry()
+	reg.Register(pA)
+	reg.Register(pB)
+
+	st, err := state.Open(t.TempDir() + "/state.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h := &Handler{
+		Providers: reg,
+		State:     st,
+		Transport: fixedTransport{rt: srvA.Client().Transport},
+		TransportFor: func(id provider.ID) RoundTripperFactory {
+			if id == "prov-b" {
+				return fixedTransport{rt: srvB.Client().Transport}
+			}
+			return nil
+		},
+	}
+
+	// Request for prov-a should hit srvA (via global fallback).
+	reqA := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"prov-a/test","messages":[{"role":"user","content":"hi"}],"stream":true}`))
+	recA := httptest.NewRecorder()
+	h.handleChat(recA, reqA)
+	if !hitA {
+		t.Fatal("request for prov-a did not hit srvA")
+	}
+
+	// Request for prov-b should hit srvB (via TransportFor).
+	reqB := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"prov-b/test","messages":[{"role":"user","content":"hi"}],"stream":true}`))
+	recB := httptest.NewRecorder()
+	h.handleChat(recB, reqB)
+	if !hitB {
+		t.Fatal("request for prov-b did not hit srvB")
+	}
+}
+
 // TestUnreachableUpstreamIsAbortedNotRefused — an unreachable upstream is not
 // the provider refusing anything.
 //
