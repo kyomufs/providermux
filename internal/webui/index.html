@@ -1083,6 +1083,32 @@
       `).join('');
     }
 
+    function formatRefreshTime(resetTime, dayUnit = 'd', now = Date.now()) {
+      if (!resetTime) return '0m';
+      const target = new Date(resetTime).getTime();
+      if (Number.isNaN(target)) return resetTime;
+      const diffMs = target - now;
+      if (diffMs <= 0) return '0m';
+      const diffMinutes = Math.floor(diffMs / (60 * 1000));
+      const hours = Math.floor(diffMinutes / 60);
+      const remMinutes = diffMinutes % 60;
+
+      if (hours >= 24) {
+        const days = Math.floor(hours / 24);
+        return `${days}${dayUnit} ${hours % 24}h ${remMinutes}m`;
+      }
+      if (hours > 0) {
+        return `${hours}h ${remMinutes}m`;
+      }
+      return `${remMinutes}m`;
+    }
+
+    function quotaTone(fraction) {
+      if (fraction < 0.3) return '#ef4444'; // Red
+      if (fraction <= 0.6) return '#f59e0b'; // Orange
+      return '#22c55e'; // Green
+    }
+
     async function loadAntigravityQuotaInProvider() {
       const cont = document.getElementById('ag-provider-quota-container');
       if (!cont) return;
@@ -1103,41 +1129,44 @@
 
           if (acc.groups && acc.groups.length > 0) {
             groupsHTML = acc.groups.map(g => {
+              const groupTitle = g.group;
+              const groupDesc = g.description || (groupTitle.includes('GEMINI') ? 'Models within this group: Gemini Flash, Gemini Pro' : 'Models within this group: Claude Opus, Claude Sonnet, GPT-OSS');
+
               const windowsHTML = (g.windows || []).map(w => {
                 const fraction = typeof w.remaining_fraction === 'number' ? w.remaining_fraction : 1;
-                const pct = Math.round(fraction * 100);
-                const barClass = pct > 50 ? 'high' : pct > 20 ? 'medium' : 'low';
-                let resetStr = '';
+                const pctFormatted = (fraction * 100).toFixed(2) + '%';
+                const pctRounded = Math.round(fraction * 100);
+                const widthPct = Math.max(0, Math.min(100, fraction * 100));
+                const toneColor = quotaTone(fraction);
+                const windowName = w.display_name || (w.window === '5h' ? 'Five Hour Limit Remaining' : 'Weekly Limit Remaining');
+
+                let subtext = `${pctRounded}% remaining`;
                 if (w.reset_time) {
-                  try {
-                    const rDate = new Date(w.reset_time);
-                    resetStr = `Сброс: ${rDate.toLocaleString([], { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}`;
-                  } catch (e) {
-                    resetStr = `Сброс: ${w.reset_time}`;
-                  }
+                  const refreshStr = formatRefreshTime(w.reset_time);
+                  subtext += ` · Refreshes in ${refreshStr}`;
                 }
 
                 return `
-                  <div style="margin-bottom: 10px;">
-                    <div style="display:flex; justify-content:space-between; font-size:0.85rem; margin-bottom:4px;">
-                      <span>Окно: <strong>${w.window === '5h' ? '5 часов' : w.window === 'weekly' ? 'Неделя' : w.window}</strong></span>
-                      <span><strong>${pct}%</strong> доступно</span>
+                  <div style="margin-bottom: 20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom: 6px;">
+                      <span style="font-size:0.92rem; color:var(--md-sys-color-on-surface); font-weight:500;">${windowName}</span>
+                      <span style="font-size:0.95rem; font-weight:700; color:${toneColor};">${pctFormatted}</span>
                     </div>
-                    <div class="progress-container">
-                      <div class="progress-bar ${barClass}" style="width: ${pct}%;"></div>
+                    <div class="progress-container" style="height:8px; margin:6px 0; background:rgba(128,128,128,0.2);">
+                      <div class="progress-bar" style="width:${widthPct}%; background-color:${toneColor}; height:100%;"></div>
                     </div>
-                    <div style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant); text-align:right;">${resetStr}</div>
+                    <div style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">${subtext}</div>
                   </div>
                 `;
               }).join('');
 
               return `
-                <div style="background:var(--md-sys-color-surface-container); border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--md-sys-shape-corner-medium); padding:14px; margin-top:10px;">
-                  <div style="font-weight:600; color:var(--md-sys-color-primary); margin-bottom:8px; display:flex; justify-content:space-between;">
-                    <span>${g.group}</span>
-                    <span style="font-size:0.75rem; color:var(--md-sys-color-on-surface-variant);">${g.model_count} моделей</span>
+                <div style="background:var(--md-sys-color-surface-container); border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--md-sys-shape-corner-large); padding:20px 24px; margin-top:14px;">
+                  <div style="margin-bottom:18px;">
+                    <div style="font-size:0.95rem; font-weight:700; letter-spacing:0.04em; color:var(--md-sys-color-on-surface); text-transform:uppercase;">${groupTitle}</div>
+                    <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-top:4px;">${groupDesc}</div>
                   </div>
-                  ${windowsHTML}
+                  <div>${windowsHTML}</div>
                 </div>
               `;
             }).join('');
@@ -1146,11 +1175,11 @@
           }
 
           return `
-            <div style="background:var(--md-sys-color-surface-container-high); border-radius:var(--md-sys-shape-corner-medium); border:1px solid var(--md-sys-color-outline-variant); padding:16px; margin-bottom:14px;">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+            <div style="background:var(--md-sys-color-surface-container-high); border-radius:var(--md-sys-shape-corner-large); border:1px solid var(--md-sys-color-outline-variant); padding:20px; margin-bottom:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:12px;">
                 <div>
-                  <div style="font-weight:600; font-size:1.05rem;">${acc.email || 'Google Account'}</div>
-                  <div style="font-family:monospace; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">ID: ${acc.account_id} ${acc.project ? `| Проект: ${acc.project}` : ''}</div>
+                  <div style="font-weight:700; font-size:1.15rem; color:var(--md-sys-color-primary);">${acc.email || 'Google Account'}</div>
+                  <div style="font-family:monospace; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">Account ID: ${acc.account_id} ${acc.project ? `| Project: ${acc.project}` : ''}</div>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
                   <span class="badge ${hasError ? 'badge-error' : 'badge-success'}">${hasError ? 'Ошибка' : 'Активен'}</span>

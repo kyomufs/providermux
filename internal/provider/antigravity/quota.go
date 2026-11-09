@@ -24,15 +24,17 @@ const (
 // QuotaWindowView describes remaining fraction and next reset time for a window.
 type QuotaWindowView struct {
 	Window            QuotaWindow `json:"window"`
+	DisplayName       string      `json:"display_name,omitempty"`
 	RemainingFraction float64     `json:"remaining_fraction"`
 	ResetTime         string      `json:"reset_time,omitempty"`
 }
 
-// QuotaGroupView describes the quota state for a model group ("gemini" vs "non-gemini").
+// QuotaGroupView describes the quota state for a model group ("GEMINI MODELS" vs "CLAUDE AND GPT MODELS").
 type QuotaGroupView struct {
-	Group      string            `json:"group"`
-	ModelCount int               `json:"model_count"`
-	Windows    []QuotaWindowView `json:"windows"`
+	Group       string            `json:"group"`
+	Description string            `json:"description,omitempty"`
+	ModelCount  int               `json:"model_count"`
+	Windows     []QuotaWindowView `json:"windows"`
 }
 
 // AccountQuotaSummary represents the normalized quota view for an account.
@@ -91,6 +93,17 @@ type rawQuotaResponse struct {
 	} `json:"buckets"`
 }
 
+type rawModelsResponse struct {
+	Models map[string]struct {
+		DisplayName string `json:"displayName"`
+		QuotaInfo   *struct {
+			RemainingFraction float64 `json:"remainingFraction"`
+			ResetTime         string  `json:"resetTime"`
+		} `json:"quotaInfo"`
+		ModelProvider string `json:"modelProvider"`
+	} `json:"models"`
+}
+
 func accountFingerprint(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:8])
@@ -101,6 +114,10 @@ var quotaEndpoints = []string{
 	"https://cloudcode-pa.googleapis.com",
 	"https://daily-cloudcode-pa.googleapis.com",
 }
+
+const (
+	defaultAntigravityUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Antigravity/1.18.3 Chrome/138.0.7204.235 Electron/37.3.1 Safari/537.36"
+)
 
 // FetchQuota retrieves the quota summary for a specific refresh token.
 func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project string) (*AccountQuotaSummary, error) {
@@ -118,7 +135,6 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 		client = &http.Client{Timeout: 15 * time.Second}
 	}
 
-	// Prepare endpoints to try
 	endpoints := []string{}
 	if q.baseURL != "" && q.baseURL != DefaultBaseURL {
 		endpoints = append(endpoints, strings.TrimRight(q.baseURL, "/"))
@@ -127,8 +143,8 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 
 	var lastErr error
 	var respBody []byte
+	var successfulBase string
 
-	// Try each endpoint with project, with fallback to empty project on 403
 	for _, base := range endpoints {
 		url := base + "/v1internal:retrieveUserQuotaSummary"
 
@@ -144,12 +160,7 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 			continue
 		}
 
-		req.Header.Set("Authorization", "Bearer "+accessToken)
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Antigravity/1.18.3 Chrome/138.0.7204.235 Electron/37.3.1 Safari/537.36")
-		req.Header.Set("X-Goog-Api-Client", "google-cloud-sdk vscode_cloudshelleditor/0.1")
-		req.Header.Set("Client-Metadata", `{"ideType":"ANTIGRAVITY","platform":"MACOS","pluginType":"GEMINI"}`)
-		req.Header.Set("Accept", "application/json")
+		setAntigravityHeaders(req, accessToken)
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -157,11 +168,10 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 			continue
 		}
 
-		// If 403 with project, retry with empty project
 		if resp.StatusCode == http.StatusForbidden && project != "" {
 			resp.Body.Close()
 			reqEmpty, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader([]byte("{}")))
-			reqEmpty.Header = req.Header.Clone()
+			setAntigravityHeaders(reqEmpty, accessToken)
 			resp, err = client.Do(reqEmpty)
 			if err != nil {
 				lastErr = err
@@ -179,6 +189,7 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 		if resp.StatusCode == http.StatusOK {
 			respBody = b
 			lastErr = nil
+			successfulBase = base
 			break
 		}
 		lastErr = fmt.Errorf("status %d from %s: %s", resp.StatusCode, base, strings.TrimSpace(string(b)))
@@ -190,10 +201,99 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 
 	email := fetchUserEmail(client, accessToken)
 	summary, err := parseRawQuota(respBody, refreshToken, project)
-	if err == nil && email != "" {
+	if err != nil {
+		return nil, err
+	}
+	if email != "" {
 		summary.Email = email
 	}
-	return summary, err
+
+	// If Gemini models group is missing from retrieveUserQuotaSummary, enrich with fetchAvailableModels
+	hasGemini := false
+	for _, g := range summary.Groups {
+		if strings.Contains(strings.ToUpper(g.Group), "GEMINI") {
+			hasGemini = true
+			break
+		}
+	}
+
+	if !hasGemini && successfulBase != "" {
+		geminiGroup := fetchGeminiQuotaFromModels(ctx, client, successfulBase, accessToken)
+		if geminiGroup != nil {
+			// Place GEMINI MODELS first, like in dsh-tool-antigravity
+			summary.Groups = append([]QuotaGroupView{*geminiGroup}, summary.Groups...)
+		}
+	}
+
+	return summary, nil
+}
+
+func setAntigravityHeaders(req *http.Request, accessToken string) {
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", defaultAntigravityUA)
+	req.Header.Set("X-Goog-Api-Client", "google-cloud-sdk vscode_cloudshelleditor/0.1")
+	req.Header.Set("Client-Metadata", `{"ideType":"ANTIGRAVITY","platform":"MACOS","pluginType":"GEMINI"}`)
+	req.Header.Set("Accept", "application/json")
+}
+
+func fetchGeminiQuotaFromModels(ctx context.Context, client *http.Client, base, accessToken string) *QuotaGroupView {
+	url := base + "/v1internal:fetchAvailableModels"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader([]byte("{}")))
+	if err != nil {
+		return nil
+	}
+	setAntigravityHeaders(req, accessToken)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	var mResp rawModelsResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 512<<10)).Decode(&mResp); err != nil {
+		return nil
+	}
+
+	fraction := 1.0
+	resetTime := ""
+
+	// Check gemini models
+	for mID, m := range mResp.Models {
+		if strings.HasPrefix(mID, "gemini") && m.QuotaInfo != nil {
+			if m.QuotaInfo.RemainingFraction < fraction {
+				fraction = m.QuotaInfo.RemainingFraction
+			}
+			if resetTime == "" && m.QuotaInfo.ResetTime != "" {
+				resetTime = m.QuotaInfo.ResetTime
+			}
+		}
+	}
+
+	return &QuotaGroupView{
+		Group:       "GEMINI MODELS",
+		Description: "Models within this group: Gemini Flash, Gemini Pro",
+		ModelCount:  2,
+		Windows: []QuotaWindowView{
+			{
+				Window:            Window5Hour,
+				DisplayName:       "Five Hour Limit Remaining",
+				RemainingFraction: fraction,
+				ResetTime:         resetTime,
+			},
+			{
+				Window:            WindowWeekly,
+				DisplayName:       "Weekly Limit Remaining",
+				RemainingFraction: fraction,
+				ResetTime:         "",
+			},
+		},
+	}
 }
 
 func parseRawQuota(data []byte, refreshToken, project string) (*AccountQuotaSummary, error) {
@@ -209,7 +309,6 @@ func parseRawQuota(data []byte, refreshToken, project string) (*AccountQuotaSumm
 		Groups:      []QuotaGroupView{},
 	}
 
-	// 1. First check nested groups (official Google Cloud Code API structure)
 	if len(raw.Groups) > 0 {
 		for _, g := range raw.Groups {
 			windows := []QuotaWindowView{}
@@ -218,13 +317,20 @@ func parseRawQuota(data []byte, refreshToken, project string) (*AccountQuotaSumm
 					continue
 				}
 				win := Window5Hour
+				winName := "Five Hour Limit Remaining"
 				winStr := strings.ToLower(b.Window + " " + b.BucketID)
 				if strings.Contains(winStr, "week") || b.WindowMinutes > 300 {
 					win = WindowWeekly
+					winName = "Weekly Limit Remaining"
+				}
+
+				if b.DisplayName != "" {
+					winName = b.DisplayName
 				}
 
 				windows = append(windows, QuotaWindowView{
 					Window:            win,
+					DisplayName:       winName,
 					RemainingFraction: b.RemainingFraction,
 					ResetTime:         b.ResetTime,
 				})
@@ -237,19 +343,30 @@ func parseRawQuota(data []byte, refreshToken, project string) (*AccountQuotaSumm
 				}
 				groupTitle := g.DisplayName
 				if groupTitle == "" {
-					groupTitle = "Google Cloud Code"
+					groupTitle = "CLAUDE AND GPT MODELS"
+				} else {
+					groupTitle = strings.ToUpper(groupTitle)
+				}
+
+				groupDesc := g.Description
+				if groupDesc == "" {
+					if strings.Contains(groupTitle, "CLAUDE") {
+						groupDesc = "Models within this group: Claude Opus, Claude Sonnet, GPT-OSS"
+					} else {
+						groupDesc = "Models within this group: Gemini Flash, Gemini Pro"
+					}
 				}
 
 				summary.Groups = append(summary.Groups, QuotaGroupView{
-					Group:      groupTitle,
-					ModelCount: modelCount,
-					Windows:    windows,
+					Group:       groupTitle,
+					Description: groupDesc,
+					ModelCount:  modelCount,
+					Windows:     windows,
 				})
 			}
 		}
 	}
 
-	// 2. Fallback if top-level buckets were returned
 	if len(summary.Groups) == 0 && len(raw.Buckets) > 0 {
 		geminiWindows := []QuotaWindowView{}
 		nonGeminiWindows := []QuotaWindowView{}
@@ -259,12 +376,18 @@ func parseRawQuota(data []byte, refreshToken, project string) (*AccountQuotaSumm
 				continue
 			}
 			win := Window5Hour
+			winName := "Five Hour Limit Remaining"
 			if b.WindowMinutes > 300 || strings.Contains(strings.ToLower(b.Window+" "+b.BucketID), "week") {
 				win = WindowWeekly
+				winName = "Weekly Limit Remaining"
+			}
+			if b.DisplayName != "" {
+				winName = b.DisplayName
 			}
 
 			view := QuotaWindowView{
 				Window:            win,
+				DisplayName:       winName,
 				RemainingFraction: b.RemainingFraction,
 				ResetTime:         b.ResetTime,
 			}
@@ -287,16 +410,18 @@ func parseRawQuota(data []byte, refreshToken, project string) (*AccountQuotaSumm
 
 		if len(geminiWindows) > 0 {
 			summary.Groups = append(summary.Groups, QuotaGroupView{
-				Group:      "Gemini",
-				ModelCount: 3,
-				Windows:    geminiWindows,
+				Group:       "GEMINI MODELS",
+				Description: "Models within this group: Gemini Flash, Gemini Pro",
+				ModelCount:  2,
+				Windows:     geminiWindows,
 			})
 		}
 		if len(nonGeminiWindows) > 0 {
 			summary.Groups = append(summary.Groups, QuotaGroupView{
-				Group:      "Claude & GPT (3P)",
-				ModelCount: 3,
-				Windows:    nonGeminiWindows,
+				Group:       "CLAUDE AND GPT MODELS",
+				Description: "Models within this group: Claude Opus, Claude Sonnet, GPT-OSS",
+				ModelCount:  3,
+				Windows:     nonGeminiWindows,
 			})
 		}
 	}

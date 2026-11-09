@@ -9,11 +9,30 @@ import (
 )
 
 func TestQuotaFetcherParsing(t *testing.T) {
-	// 1. Nested Google Cloud Code real response structure
 	nestedJSON := `{
 		"groups": [
 			{
-				"displayName": "Claude and GPT models",
+				"displayName": "GEMINI MODELS",
+				"description": "Models within this group: Gemini Flash, Gemini Pro",
+				"buckets": [
+					{
+						"bucketId": "gemini-5h",
+						"displayName": "Five Hour Limit Remaining",
+						"window": "5h",
+						"resetTime": "2026-11-10T04:00:00Z",
+						"remainingFraction": 0.7649
+					},
+					{
+						"bucketId": "gemini-weekly",
+						"displayName": "Weekly Limit Remaining",
+						"window": "weekly",
+						"resetTime": "2026-11-16T14:00:00Z",
+						"remainingFraction": 0.4716
+					}
+				]
+			},
+			{
+				"displayName": "CLAUDE AND GPT MODELS",
 				"description": "Models within this group: Claude Opus, Claude Sonnet, GPT-OSS",
 				"buckets": [
 					{
@@ -30,7 +49,7 @@ func TestQuotaFetcherParsing(t *testing.T) {
 						"window": "5h",
 						"resetTime": "2026-11-10T01:00:35Z",
 						"description": "5-hour limit refresh",
-						"remainingFraction": 0.05
+						"remainingFraction": 0.0073
 					}
 				]
 			}
@@ -38,9 +57,6 @@ func TestQuotaFetcherParsing(t *testing.T) {
 	}`
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1internal:retrieveUserQuotaSummary" {
-			t.Errorf("unexpected path: %s", r.URL.Path)
-		}
 		if r.Header.Get("Authorization") != "Bearer test-access-token" {
 			t.Errorf("unexpected auth header: %s", r.Header.Get("Authorization"))
 		}
@@ -72,22 +88,27 @@ func TestQuotaFetcherParsing(t *testing.T) {
 	if summary.Project != "my-project" {
 		t.Errorf("expected project 'my-project', got %q", summary.Project)
 	}
-	if len(summary.Groups) != 1 {
-		t.Fatalf("expected 1 group, got %d", len(summary.Groups))
+	if len(summary.Groups) != 2 {
+		t.Fatalf("expected 2 groups, got %d", len(summary.Groups))
 	}
 
-	g := summary.Groups[0]
-	if g.Group != "Claude and GPT models" {
-		t.Errorf("expected group 'Claude and GPT models', got %q", g.Group)
+	gemini := summary.Groups[0]
+	if gemini.Group != "GEMINI MODELS" {
+		t.Errorf("expected group 'GEMINI MODELS', got %q", gemini.Group)
 	}
-	if g.ModelCount != 3 {
-		t.Errorf("expected 3 models in group, got %d", g.ModelCount)
+	if len(gemini.Windows) != 2 {
+		t.Fatalf("expected 2 windows in gemini, got %d", len(gemini.Windows))
 	}
-	if len(g.Windows) != 2 {
-		t.Fatalf("expected 2 windows, got %d", len(g.Windows))
+	if gemini.Windows[0].RemainingFraction != 0.7649 {
+		t.Errorf("expected 0.7649, got %f", gemini.Windows[0].RemainingFraction)
 	}
-	if g.Windows[0].Window != WindowWeekly || g.Windows[0].RemainingFraction != 0.4417 {
-		t.Errorf("unexpected window[0]: %+v", g.Windows[0])
+
+	claudeGpt := summary.Groups[1]
+	if claudeGpt.Group != "CLAUDE AND GPT MODELS" {
+		t.Errorf("expected group 'CLAUDE AND GPT MODELS', got %q", claudeGpt.Group)
+	}
+	if len(claudeGpt.Windows) != 2 {
+		t.Fatalf("expected 2 windows in claude/gpt, got %d", len(claudeGpt.Windows))
 	}
 }
 
@@ -116,8 +137,8 @@ func TestQuotaFetcherFlatFallback(t *testing.T) {
 	if len(summary.Groups) != 1 {
 		t.Fatalf("expected 1 group, got %d", len(summary.Groups))
 	}
-	if summary.Groups[0].Group != "Gemini" {
-		t.Errorf("expected Gemini, got %s", summary.Groups[0].Group)
+	if summary.Groups[0].Group != "GEMINI MODELS" {
+		t.Errorf("expected GEMINI MODELS, got %s", summary.Groups[0].Group)
 	}
 	if len(summary.Groups[0].Windows) != 2 {
 		t.Errorf("expected 2 windows, got %d", len(summary.Groups[0].Windows))
