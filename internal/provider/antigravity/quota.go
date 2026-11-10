@@ -115,10 +115,6 @@ var quotaEndpoints = []string{
 	"https://daily-cloudcode-pa.googleapis.com",
 }
 
-const (
-	defaultAntigravityUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Antigravity/1.18.3 Chrome/138.0.7204.235 Electron/37.3.1 Safari/537.36"
-)
-
 // FetchQuota retrieves the quota summary for a specific refresh token.
 func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project string) (*AccountQuotaSummary, error) {
 	if refreshToken == "" {
@@ -160,7 +156,7 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 			continue
 		}
 
-		setAntigravityHeaders(req, accessToken)
+		q.setAntigravityHeaders(req, accessToken)
 
 		resp, err := client.Do(req)
 		if err != nil {
@@ -171,7 +167,7 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 		if resp.StatusCode == http.StatusForbidden && project != "" {
 			resp.Body.Close()
 			reqEmpty, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader([]byte("{}")))
-			setAntigravityHeaders(reqEmpty, accessToken)
+			q.setAntigravityHeaders(reqEmpty, accessToken)
 			resp, err = client.Do(reqEmpty)
 			if err != nil {
 				lastErr = err
@@ -218,7 +214,7 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 	}
 
 	if !hasGemini && successfulBase != "" {
-		geminiGroup := fetchGeminiQuotaFromModels(ctx, client, successfulBase, accessToken)
+		geminiGroup := q.fetchGeminiQuotaFromModels(ctx, client, successfulBase, accessToken)
 		if geminiGroup != nil {
 			// Place GEMINI MODELS first, like in dsh-tool-antigravity
 			summary.Groups = append([]QuotaGroupView{*geminiGroup}, summary.Groups...)
@@ -228,22 +224,24 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 	return summary, nil
 }
 
-func setAntigravityHeaders(req *http.Request, accessToken string) {
+func (q *QuotaFetcher) setAntigravityHeaders(req *http.Request, accessToken string) {
+	ua := q.ua
+	if ua == "" {
+		ua = DefaultUserAgent
+	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", defaultAntigravityUA)
-	req.Header.Set("X-Goog-Api-Client", "google-cloud-sdk vscode_cloudshelleditor/0.1")
-	req.Header.Set("Client-Metadata", `{"ideType":"ANTIGRAVITY","platform":"MACOS","pluginType":"GEMINI"}`)
+	req.Header.Set("User-Agent", ua)
 	req.Header.Set("Accept", "application/json")
 }
 
-func fetchGeminiQuotaFromModels(ctx context.Context, client *http.Client, base, accessToken string) *QuotaGroupView {
+func (q *QuotaFetcher) fetchGeminiQuotaFromModels(ctx context.Context, client *http.Client, base, accessToken string) *QuotaGroupView {
 	url := base + "/v1internal:fetchAvailableModels"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader([]byte("{}")))
 	if err != nil {
 		return nil
 	}
-	setAntigravityHeaders(req, accessToken)
+	q.setAntigravityHeaders(req, accessToken)
 
 	resp, err := client.Do(req)
 	if err != nil {
