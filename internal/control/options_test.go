@@ -49,8 +49,8 @@ func TestOptionsHandlers(t *testing.T) {
 	}
 
 	h := &Handler{
-		Config: cfg,
-		Providers: &provider.Registry{}, // empty registry
+		Config:     cfg,
+		Providers:  &provider.Registry{}, // empty registry
 		Transports: []string{"direct", "warp"},
 	}
 

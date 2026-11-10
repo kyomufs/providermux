@@ -483,7 +483,7 @@ func TestProviderEffectiveTransport(t *testing.T) {
 	}
 
 	pCustom := ProviderConfig{
-		Transport: "custom",
+		Transport:       "custom",
 		TransportConfig: map[string]any{"proxy": "http://127.0.0.1:8080"},
 	}
 	if got := pCustom.EffectiveTransport("direct"); got != "custom" {

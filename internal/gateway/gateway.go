@@ -444,15 +444,17 @@ func (h *Handler) handleChatFor(w http.ResponseWriter, r *http.Request, pathID p
 		return
 	}
 
-	p, modelID, err := h.resolveProvider(body, pathID)
+	p, rawModelID, err := h.resolveProvider(body, pathID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "provider not found", err.Error())
 		return
 	}
-	if modelID == "" {
+	if rawModelID == "" {
 		writeError(w, http.StatusBadRequest, "invalid request", "the model field is required")
 		return
 	}
+
+	modelID, keySelector := extractKeySelector(r, rawModelID)
 
 	model, err := h.resolveModel(r, p, modelID)
 	if err != nil {
@@ -466,7 +468,29 @@ func (h *Handler) handleChatFor(w http.ResponseWriter, r *http.Request, pathID p
 		return
 	}
 
-	h.forward(w, r, p, req, model)
+	h.forward(w, r, p, req, model, keySelector)
+}
+
+// extractKeySelector extracts an explicit key selector from headers, query string,
+// or model suffix (e.g. "model@selector" or "model#selector").
+func extractKeySelector(r *http.Request, rawModel string) (cleanModel, selector string) {
+	cleanModel = rawModel
+	if s := r.Header.Get("x-providermux-key"); s != "" {
+		selector = strings.TrimSpace(s)
+	} else if s := r.Header.Get("x-key"); s != "" {
+		selector = strings.TrimSpace(s)
+	} else if s := r.Header.Get("x-account"); s != "" {
+		selector = strings.TrimSpace(s)
+	} else if s := r.URL.Query().Get("key"); s != "" {
+		selector = strings.TrimSpace(s)
+	}
+	if idx := strings.IndexAny(cleanModel, "@#"); idx > 0 {
+		if selector == "" {
+			selector = cleanModel[idx+1:]
+		}
+		cleanModel = cleanModel[:idx]
+	}
+	return cleanModel, selector
 }
 
 // resolveModel finds a model in the provider's catalog.
@@ -552,7 +576,7 @@ func (h *Handler) buildRequest(r *http.Request, body map[string]any, p provider.
 // is precisely the volume of those that tells the operator which key and which
 // address are burnt. Counting only the client's final answer would hide the
 // failures this mechanism exists to absorb.
-func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Provider, req provider.Request, model provider.Model) {
+func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Provider, req provider.Request, model provider.Model, keySelector ...string) {
 	// The egress address is read once per request: it is the address THIS
 	// request left from, and the answer can change between requests.
 	address := h.address()
@@ -566,7 +590,11 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 	}
 
 	// The gateway substitutes the credentials: the client has no keys.
-	key := h.credentialFor(p)
+	selector := ""
+	if len(keySelector) > 0 {
+		selector = keySelector[0]
+	}
+	key := h.credentialForWithSelector(p, selector)
 
 	// The keys already refused in this request. The mechanism knows only the key
 	// it handed out and the current one, so a cycle back to a key already tried

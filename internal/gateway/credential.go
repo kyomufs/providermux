@@ -32,27 +32,43 @@ type CredentialSource interface {
 }
 
 // credentialFor returns the key for a request.
-//
-// The credential axis is consulted first: under "anonymous" the answer is an
-// empty string without the pool being asked at all, and the provider substitutes
-// its own anonymity marker. Under "account" the key comes from the pool, and a
-// missing pool is a configuration error rather than a silent fallback —
-// validation refuses to start such a deployment, so reaching this point without
-// a key means the pool was emptied after the start.
-//
-// An absent resolver keeps the older behaviour, which is the pool's presence.
-// That is for tests that wire a registry without a configuration; the daemon
-// always sets the resolver.
 func (h *Handler) credentialFor(p provider.Provider) string {
+	return h.credentialForWithSelector(p, "")
+}
+
+// credentialForWithSelector returns the key for a request, respecting an explicit selector when given.
+func (h *Handler) credentialForWithSelector(p provider.Provider, selector string) string {
 	switch h.credentialKind(p) {
 	case credentialAnonymous:
 		return ""
 	case credentialAccount:
+		if selector != "" {
+			if key, ok := h.findKey(p, selector); ok {
+				return key
+			}
+		}
 		return h.nextKey(p)
 	}
 
 	// Not told which credential is in force: fall back to what the pool says.
+	if selector != "" {
+		if key, ok := h.findKey(p, selector); ok {
+			return key
+		}
+	}
 	return h.nextKey(p)
+}
+
+// findKey looks up a key by selector in the provider's pool.
+func (h *Handler) findKey(p provider.Provider, selector string) (string, bool) {
+	if h.KeyRotation == nil {
+		return "", false
+	}
+	kr, ok := h.KeyRotation[string(p.ID())]
+	if !ok || kr == nil {
+		return "", false
+	}
+	return kr.Find(selector)
 }
 
 // The credential kinds, spelled as the configuration spells them.

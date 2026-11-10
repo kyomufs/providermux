@@ -147,7 +147,7 @@ func (d *daemon) buildHandler() http.Handler {
 			}
 			return d.transport
 		},
-		State:       d.state,
+		State:           d.state,
 		Log:             d.log,
 		Addresses:       d.egress,
 		KeyRotation:     d.keys.rotationMap(),

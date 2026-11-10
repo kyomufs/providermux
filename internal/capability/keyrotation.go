@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -248,6 +249,50 @@ func (k *KeyRotation) Take(current string) (string, bool) {
 		k.lastUsed = idx
 		return k.keys[idx], true
 	}
+	return "", false
+}
+
+// Find locates a specific key from the pool by selector.
+//
+// The selector can match:
+// 1. Exact key value.
+// 2. Key fingerprint (e.g. 8-char hex).
+// 3. 1-based index in pool order (e.g. "1", "2").
+// 4. Substring/prefix in compound keys (e.g. "refresh_token|project_id").
+func (k *KeyRotation) Find(selector string) (string, bool) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	selector = strings.TrimSpace(selector)
+	if selector == "" || len(k.keys) == 0 {
+		return "", false
+	}
+
+	for _, key := range k.keys {
+		if key == selector {
+			return key, true
+		}
+	}
+
+	for _, key := range k.keys {
+		if Fingerprint(key) == selector {
+			return key, true
+		}
+	}
+
+	if idx, err := strconv.Atoi(selector); err == nil && idx >= 1 && idx <= len(k.keys) {
+		return k.keys[idx-1], true
+	}
+
+	for _, key := range k.keys {
+		if strings.Contains(key, "|") {
+			parts := strings.SplitN(key, "|", 2)
+			if parts[0] == selector || parts[1] == selector {
+				return key, true
+			}
+		}
+	}
+
 	return "", false
 }
 

@@ -234,3 +234,49 @@ func TestRegistryNamesAreSorted(t *testing.T) {
 		}
 	}
 }
+
+func TestKeyRotationFind(t *testing.T) {
+	v, err := NewKeyRotation(map[string]any{"keys": []any{"first-key", "token-xyz|proj-123", "third-key"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kr := v.(*KeyRotation)
+
+	// 1. Exact match
+	if key, ok := kr.Find("first-key"); !ok || key != "first-key" {
+		t.Fatalf("Find exact = %q, %t; want 'first-key', true", key, ok)
+	}
+
+	// 2. Fingerprint
+	fp := Fingerprint("third-key")
+	if key, ok := kr.Find(fp); !ok || key != "third-key" {
+		t.Fatalf("Find fingerprint = %q, %t; want 'third-key', true", key, ok)
+	}
+
+	// 3. 1-based index
+	if key, ok := kr.Find("1"); !ok || key != "first-key" {
+		t.Fatalf("Find index 1 = %q, %t; want 'first-key', true", key, ok)
+	}
+	if key, ok := kr.Find("2"); !ok || key != "token-xyz|proj-123" {
+		t.Fatalf("Find index 2 = %q, %t; want 'token-xyz|proj-123', true", key, ok)
+	}
+	if _, ok := kr.Find("0"); ok {
+		t.Fatal("Find index 0 must fail")
+	}
+	if _, ok := kr.Find("4"); ok {
+		t.Fatal("Find index out of bounds must fail")
+	}
+
+	// 4. Substring/compound match
+	if key, ok := kr.Find("token-xyz"); !ok || key != "token-xyz|proj-123" {
+		t.Fatalf("Find compound left = %q, %t; want 'token-xyz|proj-123', true", key, ok)
+	}
+	if key, ok := kr.Find("proj-123"); !ok || key != "token-xyz|proj-123" {
+		t.Fatalf("Find compound right = %q, %t; want 'token-xyz|proj-123', true", key, ok)
+	}
+
+	// 5. Unknown
+	if _, ok := kr.Find("non-existent"); ok {
+		t.Fatal("Find non-existent must fail")
+	}
+}

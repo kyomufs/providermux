@@ -17,6 +17,7 @@ import (
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
 
+	"providermux/internal/capability"
 	"providermux/internal/provider"
 	"providermux/internal/state"
 )
@@ -790,5 +791,74 @@ func TestClampHoldReadsBothSpellings(t *testing.T) {
 		if ok != tc.ok || got != tc.want {
 			t.Fatalf("clampHold(%q) = %q, %t; want %q, %t", tc.in, got, ok, tc.want, tc.ok)
 		}
+	}
+}
+
+func TestExplicitKeySelector(t *testing.T) {
+	var gotAuth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("authorization")
+		w.Header().Set("content-type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	defer upstream.Close()
+
+	h, _, _ := newTestHandler(t, upstream)
+	krBuilt, err := capability.NewKeyRotation(map[string]any{"keys": []any{"key-alpha", "key-beta"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kr := krBuilt.(*capability.KeyRotation)
+	h.KeyRotation = map[string]*capability.KeyRotation{"test": kr}
+	h.Credential = func(id provider.ID) string { return "account" }
+
+	// 1. Selector via X-Providermux-Key (index "2" -> key-beta)
+	req1 := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"test/model","messages":[{"role":"user","content":"hi"}]}`))
+	req1.Header.Set("content-type", "application/json")
+	req1.Header.Set("x-providermux-key", "2")
+	rec1 := httptest.NewRecorder()
+	h.handleChat(rec1, req1)
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("rec1 status = %d", rec1.Code)
+	}
+	if gotAuth != "Bearer key-beta" {
+		t.Fatalf("rec1 auth = %q, want 'Bearer key-beta'", gotAuth)
+	}
+
+	// 2. Selector via X-Key (exact "key-alpha")
+	req2 := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"test/model","messages":[{"role":"user","content":"hi"}]}`))
+	req2.Header.Set("content-type", "application/json")
+	req2.Header.Set("x-key", "key-alpha")
+	rec2 := httptest.NewRecorder()
+	h.handleChat(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("rec2 status = %d", rec2.Code)
+	}
+	if gotAuth != "Bearer key-alpha" {
+		t.Fatalf("rec2 auth = %q, want 'Bearer key-alpha'", gotAuth)
+	}
+
+	// 3. Selector via Query parameter ?key=2
+	req3 := httptest.NewRequest(http.MethodPost, "/v1/chat/completions?key=2", strings.NewReader(`{"model":"test/model","messages":[{"role":"user","content":"hi"}]}`))
+	req3.Header.Set("content-type", "application/json")
+	rec3 := httptest.NewRecorder()
+	h.handleChat(rec3, req3)
+	if rec3.Code != http.StatusOK {
+		t.Fatalf("rec3 status = %d", rec3.Code)
+	}
+	if gotAuth != "Bearer key-beta" {
+		t.Fatalf("rec3 auth = %q, want 'Bearer key-beta'", gotAuth)
+	}
+
+	// 4. Selector via Model Suffix test/model@key-alpha
+	req4 := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"test/model@key-alpha","messages":[{"role":"user","content":"hi"}]}`))
+	req4.Header.Set("content-type", "application/json")
+	rec4 := httptest.NewRecorder()
+	h.handleChat(rec4, req4)
+	if rec4.Code != http.StatusOK {
+		t.Fatalf("rec4 status = %d", rec4.Code)
+	}
+	if gotAuth != "Bearer key-alpha" {
+		t.Fatalf("rec4 auth = %q, want 'Bearer key-alpha'", gotAuth)
 	}
 }

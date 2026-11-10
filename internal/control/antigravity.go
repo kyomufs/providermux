@@ -13,12 +13,12 @@ import (
 
 // AntigravityAccountsResponse describes accounts and quota for Antigravity.
 type AntigravityAccountsResponse struct {
-	ProviderID string                                `json:"provider_id"`
-	Configured bool                                  `json:"configured"`
-	Credential string                                `json:"credential"`
-	Rotation   bool                                  `json:"rotation"`
-	KeyUsed    bool                                  `json:"key_used"`
-	Accounts   []antigravity.AccountQuotaSummary     `json:"accounts"`
+	ProviderID string                            `json:"provider_id"`
+	Configured bool                              `json:"configured"`
+	Credential string                            `json:"credential"`
+	Rotation   bool                              `json:"rotation"`
+	KeyUsed    bool                              `json:"key_used"`
+	Accounts   []antigravity.AccountQuotaSummary `json:"accounts"`
 }
 
 // handleAntigravityQuota fetches live quota for all registered Antigravity keys.
@@ -79,9 +79,9 @@ func (h *Handler) handleAntigravityQuota(w http.ResponseWriter, r *http.Request)
 }
 
 type oauthStartResponse struct {
-	AuthURL   string `json:"auth_url"`
-	Verifier  string `json:"verifier"`
-	State     string `json:"state"`
+	AuthURL  string `json:"auth_url"`
+	Verifier string `json:"verifier"`
+	State    string `json:"state"`
 }
 
 // handleAntigravityOAuthStart initializes PKCE flow for Google OAuth.
@@ -152,10 +152,10 @@ func (h *Handler) handleAntigravityOAuthExchange(w http.ResponseWriter, r *http.
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"added":        added,
-		"email":        res.Email,
-		"fingerprint":  keyFingerprint(keyVal),
-		"project_id":   req.ProjectID,
+		"added":       added,
+		"email":       res.Email,
+		"fingerprint": keyFingerprint(keyVal),
+		"project_id":  req.ProjectID,
 	})
 }
 
