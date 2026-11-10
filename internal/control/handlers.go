@@ -381,6 +381,13 @@ func (h *Handler) info(format string, args ...any) {
 	}
 }
 
+// warn writes a warning to the journal, if there is one.
+func (h *Handler) warn(format string, args ...any) {
+	if h.Log != nil {
+		h.Log.Warn(format, args...)
+	}
+}
+
 // sortedKeys returns the keys of a map in a stable order.
 //
 // Needed for diagnostic output: without it the order would change between calls

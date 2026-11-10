@@ -144,6 +144,9 @@ func New(cfg Config) (*Provider, error) {
 // ID implements provider.Provider.
 func (p *Provider) ID() provider.ID { return p.id }
 
+// Project returns the configured Google Cloud project ID, if any.
+func (p *Provider) Project() string { return p.cfg.Project }
+
 // Credential implements provider.CredentialScheme.
 //
 // The shared machinery issues "keys"; for this service a key is a REFRESH token,
