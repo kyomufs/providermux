@@ -3,6 +3,7 @@ package control
 import (
 	"net/http"
 	"sort"
+	"time"
 
 	"providermux/internal/config"
 	"providermux/internal/egress"
@@ -76,6 +77,9 @@ func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if h.Config != nil {
 		st.Mode = h.Config.Mode.Val
 		st.Listen = h.Config.Listen.Val
+	}
+	if !h.StartTime.IsZero() {
+		st.UptimeSeconds = int64(time.Since(h.StartTime).Seconds())
 	}
 	if h.State != nil {
 		snap := h.State.Snapshot()

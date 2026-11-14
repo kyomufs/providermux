@@ -167,24 +167,10 @@ func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 
 	// Is a repeat worth it?
 	//
-	// This is a DIFFERENT question from the key one, and the two must not be
-	// collapsed. A rate limit that names no quota is a momentary burst limit: the
-	// same credentials and the same request sent again after the delay in
-	// retry-after will go through. A quota is not — waiting does not restore an
-	// exhausted key, and repeating would only spend time.
-	//
-	// It also cannot be read off the status alone: 429 carries both meanings here,
-	// and telling them apart is exactly what this provider knows and the caller
-	// does not.
-	switch {
-	case f.KeyRejected:
-		// The key is the cause, so rotation is the answer, not waiting.
-		f.Retryable = false
-	case resp.StatusCode == http.StatusTooManyRequests,
-		resp.StatusCode == http.StatusRequestTimeout,
-		resp.StatusCode >= 500:
-		f.Retryable = true
-	}
+	// DISABLED: The gateway loop must not repeat requests to this provider,
+	// because the client's own policy (or lack thereof) is the one that has to
+	// hold. Repeating here only confuses the state and spends time.
+	f.Retryable = false
 
 	// The model host is out. This is applied LAST, after every other signal, so
 	// that nothing above can turn it back into a key verdict: the body is the

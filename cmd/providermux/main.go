@@ -72,6 +72,8 @@ func run(args []string) error {
 		return cmdUp(rest)
 	case "status":
 		return cmdStatus(rest)
+	case "monitor":
+		return cmdMonitor(rest)
 	case "stop":
 		return cmdStop(rest)
 	case "models":

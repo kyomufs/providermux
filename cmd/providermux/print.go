@@ -143,6 +143,7 @@ func usage() {
 Usage:
   providermux up       [flags]     start the daemon
   providermux status   [--json]    daemon state
+  providermux monitor             daemon monitor
   providermux stop                 stop the daemon
   providermux models   [--json]    catalog of models
   providermux stats    [--json]    counters by day

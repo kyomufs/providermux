@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"providermux/internal/config"
 	"providermux/internal/gateway"
@@ -62,6 +63,9 @@ type Handler struct {
 	// Token and RequireToken — the access check.
 	Token        string
 	RequireToken bool
+
+	// StartTime — when the daemon was started.
+	StartTime time.Time
 }
 
 // Routes registers the routes.

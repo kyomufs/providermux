@@ -193,6 +193,7 @@ func (d *daemon) buildHandler() http.Handler {
 		Config:      d.cfg,
 		Transports:  transportIDs(),
 		Egress:      d.egress,
+		StartTime:   time.Now(),
 	}
 	ctrl.Routes(root)
 

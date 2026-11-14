@@ -910,6 +910,9 @@ func (c *Config) Validate() error {
 				name, CredentialAccount, CredentialAnonymous,
 			)
 		}
+		if p.IsEnabled() && p.Type == "antigravity" && c.CredentialFor(name) == CredentialAnonymous {
+			return fmt.Errorf("config: provider %q (antigravity) does not support anonymous credential", name)
+		}
 	}
 	if c.FirstEventTimeout.Val <= 0 {
 		return fmt.Errorf("config: first_event_timeout must be positive")
