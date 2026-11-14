@@ -95,7 +95,7 @@ func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if h.Providers != nil {
 		for _, p := range h.Providers.All() {
 			ps := ProviderStatus{ID: string(p.ID())}
-			if models, err := p.Models(r.Context()); err == nil {
+			if models, err := provider.ModelsForKey(r.Context(), p, h.catalogKey(p.ID())); err == nil {
 				ps.Models = len(models)
 				for _, m := range models {
 					if m.Free {
@@ -158,7 +158,7 @@ func (h *Handler) handleModels(w http.ResponseWriter, r *http.Request) {
 	var out []entry
 	if h.Providers != nil {
 		for _, p := range h.Providers.All() {
-			models, err := p.Models(r.Context())
+			models, err := provider.ModelsForKey(r.Context(), p, h.catalogKey(p.ID()))
 			if err != nil {
 				continue
 			}

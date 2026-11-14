@@ -47,6 +47,12 @@ func (h *Handler) credentialForWithSelector(p provider.Provider, selector string
 				return key
 			}
 		}
+		// The pin is a decision about the first key, not about rotation: it
+		// names the account the operator chose, and a refusal still moves on
+		// through alternativeKey when the rotation axis allows it.
+		if pin := h.pinnedKey(p); pin != "" {
+			return pin
+		}
 		return h.nextKey(p)
 	}
 
@@ -56,7 +62,62 @@ func (h *Handler) credentialForWithSelector(p provider.Provider, selector string
 			return key
 		}
 	}
+	if pin := h.pinnedKey(p); pin != "" {
+		return pin
+	}
 	return h.nextKey(p)
+}
+
+// pinnedKey returns the key the provider is pinned to, if the pin resolves.
+//
+// A pin that names a key no longer in the pool is ignored rather than fatal:
+// pools are edited from the panel, and a stale pin would otherwise stop every
+// request until the file was fixed by hand. The log says it was ignored, so the
+// stale entry can be seen and cleared.
+func (h *Handler) pinnedKey(p provider.Provider) string {
+	if h.Account == nil {
+		return ""
+	}
+	pin := h.Account(p.ID())
+	if pin == "" {
+		return ""
+	}
+	key, ok := h.findKey(p, pin)
+	if !ok {
+		h.warn("pinned account %q is not in the %s pool; falling back to rotation", pin, string(p.ID()))
+		return ""
+	}
+	return key
+}
+
+// catalogKey returns the account whose view of the catalog should be shown.
+//
+// The list is asked through a key because the service answers with what that
+// account may use. The pin wins, since it is the operator's own choice; without
+// one the first key is used, and the pool is only read, never rotated — listing
+// models must not spend a turn of the rotation.
+//
+// Under anonymous the pool is not touched at all: the axis says not to present
+// a key, and reading a catalog through one would be presenting it.
+func (h *Handler) catalogKey(p provider.Provider) string {
+	if kind := h.credentialKind(p); kind == credentialAnonymous {
+		return ""
+	}
+	if key := h.pinnedKey(p); key != "" {
+		return key
+	}
+	if h.KeyRotation == nil {
+		return ""
+	}
+	kr := h.KeyRotation[string(p.ID())]
+	if kr == nil {
+		return ""
+	}
+	keys := kr.KeysSnapshot()
+	if len(keys) == 0 {
+		return ""
+	}
+	return keys[0]
 }
 
 // findKey looks up a key by selector in the provider's pool.

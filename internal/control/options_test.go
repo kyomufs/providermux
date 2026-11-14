@@ -119,3 +119,22 @@ func TestAntigravityRefusesAnonymousAtRuntime(t *testing.T) {
 		t.Fatalf("credential = %q, want it unchanged at %q", got, "account")
 	}
 }
+
+func TestFingerprintMatches(t *testing.T) {
+	short := "a7f236d6"
+	cases := []struct {
+		value string
+		want  bool
+	}{
+		{"a7f236d6", true},
+		{"a7f236d6b8c64d7b", true},
+		{"A7F236D6B8C64D7B", true},
+		{"b8c64d7b", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := fingerprintMatches(short, c.value); got != c.want {
+			t.Errorf("fingerprintMatches(%q, %q) = %v, want %v", short, c.value, got, c.want)
+		}
+	}
+}

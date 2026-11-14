@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
+	"providermux/internal/capability"
 	"providermux/internal/config"
 	"providermux/internal/provider"
 )
@@ -39,6 +41,9 @@ type ProviderOption struct {
 	Credential  string `json:"credential"`
 	KeyRotation string `json:"key_rotation"`
 	Transport   string `json:"transport"`
+	// Account is the pinned key of this provider's pool (a fingerprint or a
+	// position). Empty means the pool rotates on its own.
+	Account string `json:"account"`
 }
 
 func (h *Handler) currentOptions() *CurrentOptions {
@@ -64,6 +69,7 @@ func (h *Handler) currentOptions() *CurrentOptions {
 				Credential:  h.Config.CredentialFor(sID),
 				KeyRotation: h.Config.RotationFor(sID),
 				Transport:   h.Config.TransportFor(sID),
+				Account:     h.Config.AccountFor(sID),
 			}
 		}
 	}
@@ -78,8 +84,14 @@ func (h *Handler) handleOptionsUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Axis == "" || req.Value == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "axis and value are required"})
+	if req.Axis == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "axis is required"})
+		return
+	}
+	// An empty value is clearing a setting, and only the axis that can be absent
+	// allows it: a credential or a transport has no "none" state.
+	if req.Value == "" && req.Axis != "account" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "value is required"})
 		return
 	}
 
@@ -125,6 +137,16 @@ func (h *Handler) handleOptionsUpdate(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			pc.Transport = req.Value
+		case "account":
+			// A pin names one key of this provider's pool: a fingerprint or a
+			// pool position. An empty value clears it, and the pool rotates as
+			// it did before. A value that is not in the pool is refused here
+			// rather than at request time, where it would read as a stale pin.
+			if req.Value != "" && !h.accountInPool(req.Provider, req.Value) {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("unknown account %q for provider %q", req.Value, req.Provider)})
+				return
+			}
+			pc.Account = req.Value
 		default:
 			writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("unsupported provider axis %q", req.Axis)})
 			return
@@ -235,7 +257,14 @@ func persistProviderOption(path, prov, key, value string) error {
 		pMap = map[string]any{}
 		provs[prov] = pMap
 	}
-	pMap[key] = value
+	// An empty value means the setting is absent, not that it is present and
+	// empty: a written "" would be read back as a value by every reader that
+	// does not special-case it.
+	if value == "" {
+		delete(pMap, key)
+	} else {
+		pMap[key] = value
+	}
 
 	out, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
@@ -272,4 +301,70 @@ func writeAtomic(path string, data []byte) error {
 	}
 	tmpName = ""
 	return nil
+}
+
+// accountInPool reports whether value names a key of this provider's pool.
+//
+// A pin is written in the same three forms the gateway accepts for a selector —
+// the key itself, its fingerprint, or a one-based position — so the operator can
+// carry a value from the quota card or from the keys list without learning a
+// fourth notation.
+func (h *Handler) accountInPool(prov, value string) bool {
+	if h.KeyRotation == nil {
+		return false
+	}
+	id := provider.ID(prov)
+	keys := h.KeyRotation.Keys(id)
+	fingerprints := h.KeyRotation.KeyFingerprints(id)
+	for i, key := range keys {
+		if key == value {
+			return true
+		}
+		if i < len(fingerprints) && fingerprintMatches(fingerprints[i], value) {
+			return true
+		}
+		if strconv.Itoa(i+1) == value {
+			return true
+		}
+	}
+	return false
+}
+
+// fingerprintMatches accepts either the short fingerprint the counters print or
+// a longer one built from the same digest, such as the account id on a quota
+// card. Comparing a prefix keeps one identifier usable in both places instead of
+// asking the operator to translate between two notations.
+func fingerprintMatches(short, value string) bool {
+	short = strings.ToLower(strings.TrimSpace(short))
+	value = strings.ToLower(strings.TrimSpace(value))
+	if short == "" || value == "" {
+		return false
+	}
+	return short == value || strings.HasPrefix(value, short)
+}
+
+// catalogKey returns the key the panel should ask the catalog through.
+//
+// The catalog belongs to an account: a pinned account answers with its own
+// models, and an unpinned provider is asked through the first key of its pool —
+// the same rule the gateway uses, so the panel and /v1/models never disagree
+// about what the provider offers.
+func (h *Handler) catalogKey(id provider.ID) string {
+	if h.KeyRotation == nil {
+		return ""
+	}
+	keys := h.KeyRotation.Keys(id)
+	if len(keys) == 0 {
+		return ""
+	}
+	if h.Config != nil {
+		if pin := strings.TrimSpace(h.Config.AccountFor(string(id))); pin != "" {
+			for _, key := range keys {
+				if fingerprintMatches(capability.Fingerprint(key), pin) || key == pin {
+					return key
+				}
+			}
+		}
+	}
+	return keys[0]
 }

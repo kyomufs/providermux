@@ -162,6 +162,7 @@ func (d *daemon) buildHandler() http.Handler {
 		// in plain strings, while the gateway identifies providers by their own
 		// type, and neither package should have to learn the other's spelling.
 		Credential: func(id provider.ID) string { return d.cfg.CredentialFor(string(id)) },
+		Account:    func(id provider.ID) string { return d.cfg.AccountFor(string(id)) },
 
 		// The silence budgets reach the request path here. Without them the
 		// gateway has only the numbers a provider declares for itself, and a

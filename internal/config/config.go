@@ -244,6 +244,16 @@ type ProviderConfig struct {
 	// one. Empty means "inherit".
 	KeyRotation string `json:"key_rotation,omitempty"`
 
+	// Account — the key this provider is pinned to, identified by fingerprint
+	// or by pool position. Empty means "no pin", and the pool rotates the way
+	// its axis says.
+	//
+	// Separate from KeyRotation on purpose: rotation decides whether a refusal
+	// moves to the next key, a pin decides which key the first request uses.
+	// They are two questions, and a provider can want the second without the
+	// first — several accounts, one of them chosen deliberately.
+	Account string `json:"account,omitempty"`
+
 	// Transport — this provider's transport identifier, overriding the global one.
 	// Empty means inherit the global transport.
 	Transport string `json:"transport,omitempty"`
@@ -982,6 +992,14 @@ func (c *Config) CredentialFor(id string) string {
 // RotationFor returns the key rotation axis in force for the provider.
 func (c *Config) RotationFor(id string) string {
 	return c.Providers[id].EffectiveRotation(c.KeyRotation.Val)
+}
+
+// AccountFor returns the key the provider is pinned to, if any.
+//
+// No inheritance: a pin names one key of one pool, and a global pin would name
+// a key that does not exist in most pools. An empty answer is the normal case.
+func (c *Config) AccountFor(id string) string {
+	return c.Providers[id].Account
 }
 
 // TransportFor returns the transport in force for the provider.

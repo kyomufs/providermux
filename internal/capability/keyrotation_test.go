@@ -280,3 +280,42 @@ func TestKeyRotationFind(t *testing.T) {
 		t.Fatal("Find non-existent must fail")
 	}
 }
+
+// A quota card names an account by a longer digest than the counters print.
+// The pin has to resolve from that card, or the account cannot be chosen at all.
+func TestKeyRotationFindAcceptsLongFingerprint(t *testing.T) {
+	kr := mustRotation(t, []any{"alpha", "beta"})
+
+	long := Fingerprint("beta") + "0f1e2d3c4b5a6978"
+	got, ok := kr.Find(long)
+	if !ok {
+		t.Fatalf("Find(%q): not found", long)
+	}
+	if got != "beta" {
+		t.Fatalf("Find(%q) = %q, want beta", long, got)
+	}
+}
+
+// A prefix that names no key stays unknown instead of resolving to a neighbour.
+func TestKeyRotationFindRejectsUnknownPrefix(t *testing.T) {
+	kr := mustRotation(t, []any{"alpha"})
+
+	if key, ok := kr.Find("ffffffffffffffff"); ok {
+		t.Fatalf("Find matched %q, want no match", key)
+	}
+}
+
+// mustRotation builds a rotation over the given keys for tests that only care
+// about lookups.
+func mustRotation(t *testing.T, keys []any) *KeyRotation {
+	t.Helper()
+	v, err := NewKeyRotation(map[string]any{"keys": keys})
+	if err != nil {
+		t.Fatalf("NewKeyRotation: %v", err)
+	}
+	kr, ok := v.(*KeyRotation)
+	if !ok {
+		t.Fatalf("NewKeyRotation returned %T", v)
+	}
+	return kr
+}

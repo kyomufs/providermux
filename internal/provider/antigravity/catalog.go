@@ -159,43 +159,49 @@ var effortLadder = []string{"low", "medium", "high"}
 
 // Models implements provider.Provider.
 //
-// The catalog is a constant: the service publishes no model list to the client,
-// and the table above is what its own client ships with. Nothing is fetched, so
-// the call never fails and never blocks.
+// The table is the capability definition and the fallback: the live list an
+// account sees is fetched by ModelsForAccount, and it only decides which of
+// these rows are visible. Nothing is fetched here, so the call never blocks and
+// never fails — a caller without an account still gets a usable catalog.
 func (p *Provider) Models(context.Context) ([]provider.Model, error) {
 	table := modelTable()
 	out := make([]provider.Model, 0, len(table))
 	for _, def := range table {
-		// The ladder offered is the one the model actually has, not the shared
-		// three-step one: a model with a single route must not advertise an
-		// effort that would be answered by silence.
-		values := make([]string, 0, len(effortLadder))
-		for _, effort := range effortLadder {
-			if _, ok := def.tiers[effort]; ok {
-				values = append(values, effort)
-			}
-		}
-		out = append(out, provider.Model{
-			ID:          def.id,
-			Name:        def.name,
-			Description: def.name + " (Google Antigravity)",
-			Context:     def.context,
-			MaxOutput:   def.maxOutput,
-			Vision:      def.vision,
-			Reasoning:   len(values) > 0,
-			ReasoningOptions: []provider.ReasoningOption{{
-				Kind:   provider.ReasoningEffort,
-				Values: values,
-			}},
-			// The thinking of these routes arrives as parts flagged `thought`,
-			// and the gateway only separates it for a client that was told the
-			// field. Gemini and Claude both answer with reasoning_content
-			// through the OpenAI surface.
-			ReasoningField: "reasoning_content",
-			Free:           true,
-		})
+		out = append(out, def.providerModel())
 	}
 	return out, nil
+}
+
+// providerModel renders one table row as the gateway's model descriptor.
+func (def modelDef) providerModel() provider.Model {
+	// The ladder offered is the one the model actually has, not the shared
+	// three-step one: a model with a single route must not advertise an
+	// effort that would be answered by silence.
+	values := make([]string, 0, len(effortLadder))
+	for _, effort := range effortLadder {
+		if _, ok := def.tiers[effort]; ok {
+			values = append(values, effort)
+		}
+	}
+	return provider.Model{
+		ID:          def.id,
+		Name:        def.name,
+		Description: def.name + " (Google Antigravity)",
+		Context:     def.context,
+		MaxOutput:   def.maxOutput,
+		Vision:      def.vision,
+		Reasoning:   len(values) > 0,
+		ReasoningOptions: []provider.ReasoningOption{{
+			Kind:   provider.ReasoningEffort,
+			Values: values,
+		}},
+		// The thinking of these routes arrives as parts flagged `thought`,
+		// and the gateway only separates it for a client that was told the
+		// field. Gemini and Claude both answer with reasoning_content
+		// through the OpenAI surface.
+		ReasoningField: "reasoning_content",
+		Free:           true,
+	}
 }
 
 // lookup finds a model by the identifier the client sent.

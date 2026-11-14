@@ -275,7 +275,11 @@ func (k *KeyRotation) Find(selector string) (string, bool) {
 	}
 
 	for _, key := range k.keys {
-		if Fingerprint(key) == selector {
+		// A selector may be a longer fingerprint than the counters print: the
+		// quota page identifies an account by a sixteen-hex digest, while
+		// Fingerprint keeps eight. A prefix still names that key and no other.
+		fp := Fingerprint(key)
+		if fp == selector || (len(selector) > len(fp) && strings.HasPrefix(selector, fp)) {
 			return key, true
 		}
 	}

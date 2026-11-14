@@ -116,6 +116,14 @@ type Handler struct {
 	// from a test that wires only a registry.
 	Credential func(provider.ID) string
 
+	// Account reports the key a provider is pinned to, or "" for none.
+	//
+	// A pin is not part of the credential axis: that axis says whether a key is
+	// presented at all, while the pin says which one goes first when several
+	// are in the pool. A function for the same reason as Credential — the answer
+	// belongs to whoever owns the configuration.
+	Account func(provider.ID) string
+
 	// Retry stores the retry policies by provider.
 	//
 	// A provider absent from here does not repeat its refusals, which is the
@@ -342,7 +350,7 @@ func (h *Handler) serveModels(w http.ResponseWriter, r *http.Request, only provi
 		if only != "" && p.ID() != only {
 			continue
 		}
-		models, err := p.Models(r.Context())
+		models, err := provider.ModelsForKey(r.Context(), p, h.catalogKey(p))
 		if err != nil {
 			h.warn("provider %q: the catalog is unavailable: %v", p.ID(), err)
 			continue
@@ -499,7 +507,7 @@ func extractKeySelector(r *http.Request, rawModel string) (cleanModel, selector 
 // provider has declared, and sending a request to an unknown model would mean
 // getting a refusal later and a less understandable one.
 func (h *Handler) resolveModel(r *http.Request, p provider.Provider, id string) (provider.Model, error) {
-	models, err := p.Models(r.Context())
+	models, err := provider.ModelsForKey(r.Context(), p, h.catalogKey(p))
 	if err != nil {
 		return provider.Model{}, fmt.Errorf("the provider catalog is unavailable: %w", err)
 	}
@@ -925,7 +933,7 @@ func (h *Handler) moveTo(ctx context.Context, p provider.Provider, req *provider
 // request already is keeps the walk going instead of returning to a model that
 // just failed to answer.
 func (h *Handler) otherModel(ctx context.Context, p provider.Provider, tried map[string]bool, after provider.Model) (provider.Model, bool) {
-	models, err := p.Models(ctx)
+	models, err := provider.ModelsForKey(ctx, p, h.catalogKey(p))
 	if err != nil {
 		h.warn("provider %q: the catalog is unavailable, no fallback: %v", p.ID(), err)
 		return provider.Model{}, false

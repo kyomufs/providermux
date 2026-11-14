@@ -404,6 +404,75 @@
     .empty-state { text-align: center; padding: 32px 16px; color: var(--md-sys-color-on-surface-variant); }
     .spin { animation: spin 1s linear infinite; }
     @keyframes spin { 100% { transform: rotate(360deg); } }
+  /* Provider switcher: one card per provider instead of a row of pills, so the
+     pool size and the credential mode are visible before the provider is picked. */
+  .provider-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .provider-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 14px 16px;
+    border-radius: var(--md-sys-shape-corner-medium);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    background: var(--md-sys-color-surface-container-low);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .provider-card:hover { border-color: var(--md-sys-color-primary); }
+  .provider-card.active {
+    border-color: var(--md-sys-color-primary);
+    background: var(--md-sys-color-primary-container);
+  }
+  .provider-card-name {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: .2px;
+  }
+  .provider-card-meta {
+    font-size: .8rem;
+    opacity: .7;
+  }
+
+  /* Account picker: a card per account, because accounts differ by mailbox and
+     quota, which a <select> cannot show. */
+  .account-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .account-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: var(--md-sys-shape-corner-small);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .account-tile:hover { border-color: var(--md-sys-color-primary); }
+  .account-tile.active {
+    border-color: var(--md-sys-color-primary);
+    background: var(--md-sys-color-primary-container);
+  }
+  .account-tile-email { font-size: .9rem; font-weight: 600; }
+  .account-tile-meta { font-size: .78rem; opacity: .7; }
+  .account-tile-id { font-family: monospace; font-size: .72rem; opacity: .55; }
+
   </style>
 </head>
 <body>
@@ -453,11 +522,6 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span>Глобальные параметры</span>
         </button>
-        <div class="rail-divider"></div>
-        <span class="rail-label">Провайдеры</span>
-        <div class="pill-nav" id="providers-pill-nav">
-          <!-- Rendered dynamically: e.g. [Antigravity] [OpenCode] -->
-        </div>
       </nav>
       <div class="content">
 
@@ -519,6 +583,13 @@
 
     <!-- 2. TAB: PROVIDERS (Dedicated separation by provider) -->
     <section id="pane-providers" class="tab-pane">
+      <div class="pane-header">
+        <div>
+          <h2>Провайдеры</h2>
+          <p class="pane-sub">Сначала провайдер, потом аккаунт и модель. Изменения сохраняются сразу.</p>
+        </div>
+      </div>
+      <div class="provider-bar" id="providers-pill-nav"></div>
       <div id="provider-views-container">
         <!-- Provider views rendered here -->
       </div>
@@ -923,9 +994,16 @@
       }
 
       list.forEach(pId => {
+        const st = appState.providers.find(p => p.id === pId) || {};
+        const keys = st.keys || 0;
+        const models = st.models || 0;
+        const cred = st.credential || 'anonymous';
         const btn = document.createElement('button');
-        btn.className = `pill-btn ${pId === appState.activeProvider ? 'active' : ''}`;
-        btn.textContent = pId;
+        btn.className = `provider-card ${pId === appState.activeProvider ? 'active' : ''}`;
+        btn.innerHTML = `
+          <span class="provider-card-name">${pId}</span>
+          <span class="provider-card-meta">${cred} · ключей: ${keys} · моделей: ${models}</span>
+        `;
         btn.onclick = () => selectProvider(pId);
         nav.appendChild(btn);
       });
@@ -962,10 +1040,17 @@
       if (pId === 'antigravity') {
         extraSectionHTML = `
           <div class="card">
+            <div class="card-header"><h3 class="card-title">Аккаунт для запросов</h3></div>
+            <p class="pane-sub" style="margin:0 0 12px">Ключ, который уходит в запрос. «Авто» — ротация выбирает сама.</p>
+            <div id="ag-account-picker" class="account-picker">
+              <div class="empty-state">Загрузка аккаунтов...</div>
+            </div>
+          </div>
+          <div class="card">
             <div class="card-header">
               <h3 class="card-title">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                Google Antigravity Аккаунты и Квоты
+                Google Antigravity Квоты
               </h3>
               <button class="btn btn-primary" onclick="openModal('ag-modal')">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1047,6 +1132,7 @@
       renderProviderModels(pId);
       // If antigravity -> load quota
       if (pId === 'antigravity') {
+        loadAccountPicker(pId);
         loadAntigravityQuotaInProvider();
       }
     }
@@ -1118,6 +1204,60 @@
       if (fraction < 0.3) return '#ef4444'; // Red
       if (fraction <= 0.6) return '#f59e0b'; // Orange
       return '#22c55e'; // Green
+    }
+
+    // Account pin: the gateway stores which key serves the provider, so the pick
+    // survives a reload, a harness restart and a model-catalog refresh.
+    function escText(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    async function loadAccountPicker(pId) {
+      const cont = document.getElementById('ag-account-picker');
+      if (!cont) return;
+      const cur = ((appState.options && appState.options.current && appState.options.current.providers) || {})[pId] || {};
+      const pinned = cur.account || '';
+      let accounts = [];
+      try {
+        const res = await apiRequest('/_control/antigravity/quota');
+        accounts = (res && res.accounts) || [];
+      } catch (err) {
+        cont.innerHTML = `<div class="empty-state">Не удалось загрузить аккаунты: ${escText(err.message)}</div>`;
+        return;
+      }
+      const tiles = [{ id: '', email: 'Авто', meta: 'ротация выбирает ключ сама', active: pinned === '' }];
+      accounts.forEach(a => {
+        const id = a.account_id || '';
+        const same = pinned !== '' && (pinned === id || id.startsWith(pinned));
+        tiles.push({
+          id: id,
+          email: a.email || 'Google Account',
+          meta: a.error ? `ошибка: ${a.error}` : (a.project ? `проект ${a.project}` : 'без проекта'),
+          active: same,
+        });
+      });
+      if (pinned !== '' && !tiles.some(t => t.active)) tiles[0].active = true;
+      cont.innerHTML = tiles.map(t => `
+        <button class="account-tile ${t.active ? 'active' : ''}" data-account="${escText(t.id)}">
+          <span class="account-tile-email">${escText(t.email)}</span>
+          <span class="account-tile-meta">${escText(t.meta)}</span>
+          ${t.id ? `<span class="account-tile-id">${escText(t.id.slice(0, 12))}</span>` : ''}
+        </button>`).join('');
+      cont.querySelectorAll('.account-tile').forEach(el => {
+        el.onclick = () => pinAccount(pId, el.getAttribute('data-account') || '');
+      });
+    }
+
+    async function pinAccount(pId, value) {
+      try {
+        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ provider: pId, axis: 'account', value: value }) });
+        showToast(value ? 'Аккаунт закреплён за провайдером' : 'Аккаунт снова выбирается ротацией');
+        await loadOptions();
+        await loadModels();
+        renderActiveProviderView();
+      } catch (err) {
+        showToast('Не удалось выбрать аккаунт: ' + err.message, 'error');
+      }
     }
 
     async function loadAntigravityQuotaInProvider() {

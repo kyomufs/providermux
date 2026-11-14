@@ -225,13 +225,21 @@ func (q *QuotaFetcher) FetchQuota(ctx context.Context, refreshToken, project str
 }
 
 func (q *QuotaFetcher) setAntigravityHeaders(req *http.Request, accessToken string) {
-	ua := q.ua
-	if ua == "" {
-		ua = DefaultUserAgent
+	setAntigravityHeaders(req, accessToken, q.ua)
+}
+
+// setAntigravityHeaders is the header set the service recognises.
+//
+// Shared rather than duplicated so that a change to one of them is a change to
+// both: the quota reader and the catalog reader speak to the same route and
+// must look like the same client.
+func setAntigravityHeaders(req *http.Request, accessToken, userAgent string) {
+	if userAgent == "" {
+		userAgent = DefaultUserAgent
 	}
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", ua)
+	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Accept", "application/json")
 }
 

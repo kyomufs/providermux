@@ -119,6 +119,9 @@ type Provider struct {
 	// signatures replays the thought signatures of earlier tool calls; see
 	// signature.go for why the client cannot carry them itself.
 	signatures *signatureStore
+	// live holds the model list the service answered for an account; see
+	// live_catalog.go for why it is not the table in catalog.go.
+	live *liveCatalog
 }
 
 // New creates a provider from configuration.
@@ -138,6 +141,7 @@ func New(cfg Config) (*Provider, error) {
 	}
 	p.tokens = newTokenCache(cfg)
 	p.signatures = newSignatureStore(signatureMemory)
+	p.live = newLiveCatalog()
 	return p, nil
 }
 

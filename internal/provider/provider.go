@@ -384,6 +384,38 @@ type Transcoder interface {
 	Transcode(upstream io.ReadCloser, model string) io.ReadCloser
 }
 
+// AccountCatalog is what a provider implements when the service answers with
+// the models THIS account may use.
+//
+// Optional, on the same reasoning as Local and Polling: a provider whose list
+// is the same for everybody must not be made to accept a key it ignores. A
+// provider that implements it is saying the list it returned from Models is a
+// default rather than the truth, and that a caller holding a credential can ask
+// for the truth — which is what the panel needs to show what the operator can
+// actually call.
+//
+// The key is the raw credential, not a fingerprint: the provider is the one that
+// turns it into whatever the service wants, and it already does that on the
+// request path.
+type AccountCatalog interface {
+	// ModelsForAccount returns the catalog as the given account sees it. An
+	// empty key means "no account", and the answer must then be the default
+	// list rather than an error.
+	ModelsForAccount(ctx context.Context, key string) ([]Model, error)
+}
+
+// ModelsForKey asks a provider for its catalog through one account.
+//
+// A provider without an account-bound catalog, and a caller without a key, both
+// get the plain Models answer: an empty list would read as "nothing to offer",
+// which is a different statement from "nobody asked on an account's behalf".
+func ModelsForKey(ctx context.Context, p Provider, key string) ([]Model, error) {
+	if ac, ok := p.(AccountCatalog); ok && key != "" {
+		return ac.ModelsForAccount(ctx, key)
+	}
+	return p.Models(ctx)
+}
+
 // Registry is the set of available providers, assembled from configuration.
 type Registry struct {
 	providers map[ID]Provider
