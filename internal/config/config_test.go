@@ -928,3 +928,37 @@ func TestLegacyEnvFallback(t *testing.T) {
 		t.Fatalf("Listen = %q, want primary env value", c2.Listen.Val)
 	}
 }
+
+// TestCredentialSupportIsOneRule — the startup check and the panel's options
+// endpoint have to answer "does this provider take this credential" the same
+// way. The rule lives in one function so the two callers cannot drift.
+func TestCredentialSupportIsOneRule(t *testing.T) {
+	tests := []struct {
+		name       string
+		provider   string
+		credential string
+		want       bool
+	}{
+		{"antigravity anonymous", "antigravity", CredentialAnonymous, true},
+		{"antigravity account", "antigravity", "account", false},
+		{"antigravity bare key", "antigravity", "key", false},
+		{"opencode anonymous", "opencode", CredentialAnonymous, false},
+		{"opencode account", "opencode", "account", false},
+	}
+	for _, tc := range tests {
+		if got := CredentialUnsupported(tc.provider, tc.credential); got != tc.want {
+			t.Errorf("%s: CredentialUnsupported(%q, %q) = %v, want %v", tc.name, tc.provider, tc.credential, got, tc.want)
+		}
+	}
+}
+
+// TestProviderTypeFallsBackToTheSectionName — the built-in sections are keyed
+// by type, and an unnamed section still has a type.
+func TestProviderTypeFallsBackToTheSectionName(t *testing.T) {
+	if got := ProviderType("opencode", ProviderConfig{}); got != "opencode" {
+		t.Fatalf("ProviderType without a declared type = %q, want the section name", got)
+	}
+	if got := ProviderType("custom", ProviderConfig{Type: "antigravity"}); got != "antigravity" {
+		t.Fatalf("ProviderType = %q, want the declared type", got)
+	}
+}

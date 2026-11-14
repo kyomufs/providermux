@@ -83,8 +83,8 @@ func TestUpstreamUnavailableIsNotAboutTheKey(t *testing.T) {
 		if failure.KeyRejected {
 			t.Fatalf("%d: an upstream outage must not be blamed on the key", status)
 		}
-		if !failure.Retryable {
-			t.Fatalf("%d: an upstream outage must not be treated as final", status)
+		if failure.Retryable {
+			t.Fatalf("%d: this provider never asks for a repeat", status)
 		}
 		if !failure.UpstreamUnavailable {
 			t.Fatalf("%d: an upstream outage must be named as one", status)

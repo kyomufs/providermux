@@ -910,7 +910,7 @@ func (c *Config) Validate() error {
 				name, CredentialAccount, CredentialAnonymous,
 			)
 		}
-		if p.IsEnabled() && p.Type == "antigravity" && c.CredentialFor(name) == CredentialAnonymous {
+		if p.IsEnabled() && CredentialUnsupported(ProviderType(name, p), c.CredentialFor(name)) {
 			return fmt.Errorf("config: provider %q (antigravity) does not support anonymous credential", name)
 		}
 	}
@@ -924,6 +924,24 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config: reasoning_idle_timeout must be positive")
 	}
 	return nil
+}
+
+// ProviderType returns the type a provider section declares, falling back to
+// the section's name. The built-in sections use the type as their key, so a
+// section that names only its settings still has a type.
+func ProviderType(name string, p ProviderConfig) string {
+	if p.Type != "" {
+		return p.Type
+	}
+	return name
+}
+
+// CredentialUnsupported reports whether a provider type refuses a credential
+// mode outright. antigravity is account-only: its free lane runs on the
+// operator's Google accounts, and an anonymous fallback would spend a lane the
+// provider does not have.
+func CredentialUnsupported(providerType, credential string) bool {
+	return providerType == "antigravity" && credential == CredentialAnonymous
 }
 
 // checkEnum checks a value against an axis's allowed values.

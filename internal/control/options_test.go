@@ -92,3 +92,30 @@ func TestOptionsHandlers(t *testing.T) {
 		t.Errorf("expected model_fallback = 'on', got %q", h.Config.ModelFallback.Val)
 	}
 }
+
+// TestAntigravityRefusesAnonymousAtRuntime — the file loaded at startup is not
+// the only way a credential gets set: the panel writes it through the options
+// endpoint. The refusal has to live there too, or the panel can put antigravity
+// on the anonymous lane the provider does not have.
+func TestAntigravityRefusesAnonymousAtRuntime(t *testing.T) {
+	cfg := config.Default()
+	cfg.Paths.ConfigFile = filepath.Join(t.TempDir(), "config.json")
+	cfg.Providers = map[string]config.ProviderConfig{
+		"antigravity": {Type: "antigravity", Credential: "account"},
+	}
+
+	h := &Handler{Config: cfg, Providers: &provider.Registry{}, Transports: []string{"direct"}}
+	mux := http.NewServeMux()
+	h.Routes(mux)
+
+	body := `{"axis": "credential", "provider": "antigravity", "value": "anonymous"}`
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/_control/options", bytes.NewReader([]byte(body))))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	if got := h.Config.Providers["antigravity"].Credential; got != "account" {
+		t.Fatalf("credential = %q, want it unchanged at %q", got, "account")
+	}
+}

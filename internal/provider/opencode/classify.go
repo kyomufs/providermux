@@ -178,11 +178,12 @@ func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 	// otherwise read as a key refusal two dozen lines up.
 	//
 	// Repeating the same request against the same model is pointless while the
-	// endpoint is down, so Retryable is not what carries this: UpstreamUnavailable
-	// is, and the gateway answers it by moving the request to another model.
+	// endpoint is down, so Retryable stays false: UpstreamUnavailable is what
+	// carries this, and the gateway answers it by moving the request to another
+	// model. Setting Retryable here would re-open the gateway's repeat path,
+	// which this provider has explicitly opted out of.
 	if upstreamUnavailable.MatchString(lower) {
 		f.KeyRejected = false
-		f.Retryable = true
 		f.UpstreamUnavailable = true
 	}
 

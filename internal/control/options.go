@@ -108,6 +108,10 @@ func (h *Handler) handleOptionsUpdate(w http.ResponseWriter, r *http.Request) {
 				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("invalid credential value %q", req.Value)})
 				return
 			}
+			if config.CredentialUnsupported(config.ProviderType(req.Provider, pc), req.Value) {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("provider %q does not support credential %q", req.Provider, req.Value)})
+				return
+			}
 			pc.Credential = req.Value
 		case "key_rotation":
 			if !sliceContains(config.RotationValues(), req.Value) {
