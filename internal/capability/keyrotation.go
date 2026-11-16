@@ -30,25 +30,27 @@ func Fingerprint(key string) string {
 	return hex.EncodeToString(sum[:4])
 }
 
-// KeyRotation — the mechanism that replaces credentials when the key is
-// refused.
+// KeyRotation — the mechanism that picks the credential a request leaves with.
 //
 // SCOPE. The mechanism does not know which provider it serves or what its
 // models are called. It is responsible for exactly one thing: to hand out the
-// next credential string and to say whether any alternatives remain. That is
-// why it suits any provider that works with keys, and asks nothing of the
-// provider beyond the sign "it was the key that got rejected".
+// next credential string. A refusal is not its business: the gateway sends one
+// request per client request and passes the answer through, so the choice is
+// made BEFORE a request, never as a reaction to one.
 //
-// WHY NOT IN THE PROVIDER. Rotation is not a property of a service but a way to
-// get around a per-key request limit. The services differ; the technique is one.
-// Keeping it in the provider would mean copying identical code into places that
-// merely happened to look alike.
+// WHY NOT IN THE PROVIDER. Spreading requests over a pool is not a property of a
+// service but a way to get around a per-key request limit. The services differ;
+// the technique is one. Keeping it in the provider would mean copying identical
+// code into places that merely happened to look alike.
 type KeyRotation struct {
 	mu sync.Mutex
 
 	// keys — the available keys. An empty list means "no key", and then the
 	// mechanism honestly reports that there is nothing to change.
 	keys []string
+
+	// start — the index the pool starts from, named in the configuration.
+	start int
 
 	// next — the index of the next key. The mechanism hands out keys in a
 	// cycle, so that usage is spread evenly and none of them burns out first.
@@ -58,16 +60,14 @@ type KeyRotation struct {
 	// key is not handed out twice in a row.
 	lastUsed int
 
-	// rotate — whether a refusal that names the key is answered by taking
-	// another one.
+	// rotate — whether consecutive requests take different keys.
 	//
-	// A switch on the MECHANISM, not a policy held outside it. Issuing a key and
-	// replacing a refused one are two different questions: with rotation off the
-	// mechanism still has to hand out the key on every request — the deployment
-	// asked for a credential — it just stops treating a refusal as a reason to
-	// reach for the next one.
+	// A switch on the MECHANISM, not a policy held outside it. With rotation off
+	// the mechanism still hands out the starting key on every request — the
+	// deployment asked for a credential — it just does not spread requests over
+	// the pool.
 	//
-	// Keeping the switch outside would mean every caller of Take repeating the
+	// Keeping the switch outside would mean every caller of Next repeating the
 	// same check, and one of them forgetting it.
 	rotate bool
 }
@@ -78,9 +78,9 @@ type KeyRotationConfig struct {
 	Keys []string
 	// StartAt — which key to start from. A negative value means "the first".
 	StartAt int
-	// Rotate — replace a refused key. Absent means on: a deployment that listed
-	// several keys wanted them spent, and the mechanism's whole reason for
-	// existing is to spend them.
+	// Rotate — spread requests over the pool. Absent means on: a deployment
+	// that listed several keys wanted them spent, and the mechanism's whole
+	// reason for existing is to spread them.
 	Rotate *bool
 }
 
@@ -143,10 +143,9 @@ func NewKeyRotation(cfg map[string]any) (any, error) {
 	// assembly: the daemon counts the keys of a section from three places at
 	// once (api_key, api_key_env, settings.keys), and an operator who wrote the
 	// same key in two of them meant one key, not two. Keeping the repeat would
-	// make Len lie and turn HasAlternatives into a false "there is another one"
-	// — while Next and Take, facing two equal strings, would hand back the very
-	// key that had just been refused. Rotation would stop working exactly where
-	// it is switched on, and silently.
+	// make Len lie — and Next, facing two equal strings, would return the very
+	// key it used last time. Spreading would stop working exactly where it is
+	// switched on, and silently.
 	keys := make([]string, 0, len(parsed.Keys))
 	for _, k := range parsed.Keys {
 		if k == "" {
@@ -165,7 +164,7 @@ func NewKeyRotation(cfg map[string]any) (any, error) {
 	}
 
 	rotate := parsed.Rotate == nil || *parsed.Rotate
-	return &KeyRotation{keys: keys, next: start, lastUsed: -1, rotate: rotate}, nil
+	return &KeyRotation{keys: keys, start: start, next: start, lastUsed: -1, rotate: rotate}, nil
 }
 
 // Len reports how many keys are available.
@@ -175,27 +174,14 @@ func (k *KeyRotation) Len() int {
 	return len(k.keys)
 }
 
-// HasAlternatives reports whether there is a key different from the current
-// one.
-//
-// False means a retry makes no sense: either there is only one key, or there
-// are none at all, or rotation is switched off. That is the case where the
-// gateway must hand the refusal back to the client instead of spending time on a
-// plainly fruitless attempt.
-func (k *KeyRotation) HasAlternatives() bool {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	return k.rotate && len(k.keys) > 1
-}
-
-// Rotate reports whether replacing a refused key is in force.
+// Rotate reports whether consecutive requests take different keys.
 func (k *KeyRotation) Rotate() bool {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	return k.rotate
 }
 
-// SetRotation changes whether a refused key is replaced.
+// SetRotation changes whether consecutive requests take different keys.
 //
 // The switch is held by the mechanism, so a live change has to be written here
 // as well; changing only the configuration would leave the request path on the
@@ -208,9 +194,9 @@ func (k *KeyRotation) SetRotation(rotate bool) {
 
 // Next hands out the next key and the sign that there is a key.
 //
-// Keys are handed out in a cycle. The key returned is remembered as used, so
-// that the next call yields a different one: on a retry the point is exactly to
-// get a different key, not the same one.
+// With rotation on, keys are handed out in a cycle, so consecutive requests
+// leave through different accounts. With rotation off, every request leaves
+// with the starting key and the rest of the pool waits.
 func (k *KeyRotation) Next() (string, bool) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
@@ -218,14 +204,14 @@ func (k *KeyRotation) Next() (string, bool) {
 		return "", false
 	}
 
-	if len(k.keys) == 1 {
-		key := k.keys[0]
-		k.lastUsed = 0
+	if !k.rotate || len(k.keys) == 1 {
+		key := k.keys[k.start]
+		k.lastUsed = k.start
 		return key, true
 	}
 
-	// Skip the key handed out last time: the retry must proceed with a
-	// different one.
+	// Skip the key handed out last time: two consecutive requests should not
+	// leave through the same account while the pool has another one.
 	for i := 0; i < len(k.keys); i++ {
 		idx := k.next % len(k.keys)
 		k.next++
@@ -237,29 +223,6 @@ func (k *KeyRotation) Next() (string, bool) {
 	}
 
 	// Reachable only with a single key, which is covered above.
-	return "", false
-}
-
-// Take returns a key different from the one named.
-//
-// Used on a retry: the current key is known, and it is precisely another one
-// that is needed. If there is no other — or rotation is switched off — the
-// second result is false, and the retry is pointless.
-func (k *KeyRotation) Take(current string) (string, bool) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if !k.rotate || len(k.keys) <= 1 {
-		return "", false
-	}
-	for i := 0; i < len(k.keys); i++ {
-		idx := k.next % len(k.keys)
-		k.next++
-		if k.keys[idx] == current {
-			continue
-		}
-		k.lastUsed = idx
-		return k.keys[idx], true
-	}
 	return "", false
 }
 

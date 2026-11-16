@@ -46,9 +46,8 @@ func (h *Handler) credentialForWithSelector(p provider.Provider, selector string
 				return key
 			}
 		}
-		// The pin is a decision about the first key, not about rotation: it
-		// names the account the operator chose, and a refusal still moves on
-		// through alternativeKey when the rotation axis allows it.
+		// The pin is a decision about which key every request uses: it names
+		// the account the operator chose, and the request is sent with it.
 		if pin := h.pinnedKey(p); pin != "" {
 			return pin
 		}
@@ -83,7 +82,7 @@ func (h *Handler) pinnedKey(p provider.Provider) string {
 	}
 	key, ok := h.findKey(p, pin)
 	if !ok {
-		h.warn("pinned account %q is not in the %s pool; falling back to rotation", pin, string(p.ID()))
+		h.warn("pinned account %q is not in the %s pool; falling back to the next key", pin, string(p.ID()))
 		return ""
 	}
 	return key

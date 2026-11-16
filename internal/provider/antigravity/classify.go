@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
-	"time"
 
 	"providermux/internal/provider"
 )
@@ -15,8 +13,8 @@ import (
 // Refusal classification.
 //
 // The refusal itself is passed to the client verbatim; what the provider has to
-// answer here is one question — would another key help, or is the answer worth
-// repeating.
+// answer here is one question — is the refusal about the credentials, so that the
+// NEXT request should leave with another key.
 //
 // For this service a key is an ACCOUNT (a Google refresh token), which changes
 // the sense of the question: "the capacity of this account is spent" and "this
@@ -46,7 +44,6 @@ func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 		Body:    body,
 		Headers: resp.Header,
 	}
-	f.RetryAfter = retryAfter(resp.Header)
 
 	lower := strings.ToLower(string(body))
 	status := errorStatus(body)
@@ -84,34 +81,7 @@ func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 	// an address the service has already judged.
 	if addressText.MatchString(lower) {
 		f.KeyRejected = false
-		f.Retryable = false
 		f.AddressRejected = true
-	}
-
-	// The account is refused for a reason that is not the credential: the client
-	// is not the reference application, the project is gone, the tier is closed.
-	// Another key does not help and a repeat does not either.
-	if permissionText.MatchString(lower) && !quotaText.MatchString(lower) && !authText.MatchString(lower) && resp.StatusCode != http.StatusTooManyRequests {
-		f.Retryable = false
-	}
-
-	// Is a repeat worth it? A different question from the key one: the same
-	// account and the same request sent again after the named delay.
-	switch {
-	case f.KeyRejected, f.AddressRejected:
-		f.Retryable = false
-	case resp.StatusCode == http.StatusRequestTimeout,
-		resp.StatusCode == http.StatusTooManyRequests,
-		resp.StatusCode >= 500:
-		f.Retryable = true
-	}
-
-	// The service is up but the edge could not reach the model: another model of
-	// the same provider is a different backend, and repeating the request against
-	// the same one is pointless.
-	if status == "UNAVAILABLE" || status == "DEADLINE_EXCEEDED" || status == "INTERNAL" {
-		f.UpstreamUnavailable = true
-		f.Retryable = true
 	}
 
 	return f
@@ -129,26 +99,4 @@ func errorStatus(body []byte) string {
 		return ""
 	}
 	return strings.ToUpper(strings.TrimSpace(envelope.Error.Status))
-}
-
-// retryAfter reads the delay the service named.
-//
-// Both spellings occur: a number of seconds and an HTTP date.
-func retryAfter(header http.Header) time.Duration {
-	raw := strings.TrimSpace(header.Get("retry-after"))
-	if raw == "" {
-		return 0
-	}
-	if seconds, err := strconv.Atoi(raw); err == nil {
-		if seconds <= 0 {
-			return 0
-		}
-		return time.Duration(seconds) * time.Second
-	}
-	if when, err := http.ParseTime(raw); err == nil {
-		if d := time.Until(when); d > 0 {
-			return d
-		}
-	}
-	return 0
 }

@@ -156,14 +156,13 @@ func TestClassifyReadsTheVerdictOffTheStatus(t *testing.T) {
 		status      int
 		body        string
 		keyRejected bool
-		retryable   bool
 	}{
-		{"a rejected key is not a reason to wait", http.StatusUnauthorized, `{"error":{"message":"bad key"}}`, true, false},
-		{"a forbidden key is the same verdict", http.StatusForbidden, `{"error":{"message":"no access"}}`, true, false},
-		{"a rate limit is a reason to wait, not to rotate", http.StatusTooManyRequests, `{"error":{"message":"rate limit exceeded"}}`, false, true},
-		{"an exhausted allowance is not restored by waiting", http.StatusTooManyRequests, `{"error":{"message":"insufficient quota"}}`, true, false},
-		{"a server fault is worth repeating", http.StatusBadGateway, `{"error":{"message":"upstream"}}`, false, true},
-		{"a bad request is worth neither", http.StatusBadRequest, `{"error":{"message":"malformed"}}`, false, false},
+		{"a rejected key names the credential", http.StatusUnauthorized, `{"error":{"message":"bad key"}}`, true},
+		{"a forbidden key is the same verdict", http.StatusForbidden, `{"error":{"message":"no access"}}`, true},
+		{"a rate limit is not about the key", http.StatusTooManyRequests, `{"error":{"message":"rate limit exceeded"}}`, false},
+		{"an exhausted allowance is", http.StatusTooManyRequests, `{"error":{"message":"insufficient quota"}}`, true},
+		{"a server fault is not about the key", http.StatusBadGateway, `{"error":{"message":"upstream"}}`, false},
+		{"a bad request is not about the key", http.StatusBadRequest, `{"error":{"message":"malformed"}}`, false},
 	}
 
 	for _, tc := range cases {
@@ -182,34 +181,27 @@ func TestClassifyReadsTheVerdictOffTheStatus(t *testing.T) {
 			if f.KeyRejected != tc.keyRejected {
 				t.Fatalf("KeyRejected = %v, want %v", f.KeyRejected, tc.keyRejected)
 			}
-			if f.Retryable != tc.retryable {
-				t.Fatalf("Retryable = %v, want %v", f.Retryable, tc.retryable)
-			}
 		})
 	}
 }
 
-// TestClassifyParsesTheAnnouncedWait — a refusal may announce how long to wait,
-// and the rotation machinery reads that instead of its own guess.
-func TestClassifyParsesTheAnnouncedWait(t *testing.T) {
+// TestClassifyKeepsTheAnnouncedWait — a refusal may announce how long to wait.
+// The gateway does not act on it, but the client does, so the header must reach
+// it exactly as the service sent it.
+func TestClassifyKeepsTheAnnouncedWait(t *testing.T) {
 	p := newTestProvider(t, Config{})
 
 	header := make(http.Header)
 	header.Set("Retry-After", "7")
 	f := p.Classify(&http.Response{StatusCode: http.StatusTooManyRequests, Header: header}, []byte(`{}`))
 
-	if f.RetryAfter.Seconds() != 7 {
-		t.Fatalf("RetryAfter = %v, want 7s from the header", f.RetryAfter)
-	}
-	if !f.Retryable {
-		t.Fatal("a rate limit with an announced wait is still a reason to repeat")
+	if got := f.Headers.Get("retry-after"); got != "7" {
+		t.Fatalf("retry-after = %q, want the header verbatim", got)
 	}
 
-	// A header that cannot be read must leave the wait at zero rather than
-	// inventing one: the rotation machinery then falls back to its own delay.
 	silent := p.Classify(&http.Response{StatusCode: http.StatusTooManyRequests, Header: make(http.Header)}, []byte(`{}`))
-	if silent.RetryAfter != 0 {
-		t.Fatalf("RetryAfter = %v, want none when the header is absent", silent.RetryAfter)
+	if got := silent.Headers.Get("retry-after"); got != "" {
+		t.Fatalf("retry-after = %q, want none when the header is absent", got)
 	}
 }
 

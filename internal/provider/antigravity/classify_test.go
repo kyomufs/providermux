@@ -10,20 +10,16 @@ import (
 // TestTheVerdictOfARefusal — which lever the gateway should pull.
 //
 // The questions are separate: is the ACCOUNT the cause (another refresh token
-// helps), is the ADDRESS the cause (only another uplink helps), and is a repeat
-// worth the client's time.
+// helps) and is the ADDRESS the cause (only another uplink helps).
 func TestTheVerdictOfARefusal(t *testing.T) {
 	p := newTestProvider(t)
 
 	cases := []struct {
-		name       string
-		status     int
-		body       string
-		retryAfter string
-		key        bool
-		retry      bool
-		address    bool
-		unavail    bool
+		name    string
+		status  int
+		body    string
+		key     bool
+		address bool
 	}{
 		{
 			name:   "the token is no longer accepted",
@@ -50,44 +46,21 @@ func TestTheVerdictOfARefusal(t *testing.T) {
 			address: true,
 		},
 		{
-			name:    "the backend behind the edge is out",
-			status:  http.StatusServiceUnavailable,
-			body:    `{"error":{"code":503,"message":"The service is currently unavailable.","status":"UNAVAILABLE"}}`,
-			retry:   true,
-			unavail: true,
-		},
-		{
-			name:       "a burst limit names its delay",
-			status:     http.StatusServiceUnavailable,
-			body:       `{"error":{"code":503,"message":"try later","status":"UNAVAILABLE"}}`,
-			retryAfter: "7",
-			retry:      true,
-			unavail:    true,
+			name:   "the backend behind the edge is out",
+			status: http.StatusServiceUnavailable,
+			body:   `{"error":{"code":503,"message":"The service is currently unavailable.","status":"UNAVAILABLE"}}`,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			resp := &http.Response{StatusCode: tc.status, Header: http.Header{}}
-			if tc.retryAfter != "" {
-				resp.Header.Set("retry-after", tc.retryAfter)
-			}
-			f := p.Classify(resp, []byte(tc.body))
+			f := p.Classify(&http.Response{StatusCode: tc.status, Header: http.Header{}}, []byte(tc.body))
 
 			if f.KeyRejected != tc.key {
 				t.Fatalf("KeyRejected = %v, want %v", f.KeyRejected, tc.key)
 			}
-			if f.Retryable != tc.retry {
-				t.Fatalf("Retryable = %v, want %v", f.Retryable, tc.retry)
-			}
 			if f.AddressRejected != tc.address {
 				t.Fatalf("AddressRejected = %v, want %v", f.AddressRejected, tc.address)
-			}
-			if f.UpstreamUnavailable != tc.unavail {
-				t.Fatalf("UpstreamUnavailable = %v, want %v", f.UpstreamUnavailable, tc.unavail)
-			}
-			if tc.retryAfter != "" && f.RetryAfter.Seconds() != 7 {
-				t.Fatalf("RetryAfter = %s, want 7s", f.RetryAfter)
 			}
 		})
 	}

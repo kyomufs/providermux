@@ -41,13 +41,9 @@ func TestClassifyOnRecordedRefusal(t *testing.T) {
 
 	// The recorded refusal is the FREE-LANE ATTESTATION one, and it is not about
 	// the credential: no key makes a non-conforming request acceptable. Rotation
-	// over it would only add refused requests from the same address, so the
-	// decision must be "do not switch and do not repeat".
+	// over it would only add refused requests from the same address.
 	if failure.KeyRejected {
 		t.Fatal("the attestation refusal must not be blamed on the credential")
-	}
-	if failure.Retryable {
-		t.Fatal("the attestation refusal must not be repeated")
 	}
 }
 
@@ -66,14 +62,14 @@ func TestAKeyRefusalIsStillBlamedOnTheKey(t *testing.T) {
 	}
 }
 
-// TestUpstreamUnavailableIsNotAboutTheKey — the provider's own edge could not
-// reach the model host, and the status it says so under is not fixed.
+// TestUpstreamRefusalIsNotAboutTheKey — the provider's own edge could not reach
+// the model host, and the status it says so under is not fixed.
 //
 // The same recorded body arrived as 503, 403 and 429 within one hour on
 // 2026-10-20 (see testdata/README.md). A status reading would split one
 // condition into three verdicts, and the 403 one would blame the credential —
 // which, with a key pool, spends keys on a model that cannot reach its own host.
-func TestUpstreamUnavailableIsNotAboutTheKey(t *testing.T) {
+func TestUpstreamRefusalIsNotAboutTheKey(t *testing.T) {
 	body := readFixture(t, "refusal-upstream-unavailable.json")
 
 	for _, status := range []int{http.StatusServiceUnavailable, http.StatusForbidden, http.StatusTooManyRequests} {
@@ -83,21 +79,15 @@ func TestUpstreamUnavailableIsNotAboutTheKey(t *testing.T) {
 		if failure.KeyRejected {
 			t.Fatalf("%d: an upstream outage must not be blamed on the key", status)
 		}
-		if failure.Retryable {
-			t.Fatalf("%d: this provider never asks for a repeat", status)
-		}
-		if !failure.UpstreamUnavailable {
-			t.Fatalf("%d: an upstream outage must be named as one", status)
-		}
 		if string(failure.Body) != string(body) {
 			t.Fatalf("%d: the refusal body was altered", status)
 		}
 	}
 }
 
-// TestInvalidParameterIsNotAnUpstreamOutage — the edge prefixes ITS OWN
-// failures and the model host's refusals with the same wrapper, so the wrapper
-// must not be read as "the model host is unreachable".
+// TestInvalidParameterIsNotAboutTheKey — the edge prefixes ITS OWN failures and
+// the model host's refusals with the same wrapper, so the wrapper must not be
+// read as a credential verdict.
 //
 // RECORDED 2026-11-01, the whole body as it arrived:
 //
@@ -105,23 +95,17 @@ func TestUpstreamUnavailableIsNotAboutTheKey(t *testing.T) {
 //	[InvalidParameter] Invalid request: invalid or unsupported parameter value
 //	trace_id: b6ea6e706635770e7aed57a6b2e4cab6"}}
 //
-// This is the request being wrong, not the host being down. Marking it
-// UpstreamUnavailable sends the gateway to another model, which refuses it the
-// same way, and the operator sees a 400 that looks like an outage.
-func TestInvalidParameterIsNotAnUpstreamOutage(t *testing.T) {
+// This is the request being wrong, not the key being refused. The gateway must
+// not rotate over it, and the body must reach the client unchanged so that the
+// client's own classification stays authoritative.
+func TestInvalidParameterIsNotAboutTheKey(t *testing.T) {
 	body := readFixture(t, "refusal-invalid-parameter.json")
 	resp := &http.Response{StatusCode: http.StatusBadRequest, Header: make(http.Header)}
 
 	failure := newTestProvider(t).Classify(resp, body)
 
-	if failure.UpstreamUnavailable {
-		t.Fatal("a rejected parameter must not be reported as an upstream outage")
-	}
 	if failure.KeyRejected {
 		t.Fatal("a rejected parameter must not be blamed on the key")
-	}
-	if failure.Retryable {
-		t.Fatal("a rejected parameter is not fixed by repeating the request")
 	}
 	if string(failure.Body) != string(body) {
 		t.Fatal("the refusal body was altered")
@@ -143,15 +127,16 @@ func TestRecordedRefusalKeepsClientSignals(t *testing.T) {
 	}
 }
 
-// TestClassifyLeavesAbsentHeaderAlone: the recorded refusal has no wait header,
-// and the parsing must not invent one.
-func TestClassifyLeavesAbsentHeaderAlone(t *testing.T) {
+// TestClassifyLeavesHeadersAlone: the recorded refusal has no wait header, and
+// the gateway must not invent one. The client owns the wait decision, so the
+// response headers reach it exactly as the service sent them.
+func TestClassifyLeavesHeadersAlone(t *testing.T) {
 	body := readFixture(t, "refusal-freetier.json")
 	resp := &http.Response{StatusCode: http.StatusForbidden, Header: make(http.Header)}
 
 	failure := newTestProvider(t).Classify(resp, body)
-	if failure.RetryAfter != 0 {
-		t.Fatalf("RetryAfter = %v, want none: the service sent no retry-after", failure.RetryAfter)
+	if got := failure.Headers.Get("retry-after"); got != "" {
+		t.Fatalf("retry-after = %q, want none: the service sent no retry-after", got)
 	}
 }
 

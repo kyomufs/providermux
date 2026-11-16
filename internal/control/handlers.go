@@ -57,8 +57,9 @@ type ProviderStatus struct {
 	// configured pool is deliberately not presented, which is what KeyUsed
 	// reports.
 	Keys int `json:"keys"`
-	// KeyRotation — whether a refused key is replaced. False under the anonymous
-	// credential, whatever the switch says, because there is nothing to replace.
+	// KeyRotation — whether consecutive requests take different keys. False
+	// under the anonymous credential, whatever the switch says, because no key
+	// is presented there.
 	KeyRotation bool `json:"key_rotation"`
 	// Credential — which credential is in force: "anonymous" or "account".
 	Credential string `json:"credential,omitempty"`
@@ -190,13 +191,13 @@ type KeysResponse struct {
 type ProviderKeys struct {
 	Provider string   `json:"provider"`
 	Keys     []string `json:"keys"`
-	// Rotation — whether a refused key is replaced.
+	// Rotation — whether consecutive requests take different keys.
 	//
 	// FALSE UNDER THE ANONYMOUS CREDENTIAL, whatever the switch says: no key is
-	// presented there, so there is nothing to replace. Reporting the switch
-	// alone would let the monitor claim a mechanism that cannot act, which is
-	// worse than saying nothing — the operator would then look for the reason a
-	// rotation never happens in the wrong place.
+	// presented there. Reporting the switch alone would let the monitor claim a
+	// mechanism that cannot act, which is worse than saying nothing — the
+	// operator would then look for the reason a rotation never happens in the
+	// wrong place.
 	Rotation bool `json:"rotation"`
 	// Credential — which credential is in force for this provider.
 	Credential string `json:"credential"`

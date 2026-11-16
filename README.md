@@ -346,7 +346,7 @@ allowed: anonymous | account
 |---|---|---|
 | `mode` | `local` \| `server` | loopback with no token check, or a reachable listener where the token is mandatory |
 | `credential` | `anonymous` \| `account` | whether a key is presented at all (counted against your address) or one is taken from the pool (counted against your account) |
-| `key_rotation` | `on` \| `off` | whether a refusal that names the key spends the next key from the pool |
+| `key_rotation` | `on` \| `off` | whether consecutive requests leave through different keys of the pool |
 | `family` | `auto` \| `v4` \| `v6` | the address family the traffic leaves from |
 | `transport` | `direct` | how requests leave the machine: from its own address |
 
@@ -360,8 +360,8 @@ happens to be lying in the configuration file:
 |---|---|---|
 | a key is present in the section | **not sent** — the service's own anonymity marker goes out instead | sent |
 | there is no key | fine; the marker goes out | **the daemon refuses to start** |
-| `key_rotation: on` | ignored — there is no key to replace | the pool is spent on a refusal that names the key |
-| `key_rotation: off` | ignored | the current key is kept and the refusal reaches the client |
+| `key_rotation: on` | ignored — there is no key to replace | consecutive requests take different keys from the pool |
+| `key_rotation: off` | ignored | every request leaves with the same key |
 
 Two of those deserve a word.
 

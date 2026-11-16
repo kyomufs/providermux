@@ -78,9 +78,9 @@ var builders = map[string]Builder{
 	"antigravity": buildAntigravity,
 
 	// A provider that answers from inside the gateway, with no network at all.
-	// It exists so that the whole path — request, refusal, rotation, retry,
-	// counters, monitor — can be exercised without a key and without depending
-	// on someone else's uptime.
+	// It exists so that the whole path — request, refusal, counters, monitor —
+	// can be exercised without a key and without depending on someone else's
+	// uptime.
 	"stub": buildStub,
 }
 

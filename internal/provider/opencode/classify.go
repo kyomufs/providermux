@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
-	"time"
 
 	"providermux/internal/provider"
 )
@@ -15,9 +13,9 @@ import (
 // Refusal classification.
 //
 // WHY IT IS NEEDED AT ALL, if the gateway passes the refusal to the client
-// verbatim. Precisely for one question: is it meaningful to switch the key and
-// retry. The body, status and headers go to the client unchanged — it parses
-// them itself. The provider answers only the question about the key.
+// verbatim. For one question: is the refusal about the credentials, so that the
+// NEXT request should leave with another key. The body, status and headers go to
+// the client unchanged — it parses them itself, and it owns the retry decision.
 //
 // The source of the signals is packages/ai/src/provider-error.ts (opencode
 // 2.0.30), the function classifyProviderFailure. The provider uses the same
@@ -75,13 +73,17 @@ var authText = regexp.MustCompile(`(?i)incorrect api key|invalid api key|api key
 // address. Neither can be answered by another key.
 var freeLaneRefusal = regexp.MustCompile(`(?i)can only be used from within opencode|detected abusive traffic|free models aren't available from your current network`)
 
-// upstreamUnavailable is the text signal of the provider's edge failing to
-// reach the model host: "Upstream request failed: Endpoint is unavailable."
+// upstreamOutage is the text signal of the provider's edge failing to reach the
+// model host: "Upstream request failed: Endpoint is unavailable."
 //
 // It is matched by TEXT and not by status because the status is not fixed for
 // it. Measured on 2026-10-20 within one hour: 503 when the edge itself
 // answered, 403 on one free model and 429 on another. One condition, three
 // statuses, so the status would split it into three different verdicts.
+//
+// It is a guard on the KEY verdict only: the gateway neither repeats nor
+// switches models, so this exists to keep "key rejected" in the log honest. No
+// key reaches a model host that the edge cannot reach.
 //
 // THE WRAPPER IS NOT THE SIGNAL. The edge prefixes its own failures with
 // "Upstream request failed:" and then quotes the model host's answer, so the
@@ -91,13 +93,11 @@ var freeLaneRefusal = regexp.MustCompile(`(?i)can only be used from within openc
 //	Upstream request failed: [InvalidParameter] Invalid request: invalid or
 //	unsupported parameter value trace_id: <hex>
 //
-// Switching models over that is a waste: the request is wrong, and the next
-// model refuses it the same way, with a different line number. So the
-// prefix only counts together with the transport wording that follows it
-// ("endpoint is unavailable", "connection", "timed out", "no healthy").
-// Anything else behind the prefix keeps its own verdict — a malformed request
-// is reported to the client, not bounced across the catalog.
-var upstreamUnavailable = regexp.MustCompile(`(?i)upstream request failed[^"]*?(?:endpoint is unavailable|unavailable|connection (?:refused|reset|error)|econn\w*|timed out|timeout|no healthy|bad gateway|service unavailable)|endpoint is unavailable`)
+// So the prefix only counts together with the transport wording that follows it
+// ("endpoint is unavailable", "connection", "timed out", "no healthy"). Anything
+// else behind the prefix keeps its own verdict — a malformed request is reported
+// to the client as itself.
+var upstreamOutage = regexp.MustCompile(`(?i)upstream request failed[^"]*?(?:endpoint is unavailable|unavailable|connection (?:refused|reset|error)|econn\w*|timed out|timeout|no healthy|bad gateway|service unavailable)|endpoint is unavailable`)
 
 // Classify implements provider.Provider.
 //
@@ -113,8 +113,6 @@ func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 		Headers: resp.Header,
 	}
 
-	f.RetryAfter = parseRetryAfter(resp.Header)
-
 	codes := extractCodes(body)
 	lower := strings.ToLower(string(body))
 
@@ -126,8 +124,8 @@ func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 	case resp.StatusCode == http.StatusForbidden:
 		// 403 can also be a regional ban or an attestation refusal. For the
 		// key decision the difference does not matter: if the gateway has a
-		// key, trying another is meaningful, and if it does not, the retry
-		// will not happen anyway.
+		// key, the next request may leave with another; if it does not, the
+		// verdict only reaches the log.
 		f.KeyRejected = true
 	}
 	for _, code := range codes {
@@ -158,33 +156,17 @@ func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 	// which is the worst possible thing to spend it on.
 	if resp.StatusCode == http.StatusForbidden && freeLaneRefusal.MatchString(lower) {
 		f.KeyRejected = false
-		f.Retryable = false
 		// Reported as its own judgement: it is the only verdict a different exit
 		// address could change, and nothing acts on it while the only transport is
 		// direct.
 		f.AddressRejected = true
 	}
 
-	// Is a repeat worth it?
-	//
-	// DISABLED: The gateway loop must not repeat requests to this provider,
-	// because the client's own policy (or lack thereof) is the one that has to
-	// hold. Repeating here only confuses the state and spends time.
-	f.Retryable = false
-
-	// The model host is out. This is applied LAST, after every other signal, so
-	// that nothing above can turn it back into a key verdict: the body is the
-	// only reliable evidence here, and a 403 carrying it was measured — a 403 is
-	// otherwise read as a key refusal two dozen lines up.
-	//
-	// Repeating the same request against the same model is pointless while the
-	// endpoint is down, so Retryable stays false: UpstreamUnavailable is what
-	// carries this, and the gateway answers it by moving the request to another
-	// model. Setting Retryable here would re-open the gateway's repeat path,
-	// which this provider has explicitly opted out of.
-	if upstreamUnavailable.MatchString(lower) {
+	// An upstream outage is not a credential problem: the edge could not reach
+	// the model host, and no key changes that. Applied last so that a 403
+	// carrying this wording is not blamed on the key just above.
+	if upstreamOutage.MatchString(lower) {
 		f.KeyRejected = false
-		f.UpstreamUnavailable = true
 	}
 
 	return f
@@ -259,36 +241,4 @@ func gatewayCodeLabel(message string) string {
 		return m[1]
 	}
 	return ""
-}
-
-// parseRetryAfter parses the wait headers.
-//
-// The order is the same as the client's (packages/ai/src/route/executor.ts):
-// first the millisecond header, then seconds, then the HTTP date. The value may
-// be needed by key rotation to decide whether to wait or to switch the key.
-func parseRetryAfter(h http.Header) time.Duration {
-	if h == nil {
-		return 0
-	}
-	if v := h.Get("retry-after-ms"); v != "" {
-		if ms, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && ms >= 0 {
-			return time.Duration(ms) * time.Millisecond
-		}
-	}
-	v := h.Get("retry-after")
-	if v == "" {
-		return 0
-	}
-	v = strings.TrimSpace(v)
-	if secs, err := strconv.ParseFloat(v, 64); err == nil && secs >= 0 {
-		return time.Duration(secs * float64(time.Second))
-	}
-	if at, err := http.ParseTime(v); err == nil {
-		d := time.Until(at)
-		if d < 0 {
-			return 0
-		}
-		return d
-	}
-	return 0
 }

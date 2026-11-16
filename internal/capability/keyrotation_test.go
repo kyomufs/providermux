@@ -2,20 +2,19 @@ package capability
 
 import "testing"
 
-// TestKeyRotationSingleKeyHasNoAlternatives — with a single key a retry is
-// pointless, and the mechanism must say so.
-func TestKeyRotationSingleKeyHasNoAlternatives(t *testing.T) {
+// TestKeyRotationSingleKeyYieldsIt — with a single key the mechanism has
+// nothing to choose from, and it must still hand the key out: the deployment
+// asked for a credential, not for a pool.
+func TestKeyRotationSingleKeyYieldsIt(t *testing.T) {
 	v, err := NewKeyRotation(map[string]any{"keys": []any{"only-one"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	kr := v.(*KeyRotation)
 
-	if kr.HasAlternatives() {
-		t.Fatal("a single key must report no alternatives")
-	}
-	if _, ok := kr.Take("only-one"); ok {
-		t.Fatal("Take must fail when there is no different key")
+	got, ok := kr.Next()
+	if !ok || got != "only-one" {
+		t.Fatalf("Next = %q, %v; want %q, true", got, ok, "only-one")
 	}
 }
 
@@ -34,9 +33,6 @@ func TestKeyRotationEmptyYieldsNothing(t *testing.T) {
 	}
 	if _, ok := kr.Next(); ok {
 		t.Fatal("Next must report no key when the list is empty")
-	}
-	if kr.HasAlternatives() {
-		t.Fatal("an empty list must report no alternatives")
 	}
 }
 
@@ -66,8 +62,8 @@ func TestKeyRotationEmptyStringsDropped(t *testing.T) {
 //
 // The repeat arrives on its own: the section supplies keys from three places at
 // once, and the same key written in two of them must not look like a pool of
-// two. Otherwise HasAlternatives promises an alternative that does not exist,
-// and the retry spends a request to get the same key back.
+// two. Otherwise Len would promise a second account that is not there, and the
+// cycle would spend a request on the very key it just used.
 func TestKeyRotationDuplicatesCollapse(t *testing.T) {
 	v, err := NewKeyRotation(map[string]any{"keys": []any{"a", "a", "b"}})
 	if err != nil {
@@ -78,17 +74,8 @@ func TestKeyRotationDuplicatesCollapse(t *testing.T) {
 	if kr.Len() != 2 {
 		t.Fatalf("Len = %d, want 2", kr.Len())
 	}
-	if !kr.HasAlternatives() {
-		t.Fatal("two distinct keys must report alternatives")
-	}
 
-	// The pair is genuinely different — the property "a has an alternative"
-	// has to hold in practice, not merely in Len.
-	if got, ok := kr.Take("a"); !ok || got != "b" {
-		t.Fatalf("Take(%q) = %q, %v; want %q, true", "a", got, ok, "b")
-	}
-
-	// And when the repeat was the ONLY content, there is nothing to rotate.
+	// And when the repeat was the ONLY content, there is one key.
 	v, err = NewKeyRotation(map[string]any{"keys": []any{"a", "a"}})
 	if err != nil {
 		t.Fatal(err)
@@ -97,32 +84,6 @@ func TestKeyRotationDuplicatesCollapse(t *testing.T) {
 
 	if kr.Len() != 1 {
 		t.Fatalf("Len = %d, want 1", kr.Len())
-	}
-	if kr.HasAlternatives() {
-		t.Fatal("a doubled single key must report no alternatives")
-	}
-	if _, ok := kr.Take("a"); ok {
-		t.Fatal("Take must fail when the only key is the current one")
-	}
-}
-
-// TestKeyRotationTakeReturnsDifferentKey — the point of the mechanism: the
-// retry proceeds with a DIFFERENT key.
-func TestKeyRotationTakeReturnsDifferentKey(t *testing.T) {
-	v, err := NewKeyRotation(map[string]any{"keys": []any{"a", "b", "c"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	kr := v.(*KeyRotation)
-
-	for _, current := range []string{"a", "b", "c"} {
-		got, ok := kr.Take(current)
-		if !ok {
-			t.Fatalf("Take(%q) reported no alternative", current)
-		}
-		if got == current {
-			t.Fatalf("Take(%q) returned the same key", current)
-		}
 	}
 }
 
@@ -141,6 +102,31 @@ func TestKeyRotationNextCycles(t *testing.T) {
 	}
 	if first == second {
 		t.Fatalf("two consecutive Next calls returned the same key %q", first)
+	}
+}
+
+// TestKeyRotationOffPinsTheStartKey — with the axis off the pool still supplies
+// a credential, but every request leaves with the same account: the operator
+// asked for one key, not for a spread.
+func TestKeyRotationOffPinsTheStartKey(t *testing.T) {
+	v, err := NewKeyRotation(map[string]any{
+		"keys":    []any{"a", "b", "c"},
+		"startAt": 1,
+		"rotate":  false,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kr := v.(*KeyRotation)
+
+	for i := 0; i < 3; i++ {
+		got, ok := kr.Next()
+		if !ok {
+			t.Fatalf("call %d: Next reported no key", i)
+		}
+		if got != "b" {
+			t.Fatalf("call %d: Next = %q, want the starting key %q", i, got, "b")
+		}
 	}
 }
 

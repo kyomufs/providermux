@@ -201,10 +201,10 @@ func (s *Store) RecordSuccess(o Outcome) { s.record(o, outcomeOK) }
 
 // RecordRefusal records a provider refusal.
 //
-// The refusal is recorded BEFORE any decision about a retry: otherwise the
-// counters would not answer the question "what has been spent". And it is saved
-// to disk straight away, for the same reason as a success: a counter that did
-// not survive a restart is useless.
+// The refusal is recorded before the answer goes to the client: the counters
+// answer the question "what has been spent", and they must not depend on what
+// the gateway does next. And it is saved to disk straight away, for the same
+// reason as a success: a counter that did not survive a restart is useless.
 func (s *Store) RecordRefusal(o Outcome) { s.record(o, outcomeRefused) }
 
 // RecordAbort records a request that ended without an answer from the provider:

@@ -150,10 +150,10 @@ func (r *keyRegistry) HasRotation(id provider.ID) bool {
 
 // SetRotation implements the live-update side of rotation management.
 //
-// The mechanism keeps its own switch because Take and HasAlternatives must not
-// repeat the policy check. A change made from the panel therefore has to reach
-// the mechanism, or the axis would say "on" while every refused key stayed in
-// place until the daemon was restarted.
+// The mechanism keeps its own switch because Next must not repeat the policy
+// check. A change made from the panel therefore has to reach the mechanism, or
+// the axis would say "on" while every request kept leaving on the same key
+// until the daemon was restarted.
 func (r *keyRegistry) SetRotation(id provider.ID, rotate bool) bool {
 	kr, ok := r.byProvider[id]
 	if !ok {

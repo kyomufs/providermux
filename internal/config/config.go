@@ -309,10 +309,10 @@ type ProviderConfig struct {
 	// or by pool position. Empty means "no pin", and the pool rotates the way
 	// its axis says.
 	//
-	// Separate from KeyRotation on purpose: rotation decides whether a refusal
-	// moves to the next key, a pin decides which key the first request uses.
-	// They are two questions, and a provider can want the second without the
-	// first — several accounts, one of them chosen deliberately.
+	// Separate from KeyRotation on purpose: rotation decides whether consecutive
+	// requests take different keys, a pin decides that every request uses one
+	// chosen key. A provider can want the second without the first — several
+	// accounts, one of them chosen deliberately.
 	Account string `json:"account,omitempty"`
 
 	// Transport — this provider's transport identifier, overriding the global one.
@@ -436,15 +436,15 @@ func CredentialValues() []string {
 	return []string{CredentialAnonymous, CredentialAccount}
 }
 
-// The key rotation axis — whether the pool is spent on a refusal that names the
-// key.
+// The key rotation axis — whether consecutive requests leave through different
+// keys of the pool.
 const (
-	// RotationOn — ask for another key and retry once.
+	// RotationOn — each request takes the next key from the pool.
 	RotationOn = "on"
-	// RotationOff — hand the refusal to the client as it arrived.
+	// RotationOff — every request uses the starting key.
 	//
-	// The right choice when the keys are equivalent and a rejection is more
-	// likely to describe the address than the key.
+	// The right choice when the keys are equivalent and spreading is not
+	// needed, or when one account is meant to carry the deployment.
 	RotationOff = "off"
 )
 

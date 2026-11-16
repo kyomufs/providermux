@@ -469,7 +469,7 @@ curl -sN http://127.0.0.1:8787/v1/chat/completions \
 | `internal/provider/opencode/sessioncache.go` | one session per conversation, bounded |
 | `internal/provider/opencode/identifiers.go` | the identifier formula of the shipped client, reproduced |
 | `internal/gateway/collect.go` | event stream merged into one body for a non-streaming caller |
-| `internal/gateway/gateway.go` | the rotation loop: key, repeat, and the move to another model |
+| `internal/gateway/gateway.go` | the single provider request and the verbatim refusal |
 | `internal/transport/bunhello.go` | the captured Bun ClientHello |
 | `internal/transport/direct.go` | egress: HTTP/1.1, ALPN, uTLS with the Bun hello |
 

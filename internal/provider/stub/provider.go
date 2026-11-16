@@ -9,11 +9,10 @@
 // against a real service, which spends quota and fails for reasons that have nothing
 // to do with the gateway.
 //
-// And it exercises the SECOND family of strategies. The opencode provider answers a
-// refusal by rotating keys. A service that limits the address rather than the key
-// cannot be helped that way: there the answer is to wait and send the same request
-// again, which is what the retry strategy it declares does. Two providers, two
-// mechanisms, one gateway — and any of it can be watched without a key.
+// And it makes a refusal watchable. The gateway sends one request and passes
+// the answer through, so a stub is the easiest way to see a refusal reach a
+// client exactly as the service wrote it — status, body and headers — without
+// spending a real quota or waiting for a real outage.
 //
 // HOW IT ANSWERS WITHOUT A SERVER. The flow through the gateway is an HTTP round
 // trip, unchanged, and the stub supplies its own transport: the request it builds is
@@ -67,9 +66,6 @@ const stubHost = "stub.invalid"
 //	      fail_text: "rate limit exceeded"   # and this text in the body
 //	      retry_after_s: 1               # announcing this wait
 //	      delay_ms: 200                  # holding every request this long
-//	      retry:                         # the declared strategy
-//	        attempts: 3
-//	        delay_ms: 500
 //
 // Every setting has a default that makes the provider work: a section consisting of
 // nothing but "type: stub" answers requests.
@@ -88,7 +84,8 @@ type Config struct {
 	// syntactically correct error object that names no reason.
 	FailText string
 	// RetryAfter — the wait announced in the refusal headers. Zero announces
-	// nothing, which is the case a retry strategy has to handle with its own delay.
+	// nothing. The gateway forwards it but does not act on it; the client owns
+	// the decision.
 	RetryAfter time.Duration
 	// Delay — how long to hold every request. It exists so that a client's timeout
 	// and the monitor's stream handling can be exercised without a slow service.
@@ -206,9 +203,9 @@ func (p *Provider) Build(req provider.Request) (provider.Prepared, error) {
 //
 // The verdicts are read off the status, and that is the whole point: a stub must be
 // predictable, so that what the gateway does next is a property of the gateway and
-// not of a clever fixture. 401 and 403 name the key; 429 and 5xx ask for a repeat;
-// a quota named in the text outranks both, because an exhausted allowance is not
-// restored by waiting.
+// not of a clever fixture. 401 and 403 name the key; a quota named in the text
+// outranks a status that would otherwise read as a plain "try later", because an
+// exhausted allowance is not restored by another key.
 func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 	f := provider.Failure{
 		Status:  resp.StatusCode,
@@ -216,23 +213,14 @@ func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 		Headers: resp.Header,
 	}
 
-	if v := resp.Header.Get("retry-after"); v != "" {
-		if d, err := time.ParseDuration(v + "s"); err == nil {
-			f.RetryAfter = d
-		}
-	}
-
 	text := strings.ToLower(string(body))
 	quota := strings.Contains(text, "quota") || strings.Contains(text, "insufficient")
 
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized, resp.StatusCode == http.StatusForbidden:
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		f.KeyRejected = true
-	case resp.StatusCode == http.StatusTooManyRequests, resp.StatusCode >= 500:
+	} else if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 		if quota {
 			f.KeyRejected = true
-		} else {
-			f.Retryable = true
 		}
 	}
 

@@ -248,42 +248,12 @@ type Failure struct {
 	// Headers are the response headers. They are needed in full: retry-after
 	// and the like influence the client's decision.
 	Headers http.Header
-	// RetryAfter is the parsed retry-after, if there was one. A separate field
-	// is needed by key rotation: it decides from it whether to wait or switch
-	// keys.
-	RetryAfter time.Duration
 	// KeyRejected marks that the refusal was caused specifically by the
 	// credentials.
 	//
 	// This judgement exists for the sake of key rotation: switching a key is
 	// meaningful only when a key has been rejected.
 	KeyRejected bool
-	// Retryable marks that the same request, sent again after a wait, may
-	// succeed.
-	//
-	// A SEPARATE JUDGEMENT from KeyRejected, and it must not be folded into it:
-	// the two are answered by different machinery. A rejected key is answered by
-	// taking another one; a "not now" is answered by waiting. A refusal may be
-	// either, neither, or in principle both, and the provider is the only party
-	// that can tell which — the same status carries different meanings at
-	// different services.
-	//
-	// A provider that leaves this false is saying that a repeat is pointless,
-	// which is the safe reading: repeating a refusal that will not change only
-	// spends the client's time.
-	Retryable bool
-	// UpstreamUnavailable marks that the provider's own edge could not reach the
-	// model host, so the model — not the key, not the request, not the address —
-	// is what is out.
-	//
-	// It is a separate judgement from Retryable because it answers a different
-	// question: a repeat of the SAME request is what Retryable allows, while this
-	// one says the same request is addressed to a model that cannot answer at
-	// all, and that moving the request to ANOTHER model is what may help. On
-	// opencode both were measured live: with one free model refusing this way,
-	// four other free models of the same provider answered 200 in the same
-	// second.
-	UpstreamUnavailable bool
 	// AddressRejected marks that the refusal concerns the SOURCE ADDRESS of the
 	// request — the provider does not want traffic from this network at all.
 	//
