@@ -48,6 +48,16 @@ const (
 type liveCatalog struct {
 	mu      sync.Mutex
 	entries map[string]liveCatalogEntry
+	// reported holds the ids already mentioned in the log, per account.
+	//
+	// WHY IT IS KEPT. The panel asks for the catalog on every refresh, while the
+	// live answer behind it is cached for minutes. Reporting an unknown model on
+	// every call therefore repeated one fact on every panel tick — measured at
+	// eight megabytes of log in twenty minutes — and the rotation threshold
+	// pushed the request history out of the file. The warning is still the only
+	// way the table ever learns about a new route, so it is deduplicated rather
+	// than dropped: one line per account and id.
+	reported map[string]map[string]struct{}
 }
 
 type liveCatalogEntry struct {
@@ -56,7 +66,40 @@ type liveCatalogEntry struct {
 }
 
 func newLiveCatalog() *liveCatalog {
-	return &liveCatalog{entries: make(map[string]liveCatalogEntry)}
+	return &liveCatalog{
+		entries:  make(map[string]liveCatalogEntry),
+		reported: make(map[string]map[string]struct{}),
+	}
+}
+
+// unseenUnknown returns the ids the table does not know and that have not been
+// reported for this account yet, and records them as reported.
+//
+// known is consulted with the lower-cased id, the same spelling the caller uses
+// to build the known set.
+func (c *liveCatalog) unseenUnknown(account string, ids []string, known func(string) bool) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	seen := c.reported[account]
+	if seen == nil {
+		seen = make(map[string]struct{}, len(ids))
+		c.reported[account] = seen
+	}
+
+	var fresh []string
+	for _, id := range ids {
+		key := strings.ToLower(id)
+		if known(key) {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		fresh = append(fresh, id)
+	}
+	return fresh
 }
 
 func (c *liveCatalog) get(account string, now time.Time) ([]string, bool) {
@@ -113,11 +156,10 @@ func (p *Provider) ModelsForAccount(ctx context.Context, key string) ([]provider
 
 	// An id the table does not know is not silently dropped: it is a model the
 	// operator can be offered after the table learns its route, and saying so is
-	// the only way that ever happens.
-	for _, id := range ids {
-		if !known[strings.ToLower(id)] {
-			p.logf("antigravity: account %s sees model %q, which the table has no route for", accountFingerprint(key), id)
-		}
+	// the only way that ever happens. It is said once per account and id, because
+	// the panel asks repeatedly while the live answer under it is cached.
+	for _, id := range p.live.unseenUnknown(accountFingerprint(key), ids, func(id string) bool { return known[id] }) {
+		p.logf("antigravity: account %s sees model %q, which the table has no route for", accountFingerprint(key), id)
 	}
 
 	return out, nil
