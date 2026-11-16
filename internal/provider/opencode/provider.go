@@ -58,23 +58,25 @@ const liveModelsPath = "/models"
 
 const ID provider.ID = "opencode"
 
-// DefaultBaseURL is the address of the provider's model list.
+// DefaultBaseURL is the service address the reference client uses.
 //
-// Taken from the model catalog (snapshot.txt, the `api` key) rather than from
-// the client's code: the catalog is what the client goes by when choosing a
-// model. It is NOT the chat address: the service moved chat to a
-// protocol-specific path, and the old one now answers from a different,
-// address-limited lane (see DefaultChatPath).
-const DefaultBaseURL = "https://opencode.ai/inference/v1"
+// MEASURED on 2026-11-16 by running opencode2 2.2.6 through a local listener:
+// the client resolves both the model list and chat from this base, appending
+// /models and /chat/completions. The older /inference/v1 base answered 200 on
+// that date too, but it is the legacy lane, and a proxy that speaks the current
+// client's address is the one that cannot be routed into it by mistake.
+const DefaultBaseURL = "https://opencode.ai/inference/openai/v1"
 
 // DefaultChatPath is the path of the chat endpoint on the service's host.
 //
-// MEASURED on 2026-10-24: the reference client sends chat to
-// /inference/openai/v1/chat/completions. The old /inference/v1/chat/completions
-// still answers, but from the address-limited free lane, and with a spent
-// address it answers 429 FreeUsageLimitError while the client's path answers
-// 200 with the same body, headers and TLS client. The path is therefore part of
-// the wire contract, not a cosmetic alias.
+// MEASURED on 2026-10-24 and again on 2026-11-16: the reference client sends
+// chat to /inference/openai/v1/chat/completions. The old
+// /inference/v1/chat/completions still answers, but from the address-limited
+// free lane, and with a spent address it answers 429 FreeUsageLimitError while
+// the client's path answers 200 with the same body, headers and TLS client. The
+// path is therefore part of the wire contract, not a cosmetic alias. The path
+// stays absolute so that a mirror configured with another base still reaches
+// the client's lane.
 const DefaultChatPath = "/inference/openai/v1/chat/completions"
 
 // Config is the provider settings, parsed from the gateway configuration.
@@ -716,8 +718,7 @@ func (p *Provider) gateTools() []gateTool {
 					"name":        gateNameShell,
 					"description": shellDescription,
 					"parameters": map[string]any{
-						"$schema": jsonSchemaDialect,
-						"type":    "object",
+						"type": "object",
 						"properties": map[string]any{
 							"command": map[string]any{
 								"type":        "string",
@@ -737,7 +738,8 @@ func (p *Provider) gateTools() []gateTool {
 								"description": backgroundDescription,
 							},
 						},
-						"required": []any{"command"},
+						"required":             []any{"command"},
+						"additionalProperties": false,
 					},
 					"strict": false,
 				},
@@ -751,8 +753,7 @@ func (p *Provider) gateTools() []gateTool {
 					"name":        gateNameRead,
 					"description": readDescription,
 					"parameters": map[string]any{
-						"$schema": jsonSchemaDialect,
-						"type":    "object",
+						"type": "object",
 						"properties": map[string]any{
 							"path": map[string]any{
 								"type":        "string",
@@ -769,7 +770,8 @@ func (p *Provider) gateTools() []gateTool {
 								"description": "The maximum number of lines or directory entries to read (defaults to and capped at 2000)",
 							},
 						},
-						"required": []any{"path"},
+						"required":             []any{"path"},
+						"additionalProperties": false,
 					},
 					"strict": false,
 				},

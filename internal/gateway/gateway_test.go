@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
@@ -744,21 +743,23 @@ func TestModelCapacitiesAreReported(t *testing.T) {
 	}
 }
 
-// TestALongHoldIsClamped — a provider's hold is capped before it reaches the
-// client.
+// TestRefusalHeadersAreVerbatim — the provider's hold reaches the client as it
+// was sent, in both spellings.
 //
-// Measured 2026-11-09: one 429 from a provider carried a ten-minute hold, the
-// gateway passed it on, and the client (the DSH proxy) parked every request of
-// the session for those ten minutes. The gateway has already rotated keys and
-// spent its retries by the time it writes a refusal, so the number it hands over
-// is a retry hint, not a copy of the provider's outage.
-func TestALongHoldIsClamped(t *testing.T) {
+// A refusal is the provider's answer about its own service: how long it will
+// stay shut is part of that answer. Rewriting the number here would make the
+// client wait a different time than the provider asked for, and the whole point
+// of a transparent gateway is that a direct call and a proxied one produce the
+// same decision.
+func TestRefusalHeadersAreVerbatim(t *testing.T) {
 	const body = `{"error":{"type":"rate_limit_error","code":"quota","message":"slow down"}}`
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		w.Header().Set("retry-after", "600")
-		w.WriteHeader(http.StatusForbidden)
+		w.Header().Set("retry-after-ms", "2500")
+		w.Header().Set("x-ratelimit-remaining", "0")
+		w.WriteHeader(http.StatusTooManyRequests)
 		_, _ = io.WriteString(w, body)
 	}))
 	defer upstream.Close()
@@ -766,60 +767,19 @@ func TestALongHoldIsClamped(t *testing.T) {
 	h, _, _ := newTestHandler(t, upstream)
 	rec := postChat(t, h, `{"model":"test/model","messages":[{"role":"user","content":"hello"}]}`)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTooManyRequests)
 	}
 	if got := rec.Body.String(); got != body {
 		t.Fatalf("body changed:\n got %s\nwant %s", got, body)
 	}
-	if got := rec.Header().Get("retry-after"); got != "60" {
-		t.Fatalf("retry-after = %q, want the ceiling %q", got, "60")
-	}
-}
-
-// TestAShortHoldIsKept — the ceiling is a ceiling, not a rewrite: a hold the
-// provider can honour within a minute is passed on as it is.
-func TestAShortHoldIsKept(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("content-type", "application/json")
-		w.Header().Set("retry-after", "7")
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = io.WriteString(w, `{"error":{"type":"rate_limit_error"}}`)
-	}))
-	defer upstream.Close()
-
-	h, _, _ := newTestHandler(t, upstream)
-	rec := postChat(t, h, `{"model":"test/model","messages":[{"role":"user","content":"hello"}]}`)
-
-	if got := rec.Header().Get("retry-after"); got != "7" {
-		t.Fatalf("retry-after = %q, want %q", got, "7")
-	}
-}
-
-// TestClampHoldReadsBothSpellings — a hold arrives as seconds or as a date, and
-// an unreadable one is dropped rather than passed on.
-func TestClampHoldReadsBothSpellings(t *testing.T) {
-	now := time.Date(2026, 11, 9, 18, 0, 0, 0, time.UTC)
-	cases := []struct {
-		in   string
-		want string
-		ok   bool
-	}{
-		{"0", "0", true},
-		{"7", "7", true},
-		{"60", "60", true},
-		{"601", "60", true},
-		{"3600", "60", true},
-		{now.Add(20 * time.Second).Format(http.TimeFormat), "20", true},
-		{now.Add(2 * time.Hour).Format(http.TimeFormat), "60", true},
-		{now.Add(-time.Minute).Format(http.TimeFormat), "0", true},
-		{"", "", false},
-		{"soon", "", false},
-	}
-	for _, tc := range cases {
-		got, ok := clampHold(tc.in, now)
-		if ok != tc.ok || got != tc.want {
-			t.Fatalf("clampHold(%q) = %q, %t; want %q, %t", tc.in, got, ok, tc.want, tc.ok)
+	for name, want := range map[string]string{
+		"retry-after":           "600",
+		"retry-after-ms":        "2500",
+		"x-ratelimit-remaining": "0",
+	} {
+		if got := rec.Header().Get(name); got != want {
+			t.Fatalf("%s = %q, want %q: the refusal header was rewritten", name, got, want)
 		}
 	}
 }

@@ -228,9 +228,8 @@ that case, `skip_thought_signature_validator`. For Claude the sentinel is used
 only on the first replayed call, because a run of them there is refused.
 
 A **refusal** is never translated. The status, body and headers reach the client
-verbatim, as for every other provider — with the single gateway-wide exception of
-`retry-after`, which is capped at a minute before it is handed over
-(`refusalHoldMax` in `internal/gateway/gateway.go`); see [Refusals](#refusals).
+verbatim, as for every other provider, `retry-after` included; see
+[Refusals](#refusals).
 
 ## Refusals
 
@@ -243,14 +242,12 @@ pull, not what to tell the client.
 | 429, `RESOURCE_EXHAUSTED` | key rejected | the capacity of the *account* is spent |
 | 403, `PERMISSION_DENIED` | key rejected | the account may not call the service |
 | 403 naming a location or a country | address rejected, not retried | another account does not fix where the request comes from |
-| 503 `UNAVAILABLE`, 504 `DEADLINE_EXCEEDED`, 500 `INTERNAL` | upstream unavailable, retryable | another model of the same provider is another backend |
+| 503 `UNAVAILABLE`, 504 `DEADLINE_EXCEEDED`, 500 `INTERNAL` | upstream unavailable | the service, not the request, is what is out |
 
-`retry-after` is read in both spellings (seconds and an HTTP date). It is not,
-however, forwarded as it stands: the gateway caps the hold it asks a client to
-sit out at one minute, because by the time a refusal reaches the client the
-gateway has already rotated keys and spent its own retries. Measured on
-2026-11-09: one 429 carried a ten-minute hold, the gateway passed it on verbatim,
-and the DSH proxy parked the whole session for those ten minutes.
+`retry-after` is forwarded as it stands, in both spellings (seconds and an HTTP
+date). The provider named the hold; the gateway is not the party that can improve
+on the number, and rewriting it would make the client wait a different time than
+the one it would have waited on a direct call.
 
 The wording matched here is the Google error model — `{"error": {"code",
 "message", "status"}}` with a gRPC status name. It is **not measured** against

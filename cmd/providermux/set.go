@@ -53,7 +53,6 @@ func settableAxes() []settable {
 		{command: "mode", key: "mode", values: config.ModeValues()},
 		{command: "cred", aliases: []string{"credential"}, key: "credential", values: config.CredentialValues()},
 		{command: "rotate", aliases: []string{"key_rotation"}, key: "key_rotation", values: config.RotationValues()},
-		{command: "fallback", aliases: []string{"model_fallback"}, key: "model_fallback", values: config.FallbackValues()},
 		{command: "family", key: "family", values: config.FamilyValues()},
 		{command: "transport", key: "transport", values: transportIDs()},
 	}
@@ -170,8 +169,6 @@ func axisValue(cfg *config.Config, key string) config.Value[string] {
 		return cfg.Credential
 	case "key_rotation":
 		return cfg.KeyRotation
-	case "model_fallback":
-		return cfg.ModelFallback
 	case "family":
 		return cfg.Family
 	case "transport":

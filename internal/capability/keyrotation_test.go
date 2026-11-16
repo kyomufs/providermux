@@ -210,7 +210,7 @@ func TestRegistryReturnsRegistered(t *testing.T) {
 	if _, err := r.Build(KindKeyRotation, "no-such-name", nil); err == nil {
 		t.Fatal("an unknown name must fail")
 	}
-	if _, err := r.Build(KindRetry, "pool", nil); err == nil {
+	if _, err := r.Build(Kind("no-such-kind"), "pool", nil); err == nil {
 		t.Fatal("an unknown kind must fail")
 	}
 }

@@ -3,13 +3,8 @@ package gateway
 import (
 	"context"
 	"errors"
-	"io"
-	"net"
 	"sync"
-	"syscall"
 	"time"
-
-	"providermux/internal/provider"
 )
 
 // The budgets of one attempt at the provider.
@@ -38,46 +33,7 @@ const (
 	// a test holds them together.
 	defaultFirstEventTimeout = 30 * time.Second
 	defaultIdleTimeout       = 120 * time.Second
-
-	// transportAttempts is how many times one request is sent when the failure
-	// happened on the way to the provider rather than in the answer.
-	//
-	// A pooled connection can be dead without anyone noticing: the peer is gone,
-	// no FIN arrived, and the first write after that reads as an EOF instead of
-	// an answer. One attempt turns such a blip into a failed turn; a retry on a
-	// fresh connection turns it into a slow turn.
-	transportAttempts = 3
-
-	// silenceAttempts is how many times a stream is sent when its headers never
-	// arrived.
-	//
-	// One retry, no more, and only for that stage. A stream whose headers never
-	// came is the same dead connection seen a moment later, and a fresh one
-	// usually answers at once. A request that does not stream is not repeated
-	// here at all: its silence budget is measured in minutes, and the provider
-	// had all of it to answer.
-	silenceAttempts = 2
-
-	// modelFallbackLimit is how many OTHER models one request may be moved to
-	// when the model it asked for cannot answer at all.
-	//
-	// Two, not the whole catalog: each move is a fresh attempt on a fresh
-	// connection, and the client waits through all of them. Two is enough to
-	// survive one dead endpoint — measured, the free lane had several models out
-	// at once — while keeping the worst case a few seconds rather than a minute.
-	//
-	// The limit applies only when the model_fallback axis is on; with it off the
-	// budget is zero and the client is answered by the model it asked for or not
-	// at all.
-	modelFallbackLimit = 2
 )
-
-// transportDelays are the pauses before the second and the following attempts.
-//
-// Short on purpose: the fault being absorbed is a connection dropped by the
-// kernel or a packet lost on the way, not a provider that is down. Waiting
-// longer here would only delay the answer the client is entitled to.
-var transportDelays = []time.Duration{200 * time.Millisecond, 700 * time.Millisecond}
 
 // Causes explaining why an attempt was cut short.
 var (
@@ -179,81 +135,7 @@ func (w *watchdog) stop() {
 	w.cancel(nil)
 }
 
-// retriableTransport reports whether a failed attempt is worth repeating on a
-// fresh connection.
-//
-// A failure is worth repeating when it happened on the way to the provider: a
-// pooled connection that was already dead, a route that was gone when it was
-// used, a certificate that did not verify because the middle of the path was
-// being replaced at that moment. A refusal is NOT repeated here — that is the
-// provider's answer, and what to do with it is the retry policy's business, not
-// the transport's.
-func retriableTransport(err error) bool {
-	switch {
-	case err == nil:
-		return false
-	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		// Someone else ended the attempt: the client hung up, or our own
-		// watchdog fired. Repeating it would work against that decision.
-		return false
-	}
-
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, net.ErrClosed) {
-		return true
-	}
-
-	// Every dial and every read of the connection reports through net.OpError.
-	//
-	// A certificate that did not verify arrives through the same path and IS
-	// repeated, because the evidence says the verdict is as unstable as the path:
-	// over an uplink that is being switched, one request in two fails the
-	// handshake and the next one succeeds against the very same certificate.
-	// Treating it as final turns that flakiness into a failed turn, and the
-	// request body is never sent on a handshake that failed, so repeating it
-	// discloses nothing. What is left is the cost of two failed handshakes
-	// against a certificate that is wrong for a reason — and that is cheaper than
-	// a turn lost to one that is not.
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
-		return opErr.Err != nil
-	}
-
-	for _, target := range []error{
-		syscall.ECONNRESET, syscall.ECONNREFUSED, syscall.EPIPE,
-		syscall.EHOSTUNREACH, syscall.ENETUNREACH, syscall.ETIMEDOUT,
-	} {
-		if errors.Is(err, target) {
-			return true
-		}
-	}
-	return false
-}
-
 // idleCloser is what a transport implements when it holds a pool of connections.
 type idleCloser interface {
 	CloseIdleConnections()
-}
-
-// dropConnections empties the provider's pool of idle connections.
-//
-// Called before a retry, and only then: the attempt that failed is the reason
-// the pool is suspect, and reaching the provider over a fresh connection is the
-// whole point of repeating it.
-func (h *Handler) dropConnections(p provider.Provider) {
-	if local, ok := p.(provider.Local); ok {
-		if rt := local.RoundTripper(); rt != nil {
-			if c, ok := rt.(idleCloser); ok {
-				c.CloseIdleConnections()
-			}
-			return
-		}
-	}
-	if h.Transport == nil {
-		return
-	}
-	if rt, err := h.Transport.RoundTripper(); err == nil && rt != nil {
-		if c, ok := rt.(idleCloser); ok {
-			c.CloseIdleConnections()
-		}
-	}
 }

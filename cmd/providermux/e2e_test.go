@@ -42,8 +42,7 @@ const e2eConfig = `{
       "settings": {
         "fail": 1,
         "fail_status": 429,
-        "fail_text": "rate limit exceeded",
-        "retry": {"attempts": 2, "delay_ms": 1}
+        "fail_text": "rate limit exceeded"
       }
     },
     "rotate": {
@@ -78,7 +77,7 @@ func e2eDaemon(t *testing.T) *httptest.Server {
 	for _, name := range []string{
 		config.EnvMode, config.EnvListen, config.EnvToken, config.EnvTransport,
 		config.EnvUpstream, config.EnvCredential, config.EnvRotation, config.EnvFamily,
-		config.EnvModelFallback, config.EnvFirstEventTimeout, config.EnvIdleTimeout,
+		config.EnvFirstEventTimeout, config.EnvIdleTimeout,
 		config.EnvReasoningIdleTimeout, config.EnvConfig, config.EnvState,
 	} {
 		t.Setenv(name, "")
@@ -185,19 +184,27 @@ func TestEndToEndThroughTheStub(t *testing.T) {
 		t.Fatalf("the stream has no terminator: %s", raw)
 	}
 
-	// 4. A retryable refusal is repeated by the provider's own policy, and the
-	// client sees one successful answer.
+	// 4. A refusal reaches the client as it is. The gateway neither repeats it
+	// nor replaces it with another key: the client's own policy is the only one
+	// that decides whether to ask again.
 	resp, raw = e2ePost(t, srv.URL+"/p/flaky/v1/chat/completions",
 		`{"model":"stub-echo","messages":[{"role":"user","content":"hello"}]}`)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("flaky = %d: %s", resp.StatusCode, raw)
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("flaky = %d, want the provider's 429: %s", resp.StatusCode, raw)
+	}
+	if !bytes.Contains(raw, []byte("rate limit exceeded")) {
+		t.Fatalf("the refusal body was rewritten: %s", raw)
 	}
 
-	// 5. A refused key is replaced by the next one of the pool.
+	// 5. The key was rejected and there is another in the pool, but rotation is
+	// not a reason to spend it behind the client's back. The 403 is the answer.
 	resp, raw = e2ePost(t, srv.URL+"/p/rotate/v1/chat/completions",
 		`{"model":"stub-echo","messages":[{"role":"user","content":"hello"}]}`)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("rotate = %d: %s", resp.StatusCode, raw)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("rotate = %d, want the provider's 403: %s", resp.StatusCode, raw)
+	}
+	if !bytes.Contains(raw, []byte("invalid key")) {
+		t.Fatalf("the refusal body was rewritten: %s", raw)
 	}
 
 	// 6. The control surface sees the pool, the usage and a live axis change.
@@ -255,8 +262,9 @@ func TestEndToEndThroughTheStub(t *testing.T) {
 		t.Fatalf("server mode without a token = %d, want 400: %s", resp.StatusCode, raw)
 	}
 
-	// 7. The counters tell the same story as the answers: the refused attempts
-	// are counted even though the client saw a success.
+	// 7. The counters tell the same story as the answers: two successes, two
+	// refusals passed through, and not a single attempt more than the client
+	// asked for.
 	resp, raw = e2eGet(t, srv.URL+"/_control/status")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d: %s", resp.StatusCode, raw)
@@ -270,8 +278,8 @@ func TestEndToEndThroughTheStub(t *testing.T) {
 	if err := json.Unmarshal(raw, &status); err != nil {
 		t.Fatalf("status body: %v", err)
 	}
-	if status.Totals.OK != 4 {
-		t.Fatalf("successful attempts = %d, want 4: %s", status.Totals.OK, raw)
+	if status.Totals.OK != 2 {
+		t.Fatalf("successful attempts = %d, want 2: %s", status.Totals.OK, raw)
 	}
 	if status.Totals.Refused != 2 {
 		t.Fatalf("refused attempts = %d, want 2: %s", status.Totals.Refused, raw)

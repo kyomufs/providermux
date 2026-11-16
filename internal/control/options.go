@@ -27,7 +27,6 @@ type CurrentOptions struct {
 	Mode                 string                    `json:"mode"`
 	Credential           string                    `json:"credential"`
 	KeyRotation          string                    `json:"key_rotation"`
-	ModelFallback        string                    `json:"model_fallback"`
 	Family               string                    `json:"family"`
 	Transport            string                    `json:"transport"`
 	FirstEventTimeout    string                    `json:"first_event_timeout"`
@@ -55,7 +54,6 @@ func (h *Handler) currentOptions() *CurrentOptions {
 		Mode:                 snap.Mode,
 		Credential:           snap.Credential,
 		KeyRotation:          snap.KeyRotation,
-		ModelFallback:        snap.ModelFallback,
 		Family:               snap.Family,
 		Transport:            snap.Transport,
 		FirstEventTimeout:    snap.FirstEventTimeout.String(),
@@ -217,14 +215,6 @@ func (h *Handler) handleOptionsUpdate(w http.ResponseWriter, r *http.Request) {
 			}
 			updated = value
 			apply = func(c *config.Config) { c.KeyRotation.Set(value, config.SourceFile) }
-		case "model_fallback":
-			value, ok := canonical(config.FallbackValues(), req.Value)
-			if !ok {
-				status, message = http.StatusBadRequest, fmt.Sprintf("invalid model_fallback %q", req.Value)
-				return
-			}
-			updated = value
-			apply = func(c *config.Config) { c.ModelFallback.Set(value, config.SourceFile) }
 		case "family":
 			value, ok := canonical(config.FamilyValues(), req.Value)
 			if !ok {

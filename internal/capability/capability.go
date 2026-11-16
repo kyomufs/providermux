@@ -31,8 +31,6 @@ const (
 	KindKeyRotation Kind = "key_rotation"
 	// KindDisguise — substituting the request shape for that of another client.
 	KindDisguise Kind = "disguise"
-	// KindRetry — retrying the request under its own policy.
-	KindRetry Kind = "retry"
 )
 
 // Info describes a mechanism for the interfaces and the help text.

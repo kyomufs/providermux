@@ -31,9 +31,9 @@ import (
 // recordingUpstream returns an upstream that records every Authorization header
 // it receives.
 //
-// It answers with a refusal rather than a stream: the retry and rotation
-// machinery must not be involved in a test about which credential is presented,
-// and a refusal ends the request after exactly one attempt.
+// It answers with a refusal rather than a stream: a test about which credential
+// is presented must not wait for a model to answer, and a refusal ends the
+// request after exactly one attempt.
 func recordingUpstream(t *testing.T) (*httptest.Server, func() []string) {
 	t.Helper()
 

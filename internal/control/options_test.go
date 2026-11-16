@@ -79,7 +79,7 @@ func TestOptionsHandlers(t *testing.T) {
 	}
 
 	// 2. POST /_control/options (update global axis)
-	updateBody := `{"axis": "model_fallback", "value": "on"}`
+	updateBody := `{"axis": "key_rotation", "value": "off"}`
 	postReq := httptest.NewRequest(http.MethodPost, "/_control/options", bytes.NewReader([]byte(updateBody)))
 	postRec := httptest.NewRecorder()
 	mux.ServeHTTP(postRec, postReq)
@@ -88,8 +88,8 @@ func TestOptionsHandlers(t *testing.T) {
 		t.Fatalf("post status code = %d, want 200", postRec.Code)
 	}
 
-	if h.Config.ModelFallback.Val != "on" {
-		t.Errorf("expected model_fallback = 'on', got %q", h.Config.ModelFallback.Val)
+	if h.Config.KeyRotation.Val != config.RotationOff {
+		t.Errorf("expected key_rotation = %q, got %q", config.RotationOff, h.Config.KeyRotation.Val)
 	}
 }
 

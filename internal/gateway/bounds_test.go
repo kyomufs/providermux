@@ -1,15 +1,10 @@
 package gateway
 
 import (
-	"context"
-	"crypto/x509"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
@@ -157,114 +152,6 @@ func TestStreamSilenceBetweenEventsIsCutOff(t *testing.T) {
 	}
 	if day.OK != 0 {
 		t.Fatalf("OK = %d, want 0", day.OK)
-	}
-}
-
-// TestDeadConnectionIsRetriedOnAFreshOne — the failure the client saw as
-// "the provider is unreachable: EOF".
-//
-// A pooled connection can be dead without anyone knowing: after a network blip
-// the peer is gone, no FIN arrived, and the first request written into that
-// connection reads as an EOF instead of an answer. Failing the turn there is
-// what turns a twenty-second outage into a broken session, although a fresh
-// connection reaches the provider at once.
-func TestDeadConnectionIsRetriedOnAFreshOne(t *testing.T) {
-	var hits atomic.Int32
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// The first two connections die the way a dropped route kills them: the
-		// request is read in full, and then the connection is gone without a
-		// single byte of answer.
-		if hits.Add(1) <= 2 {
-			_, _ = io.Copy(io.Discard, r.Body)
-			conn, _, err := w.(http.Hijacker).Hijack()
-			if err != nil {
-				t.Errorf("hijacking: %v", err)
-				return
-			}
-			_ = conn.Close()
-			return
-		}
-		w.Header().Set("content-type", "text/event-stream")
-		_, _ = io.WriteString(w, "data: {\"choices\":[]}\n\ndata: [DONE]\n\n")
-	}))
-	defer upstream.Close()
-
-	h, _, st := newTestHandler(t, upstream)
-	rec := postChat(t, h, `{"model":"test/model","stream":true,"messages":[{"role":"user","content":"hello"}]}`)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: the request must survive a dead connection (body %s)", rec.Code, rec.Body)
-	}
-	if got := hits.Load(); got != 3 {
-		t.Fatalf("the provider saw %d requests, want 3", got)
-	}
-
-	day := st.Snapshot().Days[0]
-	if day.OK != 1 {
-		t.Fatalf("OK = %d, want 1", day.OK)
-	}
-	if day.Aborted != 0 {
-		t.Fatalf("Aborted = %d, want 0: the turn was answered in the end", day.Aborted)
-	}
-}
-
-// TestSilentStreamIsRetriedOnce — a stream whose headers never arrived is the
-// same dead connection seen a moment later.
-//
-// One retry, on a fresh connection: after a switch of the uplink the first
-// request is often written into a path that no longer exists, while the next one
-// is answered at once.
-func TestSilentStreamIsRetriedOnce(t *testing.T) {
-	var hits atomic.Int32
-	release := make(chan struct{})
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if hits.Add(1) == 1 {
-			<-release
-			return
-		}
-		w.Header().Set("content-type", "text/event-stream")
-		_, _ = io.WriteString(w, "data: {\"choices\":[]}\n\ndata: [DONE]\n\n")
-	}))
-	defer func() {
-		close(release)
-		upstream.Close()
-	}()
-
-	h, p, _ := newTestHandler(t, upstream)
-	p.build = slowBuild(upstream.URL+"/chat/completions", 100*time.Millisecond, 100*time.Millisecond)
-
-	rec := postChat(t, h, `{"model":"test/model","stream":true,"messages":[{"role":"user","content":"hello"}]}`)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200 (body %s)", rec.Code, rec.Body)
-	}
-	if got := hits.Load(); got != 2 {
-		t.Fatalf("the provider saw %d requests, want 2", got)
-	}
-}
-
-// TestRetriableTransport — what is worth a second attempt and what is not.
-func TestRetriableTransport(t *testing.T) {
-	cases := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{"nil", nil, false},
-		{"eof", io.EOF, true},
-		{"unexpected eof", io.ErrUnexpectedEOF, true},
-		{"reset", &net.OpError{Op: "read", Err: syscall.ECONNRESET}, true},
-		{"closed", net.ErrClosed, true},
-		{"client went away", context.Canceled, false},
-		{"deadline", context.DeadlineExceeded, false},
-		// The verdict of a certificate is repeated: over an uplink that is being
-		// switched the same handshake fails and then succeeds, and the body is
-		// never written into a handshake that failed.
-		{"bad certificate", &net.OpError{Op: "dial", Err: x509.UnknownAuthorityError{}}, true},
-	}
-	for _, c := range cases {
-		if got := retriableTransport(c.err); got != c.want {
-			t.Errorf("%s: retriableTransport = %t, want %t", c.name, got, c.want)
-		}
 	}
 }
 

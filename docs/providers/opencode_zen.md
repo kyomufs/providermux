@@ -345,46 +345,18 @@ MSK.
 
 ### What the gateway does about it
 
-**Nothing, by default.** The refusal above is the client's, verbatim: the client
-named a model, and answering it with a different one is a different contract than
-the one it asked for. The model field of an OpenAI answer is what a tool reads to
-know who replied.
+**Nothing.** One client request is one provider request: no second attempt, no
+switch to another key, no move to another model. The refusal above reaches the
+client exactly as the service wrote it — status, body and headers, including
+`retry-after` in either spelling. The model field of an OpenAI answer is what a
+tool reads to know who replied, and substituting a model would answer a question
+the client did not ask.
 
-The move exists, off by default, under the `model_fallback` axis (`on | off`;
-`--model-fallback`, `FREE_AI_ROUTER_MODEL_FALLBACK`, `"model_fallback"` in the
-file). An operator who prefers any answer to the absence of the right one's can
-turn it on, and then the request moves to another FREE model of the same
-provider, up to `modelFallbacks = 2` moves, never to one already tried and never
-to a paid one. The reason the move is worth having at all is measured: inside the
-outage `glm-5.3-flash-free`, `mimo-v2.6-flash-free`, `minimax-m3.1-flash-free` and
-`longcat-2.5-preview-free` all answered `200` in the same second in which
-`deepseek-v4.1-flash-free` answered with this body. Repeating the same request on
-the same model cannot help — the endpoint, not the request, is what is out — and
-the repeat is only the client's time.
-
-The same move is made when the model takes the connection and never sends its
-headers — again only when the axis is on. Measured 2026-10-21 03:36–03:42 MSK: the
-refusal on `deepseek-v4.1-flash-free` moved the request to `big-pickle`, which
-held it for the whole first-event budget and then for a second one, and the client
-got a `504` — while `glm-5.3-flash-free` answered in 818ms, `mimo-v2.6-flash-free`
-in 5.3s, `beam-free` in 6.2s and `longcat-2.5-preview-free` in 9.3s. So the move is
-tried before the second silence budget, and the silence is counted as an abort of
-the model that stayed quiet, not as a refusal: nothing was refused.
-
-Each refused attempt is still counted as a refusal of the model that refused, and
-the answer is counted against the model that gave it: the counters describe
-attempts, and hiding a move would hide exactly the model that is degraded. When
-there is nothing left to move to, the client receives the provider's last refusal
-verbatim, as always.
-
-The target is chosen from the models the provider's own catalog offers and only
-from those the catalog marks free. The walk starts AFTER the model that failed
-rather than at the head of the catalog: with the head-first scan every request in
-the 2026-10-21 outage landed on the same first entry, which was itself quiet, and
-the rest of a healthy catalog was never reached. The free flag comes from the
-property catalog, so a run that has not read it yet has no free model to move to —
-the log says so in one line (`no untried free model to move to`) rather than
-leaving it to be read as a plain refusal.
+The provider offers the same reason itself: the flag is about the address, not
+the request, so a repeat from the same address asks the same question again.
+Aside from that, the vendor's own client classifies a 403 as an authentication
+failure and does not retry it (`packages/ai/src/provider-error.ts`), which is the
+behaviour this gateway copies.
 
 `FreeTierError` is classified as a quota code by the vendor's own classifier
 (`packages/ai/src/provider-error.ts`, `classifyProviderFailure`), which is why it

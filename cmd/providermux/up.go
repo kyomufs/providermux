@@ -151,7 +151,6 @@ func (d *daemon) buildHandler() http.Handler {
 		Log:             d.log,
 		Addresses:       d.egress,
 		KeyRotation:     d.keys.rotationMap(),
-		Retry:           retryPolicies(d.cfg, d.providers),
 		DefaultProvider: d.keys.firstProvider(),
 		// The credential axis reaches the request path here. Without it the
 		// gateway would fall back to the pool's presence, and a pool configured
@@ -175,16 +174,6 @@ func (d *daemon) buildHandler() http.Handler {
 		// per-model at all.
 		FirstEventTimeout: d.cfg.FirstEventTimeout.Val,
 		IdleTimeout:       d.cfg.IdleTimeout.Val,
-
-		// The model axis reaches the request path here. It is a decision, not a
-		// safety net: with it on, an answer may come from a model the client did
-		// not name, and the body says so — the default is off, and the switch
-		// exists for the operator who prefers any answer to the right one's
-		// absence.
-		ModelFallback: d.cfg.ModelFallback.Val == config.FallbackOn,
-		// The same switch, answered against the live configuration: the panel
-		// can change it without a restart.
-		ModelFallbackFunc: d.cfg.ModelFallbackEnabled,
 	}
 	gw.AllRoutes(root)
 

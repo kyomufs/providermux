@@ -169,9 +169,9 @@ func TestOptionsResponseCarriesTheStoredValue(t *testing.T) {
 	mux := http.NewServeMux()
 	h.Routes(mux)
 
-	rec := postOption(t, mux, `{"axis":"model_fallback","value":"ON"}`)
+	rec := postOption(t, mux, `{"axis":"credential","value":"ACCOUNT"}`)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("model_fallback = %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("credential = %d: %s", rec.Code, rec.Body.String())
 	}
 	var body struct {
 		Value string `json:"value"`
@@ -179,7 +179,7 @@ func TestOptionsResponseCarriesTheStoredValue(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("the response is not JSON: %v", err)
 	}
-	if body.Value != config.FallbackOn {
-		t.Fatalf("response value = %q, want %q", body.Value, config.FallbackOn)
+	if body.Value != config.CredentialAccount {
+		t.Fatalf("response value = %q, want %q", body.Value, config.CredentialAccount)
 	}
 }

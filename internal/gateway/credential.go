@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	"providermux/internal/capability"
 	"providermux/internal/provider"
 )
 
@@ -178,53 +177,6 @@ func (h *Handler) issuesCredentials(p provider.Provider) bool {
 	}
 	kr, ok := h.KeyRotation[string(p.ID())]
 	return ok && kr != nil && kr.Len() > 0
-}
-
-// alternativeKey looks for another key of the same provider.
-//
-// It is needed on a retry: the current key has been rejected, and it is
-// precisely a different one that is needed. If there is no other, the retry is
-// pointless, and the caller must hand the refusal to the client.
-//
-// UNDER "anonymous" THERE IS NEVER AN ALTERNATIVE. The mechanism may hold keys
-// and may have rotation switched on, but the credential in force says no key is
-// presented, so there is nothing to replace — and reporting an alternative would
-// make the retry loop reach for a key the mode forbids. This is where the axis
-// and the rotation switch meet, and they are not the same question: the axis says
-// whether a key is presented at all, the switch says whether a refused key is
-// replaced.
-//
-// The answer also carries the rotation policy: a mechanism with rotation
-// switched off never has an alternative. That is deliberate — "is there another
-// key to try" is one question, and splitting it in two would leave the retry
-// loop checking a setting the mechanism already knows about.
-func (h *Handler) alternativeKey(p provider.Provider, current string) (string, bool) {
-	if h.credentialKind(p) == credentialAnonymous {
-		return "", false
-	}
-	if h.KeyRotation == nil {
-		return "", false
-	}
-	kr, ok := h.KeyRotation[string(p.ID())]
-	if !ok || kr == nil {
-		return "", false
-	}
-	return kr.Take(current)
-}
-
-// retryFor returns the provider's retry policy, or nil when it has none.
-//
-// nil is not an error state. It says the provider did not ask for its refusals to
-// be repeated, and the refusal then goes to the client as it arrived.
-func (h *Handler) retryFor(p provider.Provider) *capability.Retry {
-	if h.Retry == nil {
-		return nil
-	}
-	policy, ok := h.Retry[string(p.ID())]
-	if !ok {
-		return nil
-	}
-	return policy
 }
 
 // KeyRotationRegistry is the management of rotation mechanisms.

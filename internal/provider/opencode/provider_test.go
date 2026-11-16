@@ -90,8 +90,11 @@ func TestGateToolReplacedWhenCallerSendsOwn(t *testing.T) {
 		if !ok {
 			t.Fatalf("the gate entry has no parameters object")
 		}
-		if _, ok := params["$schema"]; !ok {
-			t.Fatalf("the gate entry lost its $schema dialect")
+		if got, ok := params["additionalProperties"]; !ok || got != false {
+			t.Fatalf("the gate entry must close its schema like the client's: additionalProperties = %v", got)
+		}
+		if _, ok := params["$schema"]; ok {
+			t.Fatalf("the gate entry still carries a dialect the client does not send")
 		}
 		props, ok := params["properties"].(map[string]any)
 		if !ok || len(props) == 0 {

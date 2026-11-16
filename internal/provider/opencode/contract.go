@@ -6,10 +6,6 @@ import (
 	"providermux/internal/provider"
 )
 
-// jsonSchemaDialect is the schema dialect the client declares in tool
-// descriptions. It is part of the check, so it is pinned.
-const jsonSchemaDialect = "https://json-schema.org/draft/2020-12/schema"
-
 // DefaultUserAgent is the User-Agent string.
 //
 // The client builds it as `opencode/${channel}/${version}/${name}`
@@ -94,8 +90,8 @@ const DefaultUserAgent = "opencode/latest/2.2.6/cli"
 //
 //  5. The chat path must be /inference/openai/v1/chat/completions. The legacy
 //     /inference/v1/chat/completions is now the exhausted lane and is answered
-//     429 even with the client's own body. The model catalog stays on
-//     /inference/v1/models.
+//     429 even with the client's own body. The reference client resolves the
+//     model list from the same /inference/openai/v1 base.
 //
 //  6. The system message must carry the reference client's canonical prompt
 //     followed by the environment block the client appends. The canonical text

@@ -7,8 +7,28 @@ import (
 	"strings"
 	"testing"
 
+	"providermux/internal/capability"
 	"providermux/internal/provider"
 )
+
+// rotation builds a mechanism over the given keys.
+func rotation(t *testing.T, rotate bool, keys ...string) map[string]*capability.KeyRotation {
+	t.Helper()
+
+	raw := make([]any, 0, len(keys))
+	for _, k := range keys {
+		raw = append(raw, k)
+	}
+	built, err := capability.NewKeyRotation(map[string]any{"keys": raw, "rotate": rotate})
+	if err != nil {
+		t.Fatalf("building the rotation mechanism: %v", err)
+	}
+	kr, ok := built.(*capability.KeyRotation)
+	if !ok {
+		t.Fatalf("the mechanism factory returned %T", built)
+	}
+	return map[string]*capability.KeyRotation{"test": kr}
+}
 
 // Which credential goes into the header, and under which name.
 //
