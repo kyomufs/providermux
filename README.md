@@ -175,6 +175,12 @@ meet.
 
 ### Using a key or a pool of keys
 
+OpenCode Zen does not need one. Its free lane identifies the caller by the egress
+address, and the reference CLI sends `Authorization: Bearer public` when it has
+no key: `providers.opencode` with the default `credential = "anonymous"` is the
+parity configuration. A key belongs to the account lane; it does not enlarge the
+free allowance, and an exhausted address is not rescued by one.
+
 `credential` decides **whether** a key is presented, and the provider section
 supplies it:
 

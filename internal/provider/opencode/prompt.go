@@ -31,6 +31,32 @@ import (
 //go:embed prompt/default.txt
 var defaultSystemPrompt string
 
+// canonicalPromptOpening is the first line of the canonical text.
+//
+// It is read from the embedded prompt rather than repeated: a copy would keep
+// matching after the prompt was replaced, and the check below would silently
+// stop recognising the client it exists for.
+var canonicalPromptOpening = strings.SplitN(defaultSystemPrompt, "\n", 2)[0]
+
+// canonicalClientPrompt reports whether the client's system part is already the
+// reference client's own prompt: it opens with the canonical text and carries an
+// environment block.
+//
+// Such a prompt needs no enrichment. Rebuilding it put a second copy of the
+// canonical text and a second <env> in front of the model, and the free lane's
+// allowance is counted in tokens per egress address: a client that speaks the
+// reference client's prompt was paying twice for the same instructions.
+//
+// A prompt that only mentions the canonical text further down is not this case:
+// the check is on the opening, where the reference client puts it.
+func canonicalClientPrompt(system string) bool {
+	if !strings.HasPrefix(system, canonicalPromptOpening) {
+		return false
+	}
+	env := strings.Index(system, "<env>")
+	return env >= 0 && strings.Contains(system[env:], "</env>")
+}
+
 // systemPrompt assembles the system message for a request.
 //
 // The ORDER is the v2 client's (captured, not guessed): canonical text, the

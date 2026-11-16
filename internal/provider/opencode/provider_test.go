@@ -522,6 +522,86 @@ func TestBuildBodyPutsTheRenderedSystemFirst(t *testing.T) {
 	}
 }
 
+// TestCanonicalClientPromptIsPassedThrough — a client that sends the reference
+// client's own prompt is not given a second copy of it.
+//
+// The reference client's body costs about 1060 prompt tokens; the same body
+// through the gateway with a rendered prefix cost 3072. The free lane counts
+// tokens per egress address, so the duplicate was paid for on every turn.
+func TestCanonicalClientPromptIsPassedThrough(t *testing.T) {
+	p := newTestProvider(t)
+
+	system := defaultSystemPrompt +
+		"\n# Your Model\n- Name: m\n- Provider ID: opencode\n- Model ID: m\n" +
+		"\nToday's date: Mon Nov 17 2026\n" +
+		"\nHere is some useful information about the environment you are running in:\n<env>\n  Platform: linux\n</env>\n" +
+		"When you create a worktree outside the current working directory, move the session."
+
+	prep, err := p.Build(provider.Request{
+		Model:    provider.Model{ID: "m"},
+		System:   system,
+		Messages: []provider.Message{{Role: "user", Text: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	var body struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(prep.Body, &body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if len(body.Messages) != 2 || body.Messages[0].Role != "system" {
+		t.Fatalf("unexpected message shape: %+v", body.Messages)
+	}
+	if body.Messages[0].Content != system {
+		t.Fatal("the client's canonical prompt was rewritten instead of passed through")
+	}
+	if got := strings.Count(body.Messages[0].Content, canonicalPromptOpening); got != 1 {
+		t.Fatalf("the canonical text appears %d times, want 1", got)
+	}
+	if got := strings.Count(body.Messages[0].Content, "<env>"); got != 1 {
+		t.Fatalf("the environment block appears %d times, want 1", got)
+	}
+}
+
+// TestCanonicalTextInsideClientRulesIsStillEnriched — the pass-through is for a
+// prompt that OPENS with the canonical text. A client that quotes it further
+// down still gets the environment block it lacks.
+func TestCanonicalTextInsideClientRulesIsStillEnriched(t *testing.T) {
+	p := newTestProvider(t)
+	prep, err := p.Build(provider.Request{
+		Model:    provider.Model{ID: "m"},
+		System:   "Follow the house rules.\n\n" + canonicalPromptOpening,
+		Messages: []provider.Message{{Role: "user", Text: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+
+	var body struct {
+		Messages []struct {
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(prep.Body, &body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if !strings.HasPrefix(body.Messages[0].Content, canonicalPromptOpening) {
+		t.Fatal("the rendered prompt does not start with the canonical text")
+	}
+	if !strings.Contains(body.Messages[0].Content, "Follow the house rules.") {
+		t.Fatal("the client's rules were dropped")
+	}
+	if got := strings.Count(body.Messages[0].Content, "<env>"); got != 1 {
+		t.Fatalf("the environment block appears %d times, want 1", got)
+	}
+}
+
 // TestOutputBudgetUsesTheV2FieldName — the client sends max_completion_tokens
 // for this provider (detectMaxTokensField in
 // packages/ai/src/protocols/openai-chat.ts). The old max_tokens spelling is a

@@ -314,7 +314,9 @@ func (p *Provider) buildBody(req provider.Request) (map[string]any, map[string]s
 		return nil, nil, err
 	}
 
-	// The system message is rendered here, not taken from the client as-is.
+	// The system message is rendered here, not taken from the client as-is —
+	// unless the client already sent the reference client's own prompt, in
+	// which case it is passed through untouched.
 	//
 	// MEASURED on 2026-10-25: the free lane admits a request only when the
 	// system message carries the reference client's canonical prompt and the
@@ -323,9 +325,19 @@ func (p *Provider) buildBody(req provider.Request) (map[string]any, map[string]s
 	// answered 429 FreeUsageLimitError; the canonical text plus the block is
 	// answered 200. The client's own rules are kept after the block, which was
 	// admitted as well.
+	//
+	// MEASURED on 2026-11-17: the same doubled composition is still admitted,
+	// and an OpenCode-family client (dsh sends the reference prompt verbatim)
+	// was paying 3072 prompt tokens per turn where the reference client's own
+	// body costs 1060. The free lane is counted per egress address, so the
+	// second copy is not free — hence the pass-through.
+	system := req.System
+	if !canonicalClientPrompt(system) {
+		system = p.systemPrompt(req.Model, system)
+	}
 	messages = append([]map[string]any{{
 		"role":    "system",
-		"content": p.systemPrompt(req.Model, req.System),
+		"content": system,
 	}}, messages...)
 
 	body := map[string]any{

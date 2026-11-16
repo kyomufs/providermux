@@ -56,6 +56,13 @@ the rest of this file relies on:
   reaches the service with different budgets through different addresses;
 - an address-level refusal cannot be undone by any account, key or header.
 
+MEASURED on 2026-11-17 on a host whose exit address changes: the same request —
+body, headers and TLS hello held constant — was refused on one address and
+admitted on another minutes later, while `Bearer public` and an account key were
+each refused and admitted on the same address. The verdict tracked the ADDRESS,
+not the credential. A key is not a way around an exhausted address; the keyless
+`Bearer public` is the mode the reference CLI itself uses when it has no key.
+
 ## The request the lane admits
 
 The lane has two different refusals, and they mean different things. `403
@@ -158,6 +165,15 @@ The values in the block are not checked: a different working directory and date
 kept the 200. The block's shape is, and the provider keeps the client's rules
 before it, where the v2 client puts its tool guidance
 (`internal/provider/opencode/prompt.go`).
+
+A client that already sends this composition — dsh sends the reference prompt
+verbatim — is passed through untouched instead of being given a second copy of
+the canonical text and a second `<env>`. The doubled form was still admitted
+(measured 2026-11-17), but it cost 3072 prompt tokens per turn against 1060 for
+the reference client's own body, and the free allowance is counted per egress
+address: the duplicate was paid for on every turn. The check is on the opening
+of the system part, where the reference client puts the canonical text; a prompt
+that merely quotes it further down is still enriched.
 
 Condition 8 was identified on 2026-10-29 by capturing the installed v2.1.2
 client's request and replaying both shapes through the same transport: the
