@@ -75,8 +75,9 @@ func (h *Handler) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	st := Status{}
 	if h.Config != nil {
-		st.Mode = h.Config.Mode.Val
-		st.Listen = h.Config.Listen.Val
+		snap := h.Config.Snapshot()
+		st.Mode = snap.Mode
+		st.Listen = snap.Listen
 	}
 	if !h.StartTime.IsZero() {
 		st.UptimeSeconds = int64(time.Since(h.StartTime).Seconds())
@@ -224,12 +225,16 @@ func (h *Handler) keysResponse() KeysResponse {
 	}
 	for _, id := range h.Providers.IDs() {
 		credential, rotates := h.credentialOf(id)
+		keys := h.KeyRotation.KeyFingerprints(id)
 		resp.Providers = append(resp.Providers, ProviderKeys{
 			Provider:   string(id),
-			Keys:       h.KeyRotation.KeyFingerprints(id),
+			Keys:       keys,
 			Rotation:   rotates,
 			Credential: credential,
-			Used:       rotates || (credential == config.CredentialAccount && h.KeyRotation.HasRotation(id)),
+			// A key is on the wire whenever the pool is non-empty and the
+			// credential is not anonymous. Rotation is a separate question:
+			// one key can be sent without there being another to rotate to.
+			Used: len(keys) > 0 && (credential != config.CredentialAnonymous || credential == "" && h.KeyRotation.HasRotation(id)),
 		})
 	}
 	if resp.Providers == nil {
@@ -249,8 +254,9 @@ func (h *Handler) credentialOf(id provider.ID) (string, bool) {
 		// switch is the only evidence there is.
 		return "", h.KeyRotation.HasRotation(id)
 	}
-	credential := h.Config.CredentialFor(string(id))
-	return credential, h.Config.RotatesFor(string(id))
+	snap := h.Config.Snapshot()
+	pc := snap.Providers[string(id)]
+	return pc.EffectiveCredential(snap.Credential), pc.Rotates(snap.Credential, snap.KeyRotation)
 }
 
 // keyRequest — the body of a request to add or remove a key.

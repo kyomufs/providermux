@@ -17,13 +17,20 @@ import (
 // log first thing, and a command requiring a live daemon would be useless
 // exactly when it is needed most.
 
-// loadConfig reads the configuration and parses the flags.
-//
 // THE PATHS ARE RESOLVED FIRST. A path override decides WHICH file is read, so
 // it cannot be layered on afterwards: a value applied after the read would have
 // come from the wrong file, and nothing would say so. Hence the order — resolve
 // the two paths, read, and only then layer the ordinary values.
-func loadConfig(args []string) (*config.Config, *flags, error) {
+
+// loadConfigRead reads the configuration for the DIAGNOSTIC commands.
+//
+// It deliberately skips the start-up check. The commands that report status,
+// counters, keys, models and logs must answer while the configuration is being
+// edited: "mode server" written before the token exists, or a key that is named
+// but not yet exported, is exactly the moment the operator needs to look at the
+// daemon's state. A file that does not parse is still an error; a file that
+// parses but would not start a daemon is not.
+func loadConfigRead(args []string) (*config.Config, *flags, error) {
 	f, err := parseFlags(args)
 	if err != nil {
 		return nil, nil, err
@@ -31,8 +38,7 @@ func loadConfig(args []string) (*config.Config, *flags, error) {
 	if f == nil {
 		return nil, nil, nil
 	}
-
-	cfg, err := loadConfigFor(f)
+	cfg, err := loadConfigUnchecked(f)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -95,7 +101,7 @@ func loadConfigUnchecked(f *flags) (*config.Config, error) {
 
 // cmdConfig shows the effective configuration.
 func cmdConfig(args []string) error {
-	cfg, f, err := loadConfig(args)
+	cfg, f, err := loadConfigRead(args)
 	if err != nil || cfg == nil {
 		return err
 	}
@@ -133,7 +139,7 @@ func cmdConfig(args []string) error {
 // the daemon is stopped. A live daemon serves the same information more richly
 // — through the control surface — but requiring it here is not acceptable.
 func cmdStatus(args []string) error {
-	cfg, f, err := loadConfig(args)
+	cfg, f, err := loadConfigRead(args)
 	if err != nil || cfg == nil {
 		return err
 	}
@@ -177,7 +183,7 @@ func cmdStatus(args []string) error {
 
 // cmdStats shows the counters by day, broken down by model.
 func cmdStats(args []string) error {
-	cfg, f, err := loadConfig(args)
+	cfg, f, err := loadConfigRead(args)
 	if err != nil || cfg == nil {
 		return err
 	}
@@ -217,7 +223,7 @@ func cmdStats(args []string) error {
 // FINGERPRINTS are shown, not keys: the point is to learn how many there are
 // and which are in use, not to see the secret.
 func cmdKeys(args []string) error {
-	cfg, f, err := loadConfig(args)
+	cfg, f, err := loadConfigRead(args)
 	if err != nil || cfg == nil {
 		return err
 	}

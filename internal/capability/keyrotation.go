@@ -195,6 +195,17 @@ func (k *KeyRotation) Rotate() bool {
 	return k.rotate
 }
 
+// SetRotation changes whether a refused key is replaced.
+//
+// The switch is held by the mechanism, so a live change has to be written here
+// as well; changing only the configuration would leave the request path on the
+// value it was built with.
+func (k *KeyRotation) SetRotation(rotate bool) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.rotate = rotate
+}
+
 // Next hands out the next key and the sign that there is a key.
 //
 // Keys are handed out in a cycle. The key returned is remembered as used, so

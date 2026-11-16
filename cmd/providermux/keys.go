@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 
 	"providermux/internal/capability"
 	"providermux/internal/config"
@@ -137,9 +138,67 @@ func (r *keyRegistry) KeyFingerprints(id provider.ID) []string {
 }
 
 // HasRotation implements gateway.KeyRotationRegistry.
+//
+// It answers whether the MECHANISM is wired in, not whether it currently has a
+// second key: the two are different questions. A provider with one key still
+// presents that key on every request, and reporting "no rotation" here used to
+// make the control surface say the key was unused — a lie about the wire.
 func (r *keyRegistry) HasRotation(id provider.ID) bool {
+	_, ok := r.byProvider[id]
+	return ok
+}
+
+// SetRotation implements the live-update side of rotation management.
+//
+// The mechanism keeps its own switch because Take and HasAlternatives must not
+// repeat the policy check. A change made from the panel therefore has to reach
+// the mechanism, or the axis would say "on" while every refused key stayed in
+// place until the daemon was restarted.
+func (r *keyRegistry) SetRotation(id provider.ID, rotate bool) bool {
 	kr, ok := r.byProvider[id]
-	return ok && kr.Len() > 1
+	if !ok {
+		return false
+	}
+	kr.SetRotation(rotate)
+	return true
+}
+
+// FindKey resolves a pool selector — key, fingerprint or one-based position.
+//
+// It mirrors the gateway's own lookup so that the panel asks the catalog
+// through the account the request path would actually use.
+func (r *keyRegistry) FindKey(id provider.ID, selector string) (string, bool) {
+	kr, ok := r.byProvider[id]
+	if !ok {
+		return "", false
+	}
+	return kr.Find(selector)
+}
+
+// CatalogKey returns the key the catalog should be asked through.
+//
+// The same rule as the gateway and the panel: under the anonymous credential no
+// key is presented at all; otherwise the pin wins, and without one the first
+// key of the pool is used. Listing models must not spend a rotation turn, so the
+// pool is only read.
+func (r *keyRegistry) CatalogKey(cfg *config.Config, id provider.ID) string {
+	if cfg == nil || cfg.CredentialFor(string(id)) == config.CredentialAnonymous {
+		return ""
+	}
+	kr, ok := r.byProvider[id]
+	if !ok {
+		return ""
+	}
+	keys := kr.KeysSnapshot()
+	if len(keys) == 0 {
+		return ""
+	}
+	if pin := strings.TrimSpace(cfg.AccountFor(string(id))); pin != "" {
+		if key, ok := kr.Find(pin); ok {
+			return key
+		}
+	}
+	return keys[0]
 }
 
 // AddKey implements gateway.KeyRotationRegistry.

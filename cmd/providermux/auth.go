@@ -22,13 +22,31 @@ import (
 //
 // In local mode the check is not performed at all: nobody but this machine can
 // reach a loopback listener, and a token is not needed there.
+//
+// THE DECISION IS MADE PER REQUEST, not once when the handler is built. The
+// control surface can switch the mode on a live daemon, and a wrapper that
+// captured the old value would keep answering requests after the switch — or
+// keep demanding a token that had just been added. The configuration is read
+// through a snapshot so that the check does not race with the change itself.
 func requireToken(next http.Handler, cfg *config.Config) http.Handler {
-	if cfg == nil || !cfg.IsServer() {
+	if cfg == nil {
 		return next
 	}
-	token := cfg.Token.Val
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server, token := cfg.Access()
+		if !server {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Server mode without a token is a configuration the daemon refuses to
+		// start with, and the live switch refuses it too. Denying here is the
+		// last line of defence: comparing against an empty secret would accept
+		// an empty header.
+		if strings.TrimSpace(token) == "" {
+			writeAuthError(w)
+			return
+		}
 		if !tokenMatches(r, token) {
 			writeAuthError(w)
 			return

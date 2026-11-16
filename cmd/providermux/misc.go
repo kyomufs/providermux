@@ -19,7 +19,7 @@ import (
 // separate control channel for stopping — the signal is meant for this, and it
 // works even when the control surface is unreachable.
 func cmdStop(args []string) error {
-	cfg, _, err := loadConfig(args)
+	cfg, _, err := loadConfigRead(args)
 	if err != nil || cfg == nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func cmdLogs(args []string) error {
 
 // cmdData shows the trace on disk and can clean it.
 func cmdData(args []string) error {
-	cfg, f, err := loadConfig(args)
+	cfg, f, err := loadConfigRead(args)
 	if err != nil || cfg == nil {
 		return err
 	}

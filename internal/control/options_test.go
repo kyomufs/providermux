@@ -104,7 +104,11 @@ func TestAntigravityRefusesAnonymousAtRuntime(t *testing.T) {
 		"antigravity": {Type: "antigravity", Credential: "account"},
 	}
 
-	h := &Handler{Config: cfg, Providers: &provider.Registry{}, Transports: []string{"direct"}}
+	h := &Handler{Config: cfg, Providers: func() *provider.Registry {
+		reg := provider.NewRegistry()
+		reg.Register(&stubProvider{id: "antigravity"})
+		return reg
+	}(), Transports: []string{"direct"}}
 	mux := http.NewServeMux()
 	h.Routes(mux)
 

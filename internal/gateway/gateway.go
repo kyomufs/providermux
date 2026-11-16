@@ -158,6 +158,19 @@ type Handler struct {
 	// another — so it is a decision, not a safety net, and the default is the
 	// answer the client asked for or none.
 	ModelFallback bool
+	// ModelFallbackFunc, when set, answers the same question against the LIVE
+	// configuration. The axis can be changed from the control surface, and a
+	// bool captured at start-up would leave the panel showing a switch that
+	// does nothing.
+	ModelFallbackFunc func() bool
+}
+
+// fallbackEnabled reports whether the model axis is on.
+func (h *Handler) fallbackEnabled() bool {
+	if h.ModelFallbackFunc != nil {
+		return h.ModelFallbackFunc()
+	}
+	return h.ModelFallback
 }
 
 // RoundTripperFactory hands out the transport for requests.
@@ -213,11 +226,14 @@ func (h *Handler) resolveProvider(body map[string]any, pathID provider.ID) (prov
 
 	rawModel, _ := body["model"].(string)
 	if name, rest := splitProviderPrefix(rawModel); name != "" {
-		p, err := h.Providers.Get(provider.ID(name))
-		if err != nil {
-			return nil, "", fmt.Errorf("unknown provider %q in the model field", name)
+		// The first segment is a provider only when the registry knows it. A
+		// model identifier may itself contain slashes (for instance
+		// "poolside/laguna-s-2.1:free"), and treating every such name as a
+		// provider prefix made the gateway reject a perfectly valid model with
+		// "unknown provider".
+		if p, err := h.Providers.Get(provider.ID(name)); err == nil {
+			return p, rest, nil
 		}
-		return p, rest, nil
 	}
 
 	if h.DefaultProvider != "" {
@@ -466,6 +482,18 @@ func (h *Handler) handleChatFor(w http.ResponseWriter, r *http.Request, pathID p
 
 	model, err := h.resolveModel(r, p, modelID)
 	if err != nil {
+		// A name that begins with an unknown provider is reported as such, not
+		// as a missing model: the client asked for a lane that does not exist.
+		// A slash is not proof of a provider prefix — valid model identifiers
+		// contain them — so this branch is reached only after the model failed
+		// to resolve on the fallback provider.
+		if name, _ := splitProviderPrefix(rawModelID); name != "" {
+			if _, getErr := h.Providers.Get(provider.ID(name)); getErr != nil {
+				writeError(w, http.StatusBadRequest, "provider not found",
+					fmt.Sprintf("unknown provider %q in the model field", name))
+				return
+			}
+		}
 		writeError(w, http.StatusNotFound, "model not found", err.Error())
 		return
 	}
@@ -681,7 +709,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 			//
 			// The repeat below stays for the case this one cannot serve: nowhere
 			// to move to, or the move budget spent.
-			if cause == errFirstEvent && h.ModelFallback && switches < modelFallbackLimit {
+			if cause == errFirstEvent && h.fallbackEnabled() && switches < modelFallbackLimit {
 				next, rebuilt, moveErr := h.moveTo(r.Context(), p, &req, model, triedModels, switches)
 				if moveErr != nil {
 					writeError(w, http.StatusInternalServerError, "gateway error", moveErr.Error())
@@ -822,7 +850,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 		// Only under model_fallback=on. The substitution answers a request with a
 		// different model than the one named, so it is the operator's decision and
 		// not a safety net; with the axis off the refusal is the client's.
-		if failure.UpstreamUnavailable && h.ModelFallback && switches < modelFallbackLimit {
+		if failure.UpstreamUnavailable && h.fallbackEnabled() && switches < modelFallbackLimit {
 			next, rebuilt, moveErr := h.moveTo(r.Context(), p, &req, model, triedModels, switches)
 			if moveErr != nil {
 				writeError(w, http.StatusInternalServerError, "gateway error", moveErr.Error())
@@ -899,7 +927,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 // The move budget is the caller's, because the caller is the one that knows how
 // many moves the client has already waited through.
 func (h *Handler) moveTo(ctx context.Context, p provider.Provider, req *provider.Request, from provider.Model, tried map[string]bool, switches int) (provider.Model, provider.Prepared, error) {
-	if !h.ModelFallback || switches >= modelFallbackLimit {
+	if !h.fallbackEnabled() || switches >= modelFallbackLimit {
 		return provider.Model{}, provider.Prepared{}, nil
 	}
 	next, ok := h.otherModel(ctx, p, tried, from)
@@ -1012,13 +1040,26 @@ func (h *Handler) writeRefusal(w http.ResponseWriter, resp *http.Response, body 
 	// carried a ten-minute hold, and the DSH proxy honoured it verbatim.
 	// retry-after-ms is dropped rather than clamped — two spellings of the same
 	// hold, and the client reads whichever it finds first.
+	//
+	// Every other header is copied, not only content-type: rate-limit counters
+	// and provider-specific markers are exactly what the client parses to
+	// decide whether to retry, and dropping them changes the answer it received
+	// on a direct call. Hop-by-hop headers are skipped because they describe
+	// this connection, not the provider's answer, and content-length is left to
+	// the writer because the forwarded body may have been bounded.
+	for name, values := range resp.Header {
+		lower := strings.ToLower(name)
+		if hopByHop[lower] || lower == "content-length" || lower == "retry-after" || lower == "retry-after-ms" {
+			continue
+		}
+		for _, value := range values {
+			w.Header().Add(name, value)
+		}
+	}
 	if v := resp.Header.Get("retry-after"); v != "" {
 		if clamped, ok := clampHold(v, time.Now()); ok {
 			w.Header().Set("retry-after", clamped)
 		}
-	}
-	if v := resp.Header.Get("content-type"); v != "" {
-		w.Header().Set("content-type", v)
 	}
 	if w.Header().Get("content-type") == "" {
 		w.Header().Set("content-type", "application/json")
@@ -1030,6 +1071,19 @@ func (h *Handler) writeRefusal(w http.ResponseWriter, resp *http.Response, body 
 	h.recordRefusal(model.ID, address, h.fingerprint(key))
 	h.warn("provider %q: refusal %d from %s, key rejected: %t: %s",
 		p.ID(), failure.Status, address, failure.KeyRejected, excerpt(body, refusalExcerpt))
+}
+
+// hopByHop are the headers that belong to a single connection rather than to
+// the response itself.
+var hopByHop = map[string]bool{
+	"connection":          true,
+	"keep-alive":          true,
+	"proxy-authenticate":  true,
+	"proxy-authorization": true,
+	"te":                  true,
+	"trailer":             true,
+	"transfer-encoding":   true,
+	"upgrade":             true,
 }
 
 // refusalHoldMax is the longest hold the gateway asks a client to sit out.

@@ -395,6 +395,7 @@ func TestRefusalPassesThroughVerbatim(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		w.Header().Set("retry-after", "42")
+		w.Header().Set("x-ratelimit-remaining", "0")
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = io.WriteString(w, body)
 	}))
@@ -411,6 +412,11 @@ func TestRefusalPassesThroughVerbatim(t *testing.T) {
 	}
 	if got := rec.Header().Get("retry-after"); got != "42" {
 		t.Fatalf("retry-after = %q, want it forwarded", got)
+	}
+	// Every header the client may branch on travels too: a rate-limit counter
+	// is how it decides whether a retry is worth attempting.
+	if got := rec.Header().Get("x-ratelimit-remaining"); got != "0" {
+		t.Fatalf("x-ratelimit-remaining = %q, want it forwarded", got)
 	}
 
 	// And the refusal is recorded in the counters.
@@ -606,6 +612,30 @@ func TestUnknownProviderRejected(t *testing.T) {
 	}
 	if _, ok := env["error"]; !ok {
 		t.Fatalf("the error envelope lacks the error field: %s", rec.Body.String())
+	}
+}
+
+// TestModelWithSlashIsNotAProviderPrefix — a model identifier may contain a
+// slash, and the gateway has to accept it when no provider claims the first
+// segment.
+//
+// The wire form is real: "poolside/laguna-s-2.1:free". Treating every prefix as
+// a provider name rejected it as an unknown provider.
+func TestModelWithSlashIsNotAProviderPrefix(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"choices\":[]}\n\ndata: [DONE]\n\n")
+	}))
+	defer upstream.Close()
+
+	h, p, _ := newTestHandler(t, upstream)
+	p.models = append(p.models, provider.Model{
+		ID: "poolside/laguna-s-2.1:free", Context: 1000, MaxOutput: 100, Free: true,
+	})
+
+	rec := postChat(t, h, `{"model":"poolside/laguna-s-2.1:free","messages":[{"role":"user","content":"x"}]}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 }
 

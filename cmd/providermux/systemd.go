@@ -116,7 +116,7 @@ and it stays with its owner.
 		}
 	}
 
-	cfg, _, err := loadConfig(rest)
+	cfg, _, err := loadConfigRead(rest)
 	if err != nil {
 		return err
 	}

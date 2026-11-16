@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"providermux/internal/catalog"
+	"providermux/internal/provider"
 )
 
 // cmdModels shows the catalog of models.
@@ -18,7 +19,7 @@ import (
 // directly. Requiring a running daemon would mean not letting the catalog be
 // viewed before the first start — exactly when it is needed most.
 func cmdModels(ctx context.Context, args []string) error {
-	cfg, f, err := loadConfig(args)
+	cfg, f, err := loadConfigRead(args)
 	if err != nil || cfg == nil {
 		return err
 	}
@@ -27,6 +28,12 @@ func cmdModels(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	// The catalog belongs to an account: the service answers with what that
+	// account may call. Asking through the first key (or the pinned one) is the
+	// same rule the gateway and the panel follow, so this command does not show
+	// a list the request path would not serve.
+	keys := newKeyRegistry(cfg, reg)
 
 	// The catalog is read from memory, and this command has no daemon to keep it
 	// fresh: without a warm-up every provider would report an empty list. Start
@@ -49,7 +56,7 @@ func cmdModels(ctx context.Context, args []string) error {
 	var refused []string
 
 	for _, p := range reg.All() {
-		models, err := p.Models(ctx)
+		models, err := provider.ModelsForKey(ctx, p, keys.CatalogKey(cfg, p.ID()))
 		if err != nil {
 			// A provider whose catalog did not answer is named separately:
 			// otherwise an empty list would look like the service having no

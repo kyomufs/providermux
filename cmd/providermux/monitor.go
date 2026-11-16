@@ -11,7 +11,7 @@ import (
 
 // cmdMonitor launches the TUI.
 func cmdMonitor(args []string) error {
-	cfg, _, err := loadConfig(args)
+	cfg, _, err := loadConfigRead(args)
 	if err != nil || cfg == nil {
 		return err
 	}

@@ -102,6 +102,64 @@ func TestLocalModeSkipsTheCheck(t *testing.T) {
 	}
 }
 
+// TestModeSwitchIsSeenPerRequest — the access decision is made against the
+// CURRENT configuration, not the one captured when the handler was built.
+//
+// The panel can switch the mode on a live daemon. A wrapper that remembered the
+// old value would keep the surface open after the switch to server mode, which
+// is the one failure the token exists to prevent.
+func TestModeSwitchIsSeenPerRequest(t *testing.T) {
+	inside := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	cfg := config.Default()
+	cfg.Mode.Set(config.ModeLocal, config.SourceDefault)
+	handler := requireToken(inside, cfg)
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("local mode = %d, want 200", rec.Code)
+	}
+
+	cfg.Update(func() {
+		cfg.Mode.Set(config.ModeServer, config.SourceFile)
+		cfg.Token.Set("later", config.SourceFile)
+	})
+
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("server mode without a token = %d, want 401", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	req.Header.Set("authorization", "Bearer later")
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("server mode with the token = %d, want 200", rec.Code)
+	}
+}
+
+// TestServerModeWithEmptyTokenDeniesEverything — an empty secret is not a
+// wildcard.
+//
+// Server mode without a token is refused by validation and by the live switch,
+// but the wrapper is the last line: comparing the request against an empty
+// string would accept an empty header.
+func TestServerModeWithEmptyTokenDeniesEverything(t *testing.T) {
+	inside := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	cfg := config.Default()
+	cfg.Mode.Set(config.ModeServer, config.SourceDefault)
+
+	rec := httptest.NewRecorder()
+	requireToken(inside, cfg).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/models", nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("empty token = %d, want 401", rec.Code)
+	}
+}
+
 // TestResponseForm — the refusal arrives in the common gateway shape.
 func TestResponseForm(t *testing.T) {
 	inside := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})

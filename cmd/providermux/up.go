@@ -182,6 +182,9 @@ func (d *daemon) buildHandler() http.Handler {
 		// exists for the operator who prefers any answer to the right one's
 		// absence.
 		ModelFallback: d.cfg.ModelFallback.Val == config.FallbackOn,
+		// The same switch, answered against the live configuration: the panel
+		// can change it without a restart.
+		ModelFallbackFunc: d.cfg.ModelFallbackEnabled,
 	}
 	gw.AllRoutes(root)
 

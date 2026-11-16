@@ -170,6 +170,8 @@ func axisValue(cfg *config.Config, key string) config.Value[string] {
 		return cfg.Credential
 	case "key_rotation":
 		return cfg.KeyRotation
+	case "model_fallback":
+		return cfg.ModelFallback
 	case "family":
 		return cfg.Family
 	case "transport":

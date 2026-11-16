@@ -43,7 +43,12 @@ func (h *Handler) handleAntigravityQuota(w http.ResponseWriter, r *http.Request)
 	if p != nil {
 		resp.Configured = true
 		resp.Credential, resp.Rotation = h.credentialOf(pID)
-		resp.KeyUsed = resp.Rotation || (resp.Credential == "account" && h.KeyRotation.HasRotation(pID))
+		// Whether the request path presents a key is about the pool and the
+		// credential, not about rotation: a single key is still sent even when
+		// there is nothing to rotate to.
+		if h.KeyRotation != nil && resp.Credential != "anonymous" {
+			resp.KeyUsed = len(h.KeyRotation.Keys(pID)) > 0
+		}
 	}
 
 	if h.KeyRotation == nil || p == nil {

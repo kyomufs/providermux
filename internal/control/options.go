@@ -50,26 +50,28 @@ func (h *Handler) currentOptions() *CurrentOptions {
 	if h.Config == nil {
 		return nil
 	}
+	snap := h.Config.Snapshot()
 	cur := &CurrentOptions{
-		Mode:                 h.Config.Mode.Val,
-		Credential:           h.Config.Credential.Val,
-		KeyRotation:          h.Config.KeyRotation.Val,
-		ModelFallback:        h.Config.ModelFallback.Val,
-		Family:               h.Config.Family.Val,
-		Transport:            h.Config.Transport.Val,
-		FirstEventTimeout:    h.Config.FirstEventTimeout.Val.String(),
-		IdleTimeout:          h.Config.IdleTimeout.Val.String(),
-		ReasoningIdleTimeout: h.Config.ReasoningIdleTimeout.Val.String(),
+		Mode:                 snap.Mode,
+		Credential:           snap.Credential,
+		KeyRotation:          snap.KeyRotation,
+		ModelFallback:        snap.ModelFallback,
+		Family:               snap.Family,
+		Transport:            snap.Transport,
+		FirstEventTimeout:    snap.FirstEventTimeout.String(),
+		IdleTimeout:          snap.IdleTimeout.String(),
+		ReasoningIdleTimeout: snap.ReasoningIdleTimeout.String(),
 		Providers:            map[string]ProviderOption{},
 	}
 	if h.Providers != nil {
 		for _, id := range h.Providers.IDs() {
 			sID := string(id)
+			pc := snap.Providers[sID]
 			cur.Providers[sID] = ProviderOption{
-				Credential:  h.Config.CredentialFor(sID),
-				KeyRotation: h.Config.RotationFor(sID),
-				Transport:   h.Config.TransportFor(sID),
-				Account:     h.Config.AccountFor(sID),
+				Credential:  pc.EffectiveCredential(snap.Credential),
+				KeyRotation: pc.EffectiveRotation(snap.KeyRotation),
+				Transport:   pc.EffectiveTransport(snap.Transport),
+				Account:     pc.Account,
 			}
 		}
 	}
@@ -100,137 +102,253 @@ func (h *Handler) handleOptionsUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Provider != "" {
-		pID := provider.ID(req.Provider)
-		if h.Providers != nil {
-			if _, err := h.Providers.Get(pID); err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("unknown provider %q", req.Provider)})
-				return
-			}
-		}
+	var (
+		apply   func(*config.Config)
+		persist func() error
+		status  int
+		message string
+		updated string
+	)
 
-		if h.Config.Providers == nil {
-			h.Config.Providers = map[string]config.ProviderConfig{}
-		}
-		pc := h.Config.Providers[req.Provider]
+	// The validation and the reading of the current entry happen under the same
+	// lock as the write. Without it the panel could change a provider's
+	// credential while a request was reading it, which is a data race the race
+	// detector rightly reports.
+	h.Config.Update(func() {
+		if req.Provider != "" {
+			pID := provider.ID(req.Provider)
+			if h.Providers != nil {
+				if _, err := h.Providers.Get(pID); err != nil {
+					status, message = http.StatusBadRequest, fmt.Sprintf("unknown provider %q", req.Provider)
+					return
+				}
+			}
 
-		switch req.Axis {
-		case "credential":
-			if !sliceContains(config.CredentialValues(), req.Value) {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("invalid credential value %q", req.Value)})
+			if h.Config.Providers == nil {
+				h.Config.Providers = map[string]config.ProviderConfig{}
+			}
+			pc := h.Config.Providers[req.Provider]
+			updated = req.Value
+
+			switch req.Axis {
+			case "credential":
+				value, ok := canonical(config.CredentialValues(), req.Value)
+				if !ok {
+					status, message = http.StatusBadRequest, fmt.Sprintf("invalid credential value %q", req.Value)
+					return
+				}
+				if config.CredentialUnsupported(config.ProviderType(req.Provider, pc), value) {
+					status, message = http.StatusBadRequest, fmt.Sprintf("provider %q does not support credential %q", req.Provider, value)
+					return
+				}
+				pc.Credential, updated = value, value
+			case "key_rotation":
+				value, ok := canonical(config.RotationValues(), req.Value)
+				if !ok {
+					status, message = http.StatusBadRequest, fmt.Sprintf("invalid key_rotation value %q", req.Value)
+					return
+				}
+				pc.KeyRotation, updated = value, value
+			case "transport":
+				value := req.Value
+				if len(h.Transports) > 0 {
+					canonicalValue, ok := canonical(h.Transports, req.Value)
+					if !ok {
+						status, message = http.StatusBadRequest, fmt.Sprintf("invalid transport value %q", req.Value)
+						return
+					}
+					value = canonicalValue
+				}
+				pc.Transport, updated = value, value
+			case "account":
+				// A pin names one key of this provider's pool: a fingerprint or a
+				// pool position. An empty value clears it, and the pool rotates as
+				// it did before. A value that is not in the pool is refused here
+				// rather than at request time, where it would read as a stale pin.
+				if req.Value != "" && !h.accountInPool(req.Provider, req.Value) {
+					status, message = http.StatusBadRequest, fmt.Sprintf("unknown account %q for provider %q", req.Value, req.Provider)
+					return
+				}
+				pc.Account = req.Value
+			default:
+				status, message = http.StatusBadRequest, fmt.Sprintf("unsupported provider axis %q", req.Axis)
 				return
 			}
-			if config.CredentialUnsupported(config.ProviderType(req.Provider, pc), req.Value) {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("provider %q does not support credential %q", req.Provider, req.Value)})
-				return
+
+			prov := req.Provider
+			apply = func(c *config.Config) { c.Providers[prov] = pc }
+			if path := h.Config.Paths.ConfigFile; path != "" {
+				persist = func() error { return persistProviderOption(path, prov, req.Axis, updated) }
 			}
-			pc.Credential = req.Value
-		case "key_rotation":
-			if !sliceContains(config.RotationValues(), req.Value) {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("invalid key_rotation value %q", req.Value)})
-				return
-			}
-			pc.KeyRotation = req.Value
-		case "transport":
-			if len(h.Transports) > 0 && !sliceContains(h.Transports, req.Value) {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("invalid transport value %q", req.Value)})
-				return
-			}
-			pc.Transport = req.Value
-		case "account":
-			// A pin names one key of this provider's pool: a fingerprint or a
-			// pool position. An empty value clears it, and the pool rotates as
-			// it did before. A value that is not in the pool is refused here
-			// rather than at request time, where it would read as a stale pin.
-			if req.Value != "" && !h.accountInPool(req.Provider, req.Value) {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("unknown account %q for provider %q", req.Value, req.Provider)})
-				return
-			}
-			pc.Account = req.Value
-		default:
-			writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("unsupported provider axis %q", req.Axis)})
 			return
 		}
 
-		h.Config.Providers[req.Provider] = pc
-		h.info("provider %s axis %s updated to %s", req.Provider, req.Axis, req.Value)
-
-		// Persist to config.json if path is set
-		if h.Config.Paths.ConfigFile != "" {
-			_ = persistProviderOption(h.Config.Paths.ConfigFile, req.Provider, req.Axis, req.Value)
-		}
-	} else {
-		// Global axis update
+		// Global axis update.
 		switch req.Axis {
 		case "mode":
-			if !sliceContains(config.ModeValues(), req.Value) {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("invalid mode %q", req.Value)})
+			value, ok := canonical(config.ModeValues(), req.Value)
+			if !ok {
+				status, message = http.StatusBadRequest, fmt.Sprintf("invalid mode %q", req.Value)
 				return
 			}
-			h.Config.Mode.Set(req.Value, config.SourceFile)
+			// A live switch to server mode is refused without a token: the
+			// wrapper that guards both surfaces would otherwise start asking for
+			// a secret that does not exist, and the daemon would be unreachable
+			// through the very API that changed it.
+			if value == config.ModeServer && strings.TrimSpace(h.Config.Token.Val) == "" {
+				status, message = http.StatusBadRequest, "server mode requires a token: set it in the file or pass it in the environment"
+				return
+			}
+			updated = value
+			apply = func(c *config.Config) { c.Mode.Set(value, config.SourceFile) }
 		case "credential":
-			if !sliceContains(config.CredentialValues(), req.Value) {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("invalid credential %q", req.Value)})
+			value, ok := canonical(config.CredentialValues(), req.Value)
+			if !ok {
+				status, message = http.StatusBadRequest, fmt.Sprintf("invalid credential %q", req.Value)
 				return
 			}
-			h.Config.Credential.Set(req.Value, config.SourceFile)
+			updated = value
+			apply = func(c *config.Config) { c.Credential.Set(value, config.SourceFile) }
 		case "key_rotation":
-			if !sliceContains(config.RotationValues(), req.Value) {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("invalid key_rotation %q", req.Value)})
+			value, ok := canonical(config.RotationValues(), req.Value)
+			if !ok {
+				status, message = http.StatusBadRequest, fmt.Sprintf("invalid key_rotation %q", req.Value)
 				return
 			}
-			h.Config.KeyRotation.Set(req.Value, config.SourceFile)
+			updated = value
+			apply = func(c *config.Config) { c.KeyRotation.Set(value, config.SourceFile) }
 		case "model_fallback":
-			if !sliceContains(config.FallbackValues(), req.Value) {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("invalid model_fallback %q", req.Value)})
+			value, ok := canonical(config.FallbackValues(), req.Value)
+			if !ok {
+				status, message = http.StatusBadRequest, fmt.Sprintf("invalid model_fallback %q", req.Value)
 				return
 			}
-			h.Config.ModelFallback.Set(req.Value, config.SourceFile)
+			updated = value
+			apply = func(c *config.Config) { c.ModelFallback.Set(value, config.SourceFile) }
 		case "family":
-			if !sliceContains(config.FamilyValues(), req.Value) {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("invalid family %q", req.Value)})
+			value, ok := canonical(config.FamilyValues(), req.Value)
+			if !ok {
+				status, message = http.StatusBadRequest, fmt.Sprintf("invalid family %q", req.Value)
 				return
 			}
-			h.Config.Family.Set(req.Value, config.SourceFile)
+			updated = value
+			apply = func(c *config.Config) { c.Family.Set(value, config.SourceFile) }
 		case "transport":
-			if len(h.Transports) > 0 && !sliceContains(h.Transports, req.Value) {
-				writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("invalid transport %q", req.Value)})
-				return
+			value := req.Value
+			if len(h.Transports) > 0 {
+				canonicalValue, ok := canonical(h.Transports, req.Value)
+				if !ok {
+					status, message = http.StatusBadRequest, fmt.Sprintf("invalid transport %q", req.Value)
+					return
+				}
+				value = canonicalValue
 			}
-			h.Config.Transport.Set(req.Value, config.SourceFile)
+			updated = value
+			apply = func(c *config.Config) { c.Transport.Set(value, config.SourceFile) }
 		default:
-			writeJSON(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("unsupported global axis %q", req.Axis)})
+			status, message = http.StatusBadRequest, fmt.Sprintf("unsupported global axis %q", req.Axis)
 			return
 		}
 
-		h.info("global axis %s updated to %s", req.Axis, req.Value)
-		if h.Config.Paths.ConfigFile != "" {
-			_ = persistGlobalOption(h.Config.Paths.ConfigFile, req.Axis, req.Value)
+		if path := h.Config.Paths.ConfigFile; path != "" {
+			persist = func() error { return persistGlobalOption(path, req.Axis, updated) }
+		}
+	})
+
+	if message != "" {
+		writeJSON(w, status, map[string]any{"error": message})
+		return
+	}
+
+	// The file is written BEFORE the live value changes. A rejected write must
+	// not leave the daemon running a setting the next start would not have, and
+	// the operator is told the change did not happen.
+	if persist != nil {
+		if err := persist(); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{
+				"error": "the change was not saved: " + err.Error(),
+			})
+			return
 		}
 	}
 
+	if apply != nil {
+		h.Config.Update(func() { apply(h.Config) })
+	}
+
+	// Rotation is held by the mechanism as well as by the configuration. A live
+	// change has to reach both, otherwise the axis says "on" while the mechanism
+	// keeps the value it was built with.
+	if req.Axis == "key_rotation" || req.Axis == "credential" {
+		h.syncRotation()
+	}
+
+	h.info("axis %s updated to %s (provider %q)", req.Axis, updated, req.Provider)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"updated": true,
 		"axis":    req.Axis,
-		"value":   req.Value,
+		"value":   updated,
 		"current": h.currentOptions(),
 	})
 }
 
-func sliceContains(s []string, val string) bool {
-	for _, item := range s {
+// syncRotation brings the mechanisms' switches in line with the axes.
+func (h *Handler) syncRotation() {
+	setter, ok := h.KeyRotation.(interface {
+		SetRotation(provider.ID, bool) bool
+	})
+	if !ok || h.Providers == nil || h.Config == nil {
+		return
+	}
+	snap := h.Config.Snapshot()
+	for _, id := range h.Providers.IDs() {
+		pc := snap.Providers[string(id)]
+		setter.SetRotation(id, pc.Rotates(snap.Credential, snap.KeyRotation))
+	}
+}
+
+// canonical returns the allowed spelling of a value.
+//
+// The comparison is case-insensitive because an operator types "ON", but the
+// stored value is the one the rest of the code compares against. Keeping the
+// original spelling was the bug: "Account" was accepted and then failed every
+// equality check that looked for "account".
+func canonical(values []string, val string) (string, bool) {
+	for _, item := range values {
 		if strings.EqualFold(item, val) {
-			return true
+			return item, true
 		}
 	}
-	return false
+	return "", false
+}
+
+// readConfigDoc reads the raw configuration document.
+//
+// A document that does not parse is an ERROR, not an empty starting point. The
+// file can hold settings that exist nowhere else, and overwriting it after a
+// failed parse would silently discard every one of them.
+func readConfigDoc(path string) (map[string]any, error) {
+	doc := map[string]any{}
+	raw, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		if len(bytes.TrimSpace(raw)) > 0 {
+			if err := json.Unmarshal(raw, &doc); err != nil {
+				return nil, fmt.Errorf("config: parsing %s: %w", path, err)
+			}
+		}
+	case os.IsNotExist(err):
+		// No file yet: the new one is created from nothing.
+	default:
+		return nil, fmt.Errorf("config: reading %s: %w", path, err)
+	}
+	return doc, nil
 }
 
 func persistGlobalOption(path, key, value string) error {
-	doc := map[string]any{}
-	raw, err := os.ReadFile(path)
-	if err == nil && len(bytes.TrimSpace(raw)) > 0 {
-		_ = json.Unmarshal(raw, &doc)
+	doc, err := readConfigDoc(path)
+	if err != nil {
+		return err
 	}
 	doc[key] = value
 	out, err := json.MarshalIndent(doc, "", "  ")
@@ -242,10 +360,9 @@ func persistGlobalOption(path, key, value string) error {
 }
 
 func persistProviderOption(path, prov, key, value string) error {
-	doc := map[string]any{}
-	raw, err := os.ReadFile(path)
-	if err == nil && len(bytes.TrimSpace(raw)) > 0 {
-		_ = json.Unmarshal(raw, &doc)
+	doc, err := readConfigDoc(path)
+	if err != nil {
+		return err
 	}
 	provs, ok := doc["providers"].(map[string]any)
 	if !ok || provs == nil {
@@ -289,7 +406,19 @@ func writeAtomic(path string, data []byte) error {
 			_ = os.Remove(tmpName)
 		}
 	}()
+	// The file holds provider keys, so it is owner-only: CreateTemp already uses
+	// 0600, and the chmod makes that contract explicit rather than incidental.
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return err
+	}
 	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	// Sync before rename: a rename that reaches the directory before the data
+	// reaches the disk can leave an empty file after a power loss.
+	if err := tmp.Sync(); err != nil {
 		tmp.Close()
 		return err
 	}
@@ -359,6 +488,16 @@ func (h *Handler) catalogKey(id provider.ID) string {
 	}
 	if h.Config != nil {
 		if pin := strings.TrimSpace(h.Config.AccountFor(string(id))); pin != "" {
+			// The pool understands all three selector forms — key, fingerprint
+			// and one-based position. Using the same lookup keeps a position pin
+			// from silently reading the first account's catalog.
+			if finder, ok := h.KeyRotation.(interface {
+				FindKey(provider.ID, string) (string, bool)
+			}); ok {
+				if key, found := finder.FindKey(id, pin); found {
+					return key
+				}
+			}
 			for _, key := range keys {
 				if fingerprintMatches(capability.Fingerprint(key), pin) || key == pin {
 					return key

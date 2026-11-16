@@ -305,6 +305,41 @@ func TestTheFamilyAxisReachesTheTransport(t *testing.T) {
 	}
 }
 
+// TestAxisValueCoversEverySettableAxis.
+//
+// The report subcommand asks axisValue for whatever the axis command named; a
+// missing case does not fail loudly, it prints an empty value and an empty
+// source. model_fallback was exactly that: the command was listed, and asking
+// it answered nothing.
+func TestAxisValueCoversEverySettableAxis(t *testing.T) {
+	cfg := config.Default()
+	cfg.Mode.Set(config.ModeLocal, config.SourceFile)
+	cfg.Credential.Set(config.CredentialAccount, config.SourceEnv)
+	cfg.KeyRotation.Set(config.RotationOn, config.SourceDefault)
+	cfg.ModelFallback.Set(config.FallbackOn, config.SourceFile)
+	cfg.Family.Set(config.FamilyV6, config.SourceFlag)
+	cfg.Transport.Set("direct", config.SourceFile)
+
+	want := map[string]string{
+		"mode":           config.ModeLocal,
+		"credential":     config.CredentialAccount,
+		"key_rotation":   config.RotationOn,
+		"model_fallback": config.FallbackOn,
+		"family":         config.FamilyV6,
+		"transport":      "direct",
+	}
+
+	for _, axis := range settableAxes() {
+		got := axisValue(cfg, axis.key)
+		if got.Val != want[axis.key] {
+			t.Errorf("axisValue(%q) = %q, want %q", axis.key, got.Val, want[axis.key])
+		}
+		if got.From == "" {
+			t.Errorf("axisValue(%q) has no source", axis.key)
+		}
+	}
+}
+
 // TestTransportSettingsDoesNotAliasTheConfiguration.
 //
 // The settings map is handed to a transport, which may keep it. Folding the axis

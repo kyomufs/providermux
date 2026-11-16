@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -209,6 +210,88 @@ type Config struct {
 
 	// Paths — the places on disk. Not a setting: determined by XDG.
 	Paths Paths
+
+	// mu guards the fields that the Control API changes on a live daemon.
+	//
+	// The daemon reads the credential and account axes on every request while
+	// the panel can change them, so the two must not meet without a lock. The
+	// guard lives here rather than in the control package because the request
+	// path is not the control package's caller: the gateway reaches the same
+	// fields through the closures the entry point wires up.
+	mu sync.RWMutex
+}
+
+// Snapshot is a consistent view of the fields that can be changed live.
+//
+// The reader takes one snapshot instead of reading the fields one by one: a
+// status response assembled from two different moments would show a credential
+// from before a change beside a rotation flag from after it.
+type Snapshot struct {
+	Mode                 string
+	Listen               string
+	Token                string
+	Credential           string
+	KeyRotation          string
+	ModelFallback        string
+	Family               string
+	Transport            string
+	FirstEventTimeout    time.Duration
+	IdleTimeout          time.Duration
+	ReasoningIdleTimeout time.Duration
+	Providers            map[string]ProviderConfig
+}
+
+// Snapshot returns a consistent copy of the live-changeable fields.
+func (c *Config) Snapshot() Snapshot {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	providers := make(map[string]ProviderConfig, len(c.Providers))
+	for id, p := range c.Providers {
+		providers[id] = p
+	}
+
+	return Snapshot{
+		Mode:                 c.Mode.Val,
+		Listen:               c.Listen.Val,
+		Token:                c.Token.Val,
+		Credential:           c.Credential.Val,
+		KeyRotation:          c.KeyRotation.Val,
+		ModelFallback:        c.ModelFallback.Val,
+		Family:               c.Family.Val,
+		Transport:            c.Transport.Val,
+		FirstEventTimeout:    c.FirstEventTimeout.Val,
+		IdleTimeout:          c.IdleTimeout.Val,
+		ReasoningIdleTimeout: c.ReasoningIdleTimeout.Val,
+		Providers:            providers,
+	}
+}
+
+// Access returns what the token check needs, without copying the whole
+// configuration: the check runs on every request, and a snapshot per request
+// would copy every provider for two fields.
+func (c *Config) Access() (server bool, token string) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Mode.Val == ModeServer, c.Token.Val
+}
+
+// ModelFallbackEnabled reports whether the model axis is on.
+func (c *Config) ModelFallbackEnabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ModelFallback.Val == FallbackOn
+}
+
+// Update runs fn with the configuration write-locked.
+//
+// The callback addresses the fields directly: the exported getters take the
+// read lock, and calling one from inside a write-locked callback would wait on
+// itself. Callers use this for the Control API's live changes and nothing else.
+func (c *Config) Update(fn func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	fn()
 }
 
 // ProviderConfig — the settings of a single provider.
@@ -986,11 +1069,15 @@ func sortedKeys(m map[string]ProviderConfig) []string {
 // error: deciding whether a provider exists is the registry's business, and
 // duplicating that decision here would give it two answers.
 func (c *Config) CredentialFor(id string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.Providers[id].EffectiveCredential(c.Credential.Val)
 }
 
 // RotationFor returns the key rotation axis in force for the provider.
 func (c *Config) RotationFor(id string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.Providers[id].EffectiveRotation(c.KeyRotation.Val)
 }
 
@@ -999,16 +1086,22 @@ func (c *Config) RotationFor(id string) string {
 // No inheritance: a pin names one key of one pool, and a global pin would name
 // a key that does not exist in most pools. An empty answer is the normal case.
 func (c *Config) AccountFor(id string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.Providers[id].Account
 }
 
 // TransportFor returns the transport in force for the provider.
 func (c *Config) TransportFor(id string) string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.Providers[id].EffectiveTransport(c.Transport.Val)
 }
 
 // TransportConfigFor returns the transport settings in force for the provider.
 func (c *Config) TransportConfigFor(id string) map[string]any {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.Providers[id].EffectiveTransportConfig(c.TransportConfig)
 }
 
@@ -1017,12 +1110,16 @@ func (c *Config) TransportConfigFor(id string) map[string]any {
 // Both axes decide it, which is why the answer is computed in one place instead
 // of being read off either one at the call site.
 func (c *Config) RotatesFor(id string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.Providers[id].Rotates(c.Credential.Val, c.KeyRotation.Val)
 }
 
 // UsesAccount reports whether the provider is reached with a credential.
 func (c *Config) UsesAccount(id string) bool {
-	return c.CredentialFor(id) == CredentialAccount
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Providers[id].EffectiveCredential(c.Credential.Val) == CredentialAccount
 }
 
 // ProviderKey returns the provider's credentials.

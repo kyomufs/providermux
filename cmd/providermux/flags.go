@@ -136,7 +136,10 @@ func joinArgs(args []string) string {
 // loadConfigSimple reads the configuration with the flags, but without parsing
 // them into a variable: commands that need the flags only as an override do not
 // require access to the values themselves.
+//
+// The start-up check is skipped, on purpose: a command that prints the log or
+// lists the data on disk has to work while the configuration is being repaired.
 func loadConfigSimple(args []string) (*config.Config, error) {
-	cfg, _, err := loadConfig(args)
+	cfg, _, err := loadConfigRead(args)
 	return cfg, err
 }

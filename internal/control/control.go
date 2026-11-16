@@ -46,8 +46,13 @@ type Handler struct {
 	State *state.Store
 	// Log — the journal.
 	Log *state.Logger
-	// Config — the active configuration. Read-only: changing values that affect
-	// the socket requires a restart.
+	// Config — the active configuration.
+	//
+	// The values that can change on a live daemon are written through
+	// Config.Update and read through Config.Snapshot / the package's locked
+	// getters. Values that decide the socket or the provider registry are not
+	// changed here: those are fixed at start-up, and a change would describe a
+	// daemon nobody is running.
 	Config *config.Config
 
 	// Transports — the available transports. Filled in by the entry point,
