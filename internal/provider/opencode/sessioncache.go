@@ -71,6 +71,13 @@ func (c *sessionCache) get(fingerprint string) (string, bool) {
 func (c *sessionCache) put(fingerprint, id string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.set(fingerprint, id)
+}
+
+// set remembers the identifier, keeping an existing entry in place.
+//
+// The caller holds the mutex.
+func (c *sessionCache) set(fingerprint, id string) {
 	if _, ok := c.ids[fingerprint]; ok {
 		return
 	}
@@ -80,6 +87,22 @@ func (c *sessionCache) put(fingerprint, id string) {
 	}
 	c.ids[fingerprint] = id
 	c.order = append(c.order, fingerprint)
+}
+
+// replace points the fingerprint at another identifier.
+//
+// It exists for the one case put() cannot serve: a conversation whose
+// identifier the lane has retired while the conversation continues. The
+// fingerprint keeps its place in the eviction order, because the conversation is
+// still the same one.
+func (c *sessionCache) replace(fingerprint, id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.ids[fingerprint]; !ok {
+		c.set(fingerprint, id)
+		return
+	}
+	c.ids[fingerprint] = id
 }
 
 // size reports how many conversations are remembered.
@@ -108,6 +131,19 @@ func (p *Provider) stableSession(req provider.Request) provider.SessionIDs {
 	if !known {
 		stable = ids.Session
 		p.sessions.put(fingerprint, stable)
+	}
+
+	// A refusal belongs to the address it was issued on, not to the
+	// conversation: when this turn leaves from a different address, the spent
+	// identifier stays behind with the address that spent it (lane.go states
+	// the measurement). The conversation keeps its content; only the name it
+	// travels under changes.
+	if p.lane != nil {
+		if fresh, replaced := p.lane.freshSession(stable, req.Address); replaced {
+			stable = fresh
+			p.sessions.replace(fingerprint, stable)
+		}
+		p.lane.recordSend(stable, req.Address)
 	}
 
 	// The affinity header carries the affinity and falls back to the session,

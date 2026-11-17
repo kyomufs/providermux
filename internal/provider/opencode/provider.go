@@ -163,6 +163,10 @@ type Provider struct {
 	// sessions keeps the session identifier of each conversation whose client
 	// sends none, so that its turns share one session on the service side.
 	sessions *sessionCache
+	// lane remembers which address each minted session was spent on, so a
+	// refusal does not follow the conversation across an address change
+	// (lane.go states the measurement behind it).
+	lane *laneLedger
 }
 
 // New creates a provider from configuration.
@@ -212,6 +216,7 @@ func New(cfg Config) (*Provider, error) {
 		httpClient = http.DefaultClient
 	}
 	p.sessions = newSessionCache(defaultSessionCacheSize)
+	p.lane = newLaneLedger(defaultLaneLedgerSize)
 	p.catalog = modelcat.New(
 		p.baseURL, liveModelsPath, httpClient, p.applyHeaders,
 		&metaSource{http: httpClient, url: cfg.MetaURL},

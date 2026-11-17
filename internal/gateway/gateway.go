@@ -573,6 +573,10 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 	// The egress address is read once per request: it is the address THIS
 	// request left from, and the answer can change between requests.
 	address := h.address()
+	// The provider sees the address for one decision only: whether an
+	// identifier it minted still serves this request. A lane that counts by
+	// address and by session cannot answer that without it.
+	req.Address = address
 
 	prepared, err := p.Build(req)
 	if err != nil {

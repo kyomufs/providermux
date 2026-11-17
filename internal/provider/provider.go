@@ -130,6 +130,12 @@ type Request struct {
 	// Session are the session identifiers the provider may put into headers.
 	// The provider decides whether it needs them.
 	Session SessionIDs
+	// Address is the egress address this request will leave from, as the
+	// gateway resolved it, or empty when it is unknown. A provider uses it to
+	// decide whether an identifier it minted earlier still serves the request:
+	// a lane that counts traffic per address and per session needs both to
+	// answer that. It is not sent anywhere.
+	Address string
 }
 
 // Message is one message in neutral form.

@@ -61,6 +61,11 @@ var authCodes = map[string]bool{
 // 402, where a burst of requests and quota exhaustion share one status.
 var quotaText = regexp.MustCompile(`(?i)insufficient[-_\s]?(?:quota|balance)|quota[-_\s]?exceeded|budget exceeded|usage limit|limit exhausted|credit limit|free tier`)
 
+// resetsAtPattern finds the reset instant the free lane puts into a quota
+// refusal next to Retry-After. It is read as a fallback, for an answer that
+// carries only one of the two.
+var resetsAtPattern = regexp.MustCompile(`"resetsAt"\s*:\s*"([^"]+)"`)
+
 // authText are the text signals of a key refusal.
 var authText = regexp.MustCompile(`(?i)incorrect api key|invalid api key|api key is invalid|unauthenticated`)
 
@@ -169,7 +174,44 @@ func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 		f.KeyRejected = false
 	}
 
+	// The session half of the refusal is the one part a different address can
+	// leave behind, so it is recorded here: this is the only point that knows the
+	// answer was a quota one and until when it holds (lane.go).
+	p.markLaneRefusal(resp, body, codes, lower)
+
 	return f
+}
+
+// markLaneRefusal remembers a refused session identifier until the refusal
+// lifts.
+//
+// The identifier is read from the request that left, not from anything the
+// answer carries: the service does not echo it. No identifier means the lane
+// sees an anonymous call, which is under no session counter to remember.
+func (p *Provider) markLaneRefusal(resp *http.Response, body []byte, codes []string, lower string) {
+	if p.lane == nil || resp == nil || resp.Request == nil {
+		return
+	}
+	// Only a quota answer marks. A 400 that happens to contain the word limit,
+	// or a 403 about the address, says nothing about the allowance.
+	if resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode != http.StatusPaymentRequired {
+		return
+	}
+	quota := quotaText.MatchString(lower)
+	for _, code := range codes {
+		if quotaCodes[code] {
+			quota = true
+			break
+		}
+	}
+	if !quota {
+		return
+	}
+	until, ok := retryUntil(resp.Header, body, p.lane.now())
+	if !ok {
+		return
+	}
+	p.lane.spend(resp.Request.Header.Get("X-Opencode-Session-Id"), until)
 }
 
 // extractCodes pulls codes out of the body from the places different services
