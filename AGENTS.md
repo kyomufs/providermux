@@ -54,6 +54,26 @@ git diff --cached --stat
 обновлять: иначе CLI останется прежним, а запущенный демон — новым, и это
 запутает при первой же отладке.
 
+### Демон запускает тот бинарь, который собран
+
+Сборка сама по себе не меняет то, что обслуживает порт: процесс стартовал со
+старым файлом и переживёт сборку. Поэтому перезапуск — часть цикла, сразу после
+сборки, без напоминаний:
+
+```sh
+systemctl --user restart providermux
+sleep 2
+systemctl --user show providermux -p MainPID -p ExecStart | head -2
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8787/v1/models   # 200
+```
+
+Юнит пишет home-manager, и на диске это симлинк в store: править его нельзя —
+следующая активация вернёт своё. `ExecStart` на `~/.local/bin/providermux`
+переопределён drop-in'ом
+`~/.config/systemd/user/providermux.service.d/10-local-binary.conf`, который
+home-manager не трогает. Если демон после перезапуска всё ещё показывает
+store-путь — drop-in пропал, и это надо чинить, а не мириться.
+
 Коммит и пуш:
 
 ```sh
