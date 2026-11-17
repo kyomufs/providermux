@@ -212,7 +212,7 @@ func (p *Provider) Build(req provider.Request) (provider.Prepared, error) {
 		// decimal string, which is what the reference client sends.
 		"sessionId": signedSessionID(req.Session.Project),
 	}
-	if system := strings.TrimSpace(req.System); system != "" {
+	if system := acceptableSystem(strings.TrimSpace(req.System)); system != "" {
 		request["systemInstruction"] = map[string]any{
 			"parts": []any{map[string]any{"text": system}},
 		}
