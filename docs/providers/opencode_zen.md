@@ -19,20 +19,23 @@ sends, the errors it produces. Every claim carries its evidence:
 | --- | --- | --- | --- |
 | `/inference/openai/v1/chat/completions` | POST | 200 | the chat path the reference client uses; the provider's default (`DefaultChatPath`) |
 | `/inference/v1/chat/completions` | POST | 429 | the legacy chat path; now routed to the exhausted lane |
-| `/inference/v1/models` | GET | 200 | model list, the provider's base URL |
+| `/inference/openai/v1/models` | GET | 200 | model list, the provider's base URL (`DefaultBaseURL`) |
+| `/inference/v1/models` | GET | 200 | the legacy model list; still answered |
 | `/inference/go/v1/models` | GET | 200 | paid lane, ids carry no `-free` suffix |
 | `/inference/go/openai/v1/models` | GET | 404 | not a route |
 | `/zen/v1/models` | GET | 200 | legacy alias |
 | `/zen/go/v1/models` | GET | 200 | legacy alias |
 
-measured 2026-10-19, re-measured 2026-10-25. The provider's `base_url` is
-`https://opencode.ai/inference/v1` (`DefaultBaseURL` in
-`internal/provider/opencode/provider.go`), taken from the `api` key of the
-published model catalog rather than from the client's code. The chat path is
-resolved separately: `chat_path` in the provider settings, default
-`/inference/openai/v1/chat/completions`. A custom `base_url` for a mirror keeps
-the model list under its own path; the chat path stays the absolute default
-unless `chat_path` is set.
+measured 2026-10-19, re-measured 2026-10-25 and 2026-11-17. The provider's
+`base_url` is `https://opencode.ai/inference/openai/v1` (`DefaultBaseURL` in
+`internal/provider/opencode/provider.go`): measured 2026-11-16 by running the
+2.2.6 client through a local listener, it resolves both the model list and chat
+from this base. The older `/inference/v1` base answers the model list too, but it
+is the legacy lane, and a proxy that speaks the current client's address cannot
+be routed into it by mistake. The chat path is resolved separately: `chat_path`
+in the provider settings, default `/inference/openai/v1/chat/completions`. A
+custom `base_url` for a mirror keeps the model list under its own path; the chat
+path stays the absolute default unless `chat_path` is set.
 
 ## Credential
 
@@ -91,10 +94,15 @@ alike (measured 2026-10-19). The provider therefore forces the flag
 one body for a caller that asked for none
 (`internal/gateway/collect.go`).
 
-Condition 2 is decided by the **names** only. The same request with the canonical
-definitions replaced by `{"name":"shell","description":"run shell",…}` is
-admitted (measured 2026-10-19). The client's own descriptions and schemas are
-still sent, because a deeper check is the obvious next move for the lane.
+Condition 2 is decided by the **names** only: the mandatory pair is admitted
+under any description, and the same request with the canonical definitions
+replaced by `{"name":"shell","description":"run shell",…}` is admitted (measured
+2026-10-19). That is a property of this pair, not of every tool — a client name
+carrying someone else's declaration is refused once the pair is out of the way
+(condition 10, measured 2026-11-17). The client's own descriptions and schemas
+are still sent for `read` and `shell`, because the deeper check exists for the
+other names and the cost of the text is a few thousand tokens of a cached
+prompt.
 
 Condition 3 is decided by the **shape**, not the value: `ses_test`, a bare UUID
 and `ses_` followed by 64 zeros are all refused, while any well-formed identifier
@@ -219,13 +227,66 @@ unrelated request from the same egress address in the same second is admitted:
 this is a decision about the body, not a spent budget. Both names are sent with
 the underscore dropped, and the gateway maps them back as above.
 
+### The tool declarations
+
+Measured 2026-11-17, one declaration at a time, with the rest of an admitted
+request held constant and the address in an admitting state:
+
+| declaration | verdict |
+| --- | --- |
+| `edit` as the client declares it | 200 |
+| `edit` with another description | 429 |
+| `edit` with `file_path`/`old_string`/`new_string` | 429 |
+| the same declaration under a name the client does not ship | 200 |
+| a description ending "…in the session skill catalog." | 429, under any name |
+| the same with "…in the skill catalog." | 200 |
+| "Edit an existing UTF-8 text file" | 429, under any name |
+| "Edit an existing text file" or "Edit a text file" | 200 |
+
+So the lane does not compare a declaration against the client's, and does not
+require a match: it reserves the client's **names**. A known name whose content
+is not the client's is read as another agent's traffic and routed into the
+exhausted bucket, while content under a name the client lacks is not examined at
+all. The two description phrases are refused whatever the tool is called, so
+they are markers of the same kind as condition 9, written in the text instead of
+the name.
+
+The client's 13 declarations are captured verbatim from opencode 2.2.6
+(`internal/provider/opencode/tools.json`, embedded in `tooldefs.go`) and are the
+only content sent under those names. A caller's tool with a client name and a
+different description or schema goes out as `<name>_tool`, de-duplicated against
+the caller's other tools; the gateway rewrites the name back in a tool call, so
+the client still dispatches it. A caller's declaration that IS the client's own
+is sent untouched — moving the admitted shape aside would only take the request
+further from the client it imitates. The known phrases are scrubbed from every
+description, because a name does not protect a description from that rule.
+
+The conversation follows the declaration: an assistant tool call in the history
+that names a tool the request declares under an alias is written with the alias
+too. A request that declares `edit_tool` and continues a history that calls
+`edit` describes a conversation the model was not given, and the model is being
+asked to continue this one.
+
+The comparison is made on parsed JSON, not on bytes. The declaration reaches the
+provider through the gateway's own decode and re-encode, so key order and
+whitespace are not preserved and a byte comparison would never match.
+
+Replayed through this gateway on a fresh address 2026-11-17, seconds apart: the
+same body — `edit` with `old_string`/`new_string`, `skill` with "…in the session
+skill catalog." — was answered 200 by the build that reserves the names (0.99 s,
+1191 prompt tokens) and 429 FreeUsageLimitError by the build before it (1.3 s).
+The client's own 13 declarations through the same build were answered 200
+(0.76 s, 4068 prompt tokens), so the reservation does not move the shape the lane
+already admits.
+
 The 2026-10-19 reading that "the system prompt is not a condition" was taken on
 the legacy lane while it was still open. It no longer describes the client lane.
 
 ## Headers
 
 The set the provider sends, in the spelling and the case captured from the
-installed v2.1.2 client on 2026-10-29:
+installed client on 2026-10-29 and kept by the 2.2.6 build the provider names
+since 2026-11-16:
 
 ```
 B3: <trace>-<span>-1-<parent>
@@ -235,7 +296,7 @@ Accept: */*
 Accept-Encoding: gzip, deflate, br, zstd
 Authorization: <credential, "Bearer public" when anonymous>
 Content-Type: application/json
-User-Agent: opencode/latest/2.1.2/cli
+User-Agent: opencode/latest/2.2.6/cli
 X-Opencode-Project: <sha1("directory:" + directory)>
 X-Opencode-Session-Id: <session id>
 X-Session-Affinity: <affinity id>
@@ -259,7 +320,10 @@ client-supplied `global` or a `prj_`-prefixed value is translated.
 ## The reference client's wire shape
 
 Captured 2026-10-29 by running the installed v2.1.2 client through a
-TLS-terminating proxy. The client's request and this gateway's:
+TLS-terminating proxy, and re-checked against 2.2.6 on 2026-11-16 through a local
+listener; the differences are the version in the `User-Agent`, the base the
+client resolves (`/inference/openai/v1`) and the tool schemas, which carry no
+`$schema` key. The client's request and this gateway's:
 
 | field | the client | this gateway |
 | --- | --- | --- |
@@ -477,6 +541,8 @@ curl -sN http://127.0.0.1:8787/v1/chat/completions \
 | file | what it holds |
 | --- | --- |
 | `internal/provider/opencode/provider.go` | request assembly, headers, forced stream, chat path |
+| `internal/provider/opencode/tooldefs.go` | the client's reserved tool names, their declarations, and the refused description phrases |
+| `internal/provider/opencode/tools.json` | the client's 13 tool declarations, captured verbatim from opencode 2.2.6 |
 | `internal/provider/opencode/prompt.go` | the canonical system prompt and the environment block |
 | `internal/provider/opencode/prompt/default.txt` | `system.txt` of opencode v2, embedded |
 | `internal/provider/opencode/contract.go` | the admission conditions, the wire-shape table, the budgets |

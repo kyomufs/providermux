@@ -640,7 +640,7 @@ func TestV1ForkToolNameIsReplaced(t *testing.T) {
 		Tools: []provider.Tool{
 			{Name: "subagent_fork", Description: "fork"},
 			{Name: "my_SUBAGENT_FORK_tool", Description: "fork again"},
-			{Name: "grep", Description: "search"},
+			{Name: "find_text", Description: "search"},
 		},
 	})
 	if err != nil {
@@ -660,7 +660,7 @@ func TestV1ForkToolNameIsReplaced(t *testing.T) {
 		}
 		seen[name] = true
 	}
-	if !seen["grep"] {
+	if !seen["find_text"] {
 		t.Fatalf("an unrelated tool was renamed: %v", seen)
 	}
 	if got := prep.ToolNames["subagentfork"]; got != "subagent_fork" {
@@ -683,7 +683,7 @@ func TestImageDirectoryPairIsReplaced(t *testing.T) {
 		Tools: []provider.Tool{
 			{Name: "read_image", Description: "look"},
 			{Name: "working_directory", Description: "cd"},
-			{Name: "grep", Description: "search"},
+			{Name: "find_text", Description: "search"},
 		},
 	})
 	if err != nil {
@@ -696,7 +696,7 @@ func TestImageDirectoryPairIsReplaced(t *testing.T) {
 		name, _ := fn["name"].(string)
 		seen[name] = true
 	}
-	for _, want := range []string{"readimage", "workingdirectory", "grep"} {
+	for _, want := range []string{"readimage", "workingdirectory", "find_text"} {
 		if !seen[want] {
 			t.Fatalf("tool %q is missing from the wire: %v", want, seen)
 		}

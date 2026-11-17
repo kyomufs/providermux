@@ -63,10 +63,12 @@ const DefaultUserAgent = "opencode/latest/2.2.6/cli"
 //  2. The request carries the mandatory tool set: a `read` tool AND a `shell`
 //     or `bash` tool, by name. Only the names are decisive — the same request
 //     with the canonical definitions replaced by `{"name":"shell","description":
-//     "run shell",...}` is admitted too, which was measured on 2026-10-19. The
-//     names are still sent with the client's own descriptions and schemas
-//     because a deeper check is the obvious next move for the lane, and the cost
-//     of the text is a few thousand tokens of a prompt that is cached.
+//     "run shell",...}` is admitted too, which was measured on 2026-10-19. That
+//     is a property of this pair, not of every tool: a name the client ships
+//     with someone else's declaration is refused (tooldefs.go, measured
+//     2026-11-17). The mandatory definitions are still sent as the client's own,
+//     because the deeper check exists for the other names and the text is
+//     cached.
 //
 //  3. The request carries a session header whose value is an identifier of the
 //     client's shape: `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`. A request that is

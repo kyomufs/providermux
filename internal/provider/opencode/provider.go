@@ -2,9 +2,11 @@
 //
 // WHAT IS SPECIFIC TO IT and therefore lives here:
 //
-//   - the set of mandatory tools: the request must carry the definitions of
-//     `shell` and `read` in full — name, description and schema (the check
-//     compares entries, not names);
+//   - the set of mandatory tools: the request must carry `shell` and `read`, and
+//     the provider sends the client's own definitions of them. The lane reads the
+//     names for this pair; a client name carrying a foreign declaration is a
+//     marker of its own, which is why the client's other names are reserved
+//     (tooldefs.go);
 //   - the shape of the system prompt: the service rejects the specific text of
 //     the title generator, so the prompt is rendered rather than passed through
 //     as-is;
@@ -17,8 +19,8 @@
 // WHAT IS NOT HERE and must not be: retry policy, key rotation, transport. That
 // is common machinery — see internal/capability and internal/transport.
 //
-// The source of the contract is opencode 2.1.2, read from source and captured
-// off the wire:
+// The source of the contract is opencode 2.x: 2.1.2 read from source, 2.2.6
+// captured off the wire.
 //
 //	headers         packages/core/src/session/model-request.ts
 //	affinity        packages/core/src/session/affinity.ts
@@ -309,7 +311,21 @@ func resolveChatURL(base, path string) string {
 // The second result is the map the gateway needs to translate a tool call back
 // to the name the client used, and is empty when no name had to be replaced.
 func (p *Provider) buildBody(req provider.Request) (map[string]any, map[string]string, error) {
-	messages, err := p.buildMessages(req)
+	// The tools are planned FIRST, because the names they go out under decide
+	// how the conversation's own tool calls are written: a history entry that
+	// names a tool the request does not declare is a different request from the
+	// one the model is being asked to continue.
+	tools, toolNames := p.buildTools(req.Tools)
+	wireName := func(name string) string {
+		for wire, original := range toolNames {
+			if original == name {
+				return wire
+			}
+		}
+		return name
+	}
+
+	messages, err := p.buildMessages(req, wireName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -376,7 +392,6 @@ func (p *Provider) buildBody(req provider.Request) (map[string]any, map[string]s
 		body["reasoning_effort"] = req.ReasoningEffort
 	}
 
-	tools, toolNames := p.buildTools(req.Tools)
 	if len(tools) > 0 {
 		body["tools"] = tools
 		// tool_choice is sent only when there are tools: the client does the
@@ -392,7 +407,11 @@ func (p *Provider) buildBody(req provider.Request) (map[string]any, map[string]s
 }
 
 // buildMessages translates the neutral messages into the provider form.
-func (p *Provider) buildMessages(req provider.Request) ([]map[string]any, error) {
+//
+// wireName translates a tool name of the conversation into the name it is
+// declared under in this request; a tool the request does not declare is left
+// as it is written in the history.
+func (p *Provider) buildMessages(req provider.Request, wireName func(string) string) ([]map[string]any, error) {
 	out := make([]map[string]any, 0, len(req.Messages)+1)
 
 	// The thinking field of the model, and whether the conversation is in
@@ -431,7 +450,7 @@ func (p *Provider) buildMessages(req provider.Request) ([]map[string]any, error)
 						"id":   tc.ID,
 						"type": "function",
 						"function": map[string]any{
-							"name":      tc.Name,
+							"name":      wireName(tc.Name),
 							"arguments": tc.Arguments,
 						},
 					})
@@ -556,7 +575,7 @@ func (p *Provider) buildTools(tools []provider.Tool) ([]map[string]any, map[stri
 		if _, isGate := gateByName[t.Name]; isGate {
 			continue
 		}
-		if _, replaced := aliasedToolName(t.Name); replaced {
+		if _, replaced := wireToolName(t); replaced {
 			continue
 		}
 		used[t.Name] = true
@@ -573,7 +592,7 @@ func (p *Provider) buildTools(tools []provider.Tool) ([]map[string]any, map[stri
 			continue
 		}
 		name := t.Name
-		if alias, replaced := aliasedToolName(name); replaced {
+		if alias, replaced := wireToolName(t); replaced {
 			base := alias
 			for suffix := 2; used[alias]; suffix++ {
 				alias = fmt.Sprintf("%s_%d", base, suffix)
@@ -582,7 +601,7 @@ func (p *Provider) buildTools(tools []provider.Tool) ([]map[string]any, map[stri
 			if names == nil {
 				names = make(map[string]string, 1)
 			}
-			names[alias] = name
+			names[alias] = t.Name
 			name = alias
 		}
 		out = append(out, toolEntry(t, name))
@@ -649,6 +668,31 @@ func aliasedToolName(name string) (string, bool) {
 	return alias, alias != name
 }
 
+// wireToolName reports the name a caller's tool goes out under, and whether it
+// had to be replaced.
+//
+// Two reasons move a declaration off its name, and they are different:
+//
+//   - the name itself is a marker of the retired client (aliasedToolName), so
+//     the bytes of the name are the problem;
+//   - the name belongs to the reference client but the declaration is someone
+//     else's (tooldefs.go). The lane refuses a known name carrying a foreign
+//     description or a foreign parameter set, and admits any content under a
+//     name the client does not ship — measured 2026-11-17, see tooldefs.go.
+//
+// A declaration that IS the client's own is left alone: that is the shape the
+// lane admits, and rewriting it would only move the request further from the
+// client it is imitating.
+func wireToolName(t provider.Tool) (string, bool) {
+	if alias, replaced := aliasedToolName(t.Name); replaced {
+		return alias, true
+	}
+	if isClientTool(t.Name) && !sameAsClient(t.Name, t.Description, t.Schema) {
+		return clientToolAlias(t.Name), true
+	}
+	return t.Name, false
+}
+
 // replaceFold replaces every case-insensitive occurrence of marker in s.
 func replaceFold(s, marker, replacement string) string {
 	if !strings.Contains(strings.ToLower(s), marker) {
@@ -675,9 +719,10 @@ func toolEntry(t provider.Tool, name string) map[string]any {
 	var schema any
 	if len(t.Schema) > 0 {
 		if err := json.Unmarshal(t.Schema, &schema); err != nil {
-			// The client's schema did not parse: we send an empty object
-			// rather than fail the request. The check looks only at the
-			// mandatory tools; for the rest the shape is not critical.
+			// The caller's schema did not parse: we send an empty object rather
+			// than fail the request. A client name with an unreadable schema has
+			// already been moved aside by wireToolName, so this cannot turn a
+			// refused declaration into an admitted one.
 			schema = map[string]any{"type": "object", "properties": map[string]any{}}
 		}
 	} else {
@@ -686,8 +731,11 @@ func toolEntry(t provider.Tool, name string) map[string]any {
 	return map[string]any{
 		"type": "function",
 		"function": map[string]any{
-			"name":        name,
-			"description": t.Description,
+			"name": name,
+			// The known non-client signatures are scrubbed here rather than in
+			// the caller: the lane refuses them whatever the tool is called, and
+			// the caller has no way to know that (tooldefs.go).
+			"description": scrubToolDescription(t.Description),
 			"parameters":  schema,
 			// v2 lowers every tool with strict mode off unless the provider is
 			// known to reject the field (packages/ai/src/protocols/openai-chat.ts,
