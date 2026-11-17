@@ -169,7 +169,10 @@ func (p *Provider) ModelsForAccount(ctx context.Context, key string) ([]provider
 //
 // The live ids are wire names, and a model with tiers appears under the tier
 // routes as well ("gemini-4-argon-low"). Any of them means the model itself is
-// available.
+// available — except the routes the service keeps in the list after switching
+// them off for the account, which it spells with the base name and a suffix of
+// its own ("gemini-4-argon-disabled"). Asking for one of those is answered with
+// 404, so the suffix decides before the prefix rule does.
 func (def modelDef) isLive(live map[string]struct{}) bool {
 	if _, ok := live[strings.ToLower(def.id)]; ok {
 		return true
@@ -179,13 +182,19 @@ func (def modelDef) isLive(live map[string]struct{}) bool {
 			return true
 		}
 	}
+	prefix := strings.ToLower(def.id) + "-"
 	for id := range live {
-		if strings.HasPrefix(id, strings.ToLower(def.id)+"-") {
+		if strings.HasPrefix(id, prefix) && !strings.HasSuffix(id, disabledSuffix) {
 			return true
 		}
 	}
 	return false
 }
+
+// disabledSuffix is how the service names a route it lists but no longer serves
+// for the account. The name still starts with the model id, so only the suffix
+// tells it apart from a tier route.
+const disabledSuffix = "-disabled"
 
 // wireNames returns every route name this model can be asked for.
 func (def modelDef) wireNames() []string {

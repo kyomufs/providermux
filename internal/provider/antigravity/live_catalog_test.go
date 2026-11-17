@@ -28,3 +28,31 @@ func TestUnknownModelsAreReportedOnce(t *testing.T) {
 		t.Fatalf("another account saw %v, want both unknown ids", other)
 	}
 }
+
+// TestDisabledRouteDoesNotMakeAModelLive — the service lists a route it has
+// switched off for the account under the base name plus "-disabled". The prefix
+// rule used to read that as an offer, the model stayed in the catalog, and every
+// request for it was answered with 404.
+func TestDisabledRouteDoesNotMakeAModelLive(t *testing.T) {
+	def := modelDef{
+		id: "gemini-4-argon",
+		tiers: map[string]tier{
+			"low": {wire: "gemini-4-argon-low"},
+		},
+	}
+
+	disabled := map[string]struct{}{"gemini-4-argon-disabled": {}}
+	if def.isLive(disabled) {
+		t.Fatal("a disabled route was read as an offer")
+	}
+
+	tiered := map[string]struct{}{"gemini-4-argon-disabled": {}, "gemini-4-argon-high": {}}
+	if !def.isLive(tiered) {
+		t.Fatal("a tier route next to a disabled one is still an offer")
+	}
+
+	// Another model's disabled route must not decide this one either.
+	if def.isLive(map[string]struct{}{"gemini-4-hydrogen-disabled": {}}) {
+		t.Fatal("another model's route made this one live")
+	}
+}
