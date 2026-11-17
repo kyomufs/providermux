@@ -1291,8 +1291,12 @@
                 const toneColor = quotaTone(fraction);
                 const windowName = w.display_name || (w.window === '5h' ? 'Five Hour Limit Remaining' : 'Weekly Limit Remaining');
 
+                // An untouched window carries reset = fetch time + window, so its
+                // countdown restarts on every poll and reads as a broken clock.
                 let subtext = `${pctRounded}% remaining`;
-                if (w.reset_time) {
+                if (fraction >= 1) {
+                  subtext += ' · окно не начато';
+                } else if (w.reset_time) {
                   const refreshStr = formatRefreshTime(w.reset_time);
                   subtext += ` · Refreshes in ${refreshStr}`;
                 }

@@ -33,7 +33,10 @@ func TestBuildUsesTheRouteOfTheEffort(t *testing.T) {
 	}{
 		{"low", "gemini-3.8-flash-low", "MODEL_PLACEHOLDER_M320", "1000"},
 		{"medium", "gemini-3.8-flash-medium", "MODEL_PLACEHOLDER_M319", "4000"},
-		{"high", "gemini-3.8-flash-high", "MODEL_PLACEHOLDER_M318", "<nil>"},
+		// A negative budget means the model decides for itself. It must travel as
+		// -1: dropped, the route thinks at the service's floor (measured 293-421
+		// thought tokens against 736-1005 for -1 on the same prompt).
+		{"high", "gemini-3.8-flash-high", "MODEL_PLACEHOLDER_M318", "-1"},
 		{"", "gemini-3.8-flash-medium", "MODEL_PLACEHOLDER_M319", "4000"},
 		{"bogus", "gemini-3.8-flash-medium", "MODEL_PLACEHOLDER_M319", "4000"},
 	}

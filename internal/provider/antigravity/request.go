@@ -417,7 +417,7 @@ func generationConfig(req provider.Request, def modelDef, route tier) map[string
 	if route.level != "" {
 		thinking["thinkingLevel"] = route.level
 	}
-	if route.budget > 0 {
+	if route.budget != 0 {
 		thinking["thinkingBudget"] = route.budget
 	}
 	if def.claude {
