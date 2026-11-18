@@ -209,7 +209,7 @@ in
         The expected format is `KEY=value`, which is what systemd reads:
 
         ```
-        FREE_AI_ROUTER_TOKEN=<your token>
+        PROVIDERMUX_TOKEN=<your token>
         ```
 
         The environment outranks the configuration file, so this value wins over

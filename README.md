@@ -146,7 +146,7 @@ services.providermux = {
 The file named by `tokenFile` must exist when the service starts and contain:
 
 ```
-FREE_AI_ROUTER_TOKEN=<your token>
+PROVIDERMUX_TOKEN=<your token>
 ```
 
 It is read through systemd's `EnvironmentFile` and outranks the `token` option,
@@ -472,7 +472,7 @@ Env variables work the same way and are often tidier:
 ```sh
 systemctl --user edit providermux
 # [Service]
-# Environment=FREE_AI_ROUTER_FAMILY=v4
+# Environment=PROVIDERMUX_FAMILY=v4
 ```
 
 ### 2. A second daemon on a spare port (nothing is touched at all)
@@ -613,7 +613,7 @@ curl http://127.0.0.1:8787/_control/keys
 In `mode = "server"` these need the token:
 
 ```sh
-curl -H "Authorization: Bearer $FREE_AI_ROUTER_TOKEN" http://host:8787/_control/status
+curl -H "Authorization: Bearer $PROVIDERMUX_TOKEN" http://host:8787/_control/status
 ```
 
 ## Client configuration
