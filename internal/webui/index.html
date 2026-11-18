@@ -607,15 +607,6 @@
 
         <div class="params-grid">
           <div class="param-item">
-            <label class="form-label">Model Fallback (Резервные модели)</label>
-            <select id="global-opt-fallback" class="form-input">
-              <option value="off">off (отключен)</option>
-              <option value="on">on (включен)</option>
-            </select>
-            <div class="form-hint">Переключение на другую свободную модель при сбое</div>
-          </div>
-
-          <div class="param-item">
             <label class="form-label">IP Family (Сетевой стек)</label>
             <select id="global-opt-family" class="form-input">
               <option value="auto">auto (автовыбор)</option>
@@ -623,6 +614,24 @@
               <option value="v6">v6 (только IPv6)</option>
             </select>
             <div class="form-hint">Протокол для исходящих запросов к API</div>
+          </div>
+
+          <div class="param-item">
+            <label class="form-label">Credential (что предъявляем провайдеру)</label>
+            <select id="global-opt-credential" class="form-input">
+              <option value="anonymous">anonymous (без ключа)</option>
+              <option value="account">account (ключ из пула)</option>
+            </select>
+            <div class="form-hint">Действует на провайдеров без собственного credential</div>
+          </div>
+
+          <div class="param-item">
+            <label class="form-label">Key Rotation (ротация ключей)</label>
+            <select id="global-opt-rotation" class="form-input">
+              <option value="on">on (брать следующий ключ)</option>
+              <option value="off">off (держать один)</option>
+            </select>
+            <div class="form-hint">Не действует при credential = anonymous</div>
           </div>
 
           <div class="param-item">
@@ -944,7 +953,8 @@
 
         // Populate global settings tab
         if (data.current) {
-          document.getElementById('global-opt-fallback').value = data.current.model_fallback || 'off';
+          document.getElementById('global-opt-credential').value = data.current.credential || 'anonymous';
+          document.getElementById('global-opt-rotation').value = data.current.key_rotation || 'on';
           document.getElementById('global-opt-family').value = data.current.family || 'auto';
           document.getElementById('global-opt-mode').value = data.current.mode || 'local';
 
@@ -964,13 +974,15 @@
 
     // Save Global Options
     document.getElementById('save-global-opts-btn').addEventListener('click', async () => {
-      const fallback = document.getElementById('global-opt-fallback').value;
+      const credential = document.getElementById('global-opt-credential').value;
+      const rotation = document.getElementById('global-opt-rotation').value;
       const family = document.getElementById('global-opt-family').value;
       const transport = document.getElementById('global-opt-transport').value;
       const mode = document.getElementById('global-opt-mode').value;
 
       try {
-        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'model_fallback', value: fallback }) });
+        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'credential', value: credential }) });
+        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'key_rotation', value: rotation }) });
         await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'family', value: family }) });
         await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'transport', value: transport }) });
         await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'mode', value: mode }) });
