@@ -1,1584 +1,1271 @@
-<!DOCTYPE html>
-<html lang="ru" data-theme="dark">
+<!doctype html>
+<html lang="ru" data-theme="auto">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>providermux control</title>
-  <!-- The panel has no icon of its own; an empty data URI keeps the browser
-       from asking for /favicon.ico and logging a 404 on every load. -->
-  <link rel="icon" href="data:,">
-  <style>
-    :root {
-      --md-sys-color-primary: #a8c7fa;
-      --md-sys-color-on-primary: #0842a0;
-      --md-sys-color-primary-container: #0842a0;
-      --md-sys-color-on-primary-container: #d3e3fd;
-      --md-sys-color-secondary: #7cacf8;
-      --md-sys-color-on-secondary: #003366;
-      --md-sys-color-secondary-container: #004a77;
-      --md-sys-color-on-secondary-container: #c2e7ff;
-      --md-sys-color-tertiary: #6dd58c;
-      --md-sys-color-on-tertiary: #0a3818;
-      --md-sys-color-tertiary-container: #0f5223;
-      --md-sys-color-on-tertiary-container: #c4eed0;
-      --md-sys-color-error: #f2b8b5;
-      --md-sys-color-on-error: #601410;
-      --md-sys-color-error-container: #8c1d18;
-      --md-sys-color-on-error-container: #f9dedc;
-      --md-sys-color-surface: #111318;
-      --md-sys-color-surface-dim: #111318;
-      --md-sys-color-surface-bright: #37393e;
-      --md-sys-color-surface-container-lowest: #0c0e13;
-      --md-sys-color-surface-container-low: #191c20;
-      --md-sys-color-surface-container: #1d2024;
-      --md-sys-color-surface-container-high: #282a2f;
-      --md-sys-color-surface-container-highest: #33353a;
-      --md-sys-color-on-surface: #e2e2e9;
-      --md-sys-color-on-surface-variant: #c4c6d0;
-      --md-sys-color-outline: #8e9099;
-      --md-sys-color-outline-variant: #44474e;
-      --md-sys-color-inverse-surface: #e2e2e9;
-      --md-sys-color-inverse-on-surface: #2f3036;
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#FBF8FD" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121318" media="(prefers-color-scheme: dark)">
+<title>providermux</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%234A5AC7'/%3E%3Cpath d='M5 8.5 12 4.5l7 4v7L12 19.5l-7-4z' fill='none' stroke='white' stroke-width='1.7' stroke-linejoin='round'/%3E%3Cpath d='M12 12 5 8.5M12 12l7-3.5M12 12v7.5' stroke='white' stroke-width='1.3'/%3E%3C/svg%3E">
+<style>
+/* ============ design tokens (M3 baseline roles + spring motion) ============ */
+:root {
+  --primary:#4A5AC7;            --on-primary:#FFFFFF;
+  --primary-container:#DEE0FF;  --on-primary-container:#00105C;
+  --secondary:#5B5D72;          --on-secondary:#FFFFFF;
+  --secondary-container:#DFE0F9;--on-secondary-container:#181A2C;
+  --tertiary:#00696D;           --on-tertiary:#FFFFFF;
+  --tertiary-container:#B4ECEE; --on-tertiary-container:#002021;
+  --error:#B3261E;              --on-error:#FFFFFF;
+  --error-container:#F9DEDC;    --on-error-container:#410E0B;
+  --surface:#FBF8FD;
+  --surface-lowest:#FFFFFF;
+  --surface-low:#F5F2FA;
+  --surface-container:#EFEDF4;
+  --surface-high:#E9E7EF;
+  --surface-highest:#E3E1E9;
+  --on-surface:#1B1B21;
+  --on-surface-variant:#46464F;
+  --outline:#767680;
+  --outline-variant:#C7C5D0;
+  --scrim:rgba(20,20,26,.42);
 
-      /* M3 Expressive Motion tokens */
-      --md-sys-motion-spring-fast-spatial: 350ms cubic-bezier(0.27, 1.06, 0.18, 1.00);
-      --md-sys-motion-spring-default-spatial: 500ms cubic-bezier(0.27, 1.06, 0.18, 1.00);
-      --md-sys-motion-spring-slow-spatial: 700ms cubic-bezier(0.27, 1.06, 0.18, 1.00);
-      --md-sys-motion-spring-fast-effects: 150ms cubic-bezier(0.31, 0.94, 0.34, 1.00);
-      --md-sys-motion-spring-default-effects: 200ms cubic-bezier(0.34, 0.80, 0.34, 1.00);
+  --r-xs:4px; --r-sm:8px; --r-md:12px; --r-lg:16px; --r-xl:20px; --r-full:999px;
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
 
-      /* Shape tokens */
-      --md-sys-shape-corner-none: 0px;
-      --md-sys-shape-corner-extra-small: 4px;
-      --md-sys-shape-corner-small: 8px;
-      --md-sys-shape-corner-medium: 12px;
-      --md-sys-shape-corner-large: 16px;
-      --md-sys-shape-corner-extra-large: 28px;
-      --md-sys-shape-corner-full: 9999px;
+  --spring:cubic-bezier(.34,1.32,.64,1);  /* spatial: slight overshoot */
+  --ease:cubic-bezier(.2,0,0,1);          /* effects: critically damped */
+  --dur-spatial:420ms; --dur-effects:200ms;
 
-      --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    }
-
-    [data-theme="light"] {
-      --md-sys-color-primary: #0b57d0;
-      --md-sys-color-on-primary: #ffffff;
-      --md-sys-color-primary-container: #d3e3fd;
-      --md-sys-color-on-primary-container: #041e49;
-      --md-sys-color-secondary: #00639b;
-      --md-sys-color-on-secondary: #ffffff;
-      --md-sys-color-secondary-container: #c2e7ff;
-      --md-sys-color-on-secondary-container: #001d32;
-      --md-sys-color-tertiary: #146c2e;
-      --md-sys-color-on-tertiary: #ffffff;
-      --md-sys-color-tertiary-container: #c4eed0;
-      --md-sys-color-on-tertiary-container: #002107;
-      --md-sys-color-error: #ba1a1a;
-      --md-sys-color-on-error: #ffffff;
-      --md-sys-color-error-container: #ffdad6;
-      --md-sys-color-on-error-container: #410002;
-      --md-sys-color-surface: #f8f9fa;
-      --md-sys-color-surface-dim: #ded8e1;
-      --md-sys-color-surface-bright: #fef7ff;
-      --md-sys-color-surface-container-lowest: #ffffff;
-      --md-sys-color-surface-container-low: #f7f2fa;
-      --md-sys-color-surface-container: #f3edf7;
-      --md-sys-color-surface-container-high: #ece6f0;
-      --md-sys-color-surface-container-highest: #e6e0e9;
-      --md-sys-color-on-surface: #1d1b20;
-      --md-sys-color-on-surface-variant: #49454f;
-      --md-sys-color-outline: #79747e;
-      --md-sys-color-outline-variant: #cac4d0;
-      --md-sys-color-inverse-surface: #313033;
-      --md-sys-color-inverse-on-surface: #f4eff4;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: var(--font-family);
-      background-color: var(--md-sys-color-surface);
-      color: var(--md-sys-color-on-surface);
-      line-height: 1.5;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      transition: background-color var(--md-sys-motion-spring-default-effects), color var(--md-sys-motion-spring-default-effects);
-    }
-
-    /* Header */
-    header.app-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 24px;
-      background-color: var(--md-sys-color-surface-container);
-      border-bottom: 1px solid var(--md-sys-color-outline-variant);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .brand-section { display: flex; align-items: center; gap: 12px; }
-    .brand-logo {
-      width: 36px;
-      height: 36px;
-      border-radius: var(--md-sys-shape-corner-medium);
-      background: linear-gradient(135deg, var(--md-sys-color-primary), var(--md-sys-color-tertiary));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--md-sys-color-on-primary);
-      font-weight: 700;
-      font-size: 18px;
-    }
-    .brand-title { font-size: 1.25rem; font-weight: 600; color: var(--md-sys-color-on-surface); }
-    .brand-badge {
-      font-size: 0.75rem;
-      padding: 2px 8px;
-      border-radius: var(--md-sys-shape-corner-full);
-      background-color: var(--md-sys-color-primary-container);
-      color: var(--md-sys-color-on-primary-container);
-      font-weight: 600;
-    }
-    .app-actions { display: flex; align-items: center; gap: 8px; }
-
-    /* Buttons */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 8px 18px;
-      border-radius: var(--md-sys-shape-corner-full);
-      font-size: 0.875rem;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      outline: none;
-      transition: transform var(--md-sys-motion-spring-fast-spatial), background-color var(--md-sys-motion-spring-fast-effects), box-shadow var(--md-sys-motion-spring-fast-effects);
-    }
-    .btn:active { transform: scale(0.96); }
-    .btn-primary { background-color: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
-    .btn-primary:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
-    .btn-tonal { background-color: var(--md-sys-color-secondary-container); color: var(--md-sys-color-on-secondary-container); }
-    .btn-tonal:hover { background-color: var(--md-sys-color-secondary); color: var(--md-sys-color-on-secondary); }
-    .btn-outlined { background: transparent; border: 1px solid var(--md-sys-color-outline); color: var(--md-sys-color-on-surface); }
-    .btn-outlined:hover { background-color: var(--md-sys-color-surface-container-high); }
-    .btn-danger { background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
-    .btn-danger:hover { background-color: var(--md-sys-color-error); color: var(--md-sys-color-on-error); }
-    .btn-icon {
-      padding: 8px;
-      border-radius: var(--md-sys-shape-corner-full);
-      background: transparent;
-      color: var(--md-sys-color-on-surface-variant);
-      border: none;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      transition: background-color var(--md-sys-motion-spring-fast-effects), transform var(--md-sys-motion-spring-fast-spatial);
-    }
-    .btn-icon:hover { background-color: var(--md-sys-color-surface-container-highest); color: var(--md-sys-color-on-surface); }
-    .btn-icon:active { transform: scale(0.92); }
-
-    /* Container & Tabs */
-    .main-container { max-width: 1440px; width: 100%; margin: 0 auto; padding: 24px 16px; flex: 1; }
-    /* The rail is the panel's navigation: sections on top, providers below.
-       Keeping providers in the same column as the sections means the selected
-       provider is always one click away, from any view. */
-    .shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: 24px; align-items: start; }
-    .rail {
-      position: sticky;
-      top: 84px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      background-color: var(--md-sys-color-surface-container-low);
-      padding: 8px;
-      border-radius: var(--md-sys-shape-corner-large);
-      border: 1px solid var(--md-sys-color-outline-variant);
-    }
-    .rail-label {
-      padding: 10px 12px 4px;
-      font-size: 0.72rem;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--md-sys-color-on-surface-variant);
-    }
-    .rail-divider { height: 1px; background-color: var(--md-sys-color-outline-variant); margin: 8px 4px; }
-    .rail .tab-btn { width: 100%; justify-content: flex-start; }
-    .rail .pill-nav { flex-direction: column; border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-    .content { min-width: 0; }
-    @media (max-width: 900px) {
-      .shell { grid-template-columns: 1fr; }
-      .rail { position: static; flex-direction: row; flex-wrap: wrap; }
-      .rail .pill-nav { flex-direction: row; }
-      .rail-label, .rail-divider { display: none; }
-    }
-    .tabs-bar {
-      display: flex;
-      gap: 8px;
-      background-color: var(--md-sys-color-surface-container-low);
-      padding: 6px;
-      border-radius: var(--md-sys-shape-corner-large);
-      margin-bottom: 24px;
-      overflow-x: auto;
-      border: 1px solid var(--md-sys-color-outline-variant);
-    }
-    .tab-btn {
-      padding: 10px 20px;
-      border-radius: var(--md-sys-shape-corner-medium);
-      border: none;
-      background: transparent;
-      color: var(--md-sys-color-on-surface-variant);
-      font-size: 0.95rem;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      white-space: nowrap;
-      transition: background-color var(--md-sys-motion-spring-fast-effects), color var(--md-sys-motion-spring-fast-effects);
-    }
-    .tab-btn:hover { background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); }
-    .tab-btn.active {
-      background-color: var(--md-sys-color-primary-container);
-      color: var(--md-sys-color-on-primary-container);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-    }
-    .tab-pane { display: none; animation: fadeIn var(--md-sys-motion-spring-default-effects); }
-    .tab-pane.active { display: block; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-
-    /* Cards */
-    .card {
-      background-color: var(--md-sys-color-surface-container);
-      border-radius: var(--md-sys-shape-corner-large);
-      border: 1px solid var(--md-sys-color-outline-variant);
-      padding: 20px;
-      margin-bottom: 20px;
-    }
-    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
-    .card-title { font-size: 1.15rem; font-weight: 600; color: var(--md-sys-color-on-surface); display: flex; align-items: center; gap: 10px; }
-
-    /* Sub-nav pills (for provider tabs) */
-    .pill-nav {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 20px;
-      border-bottom: 1px solid var(--md-sys-color-outline-variant);
-      padding-bottom: 10px;
-    }
-    .pill-btn {
-      padding: 8px 18px;
-      border-radius: var(--md-sys-shape-corner-full);
-      border: 1px solid var(--md-sys-color-outline-variant);
-      background: var(--md-sys-color-surface-container-low);
-      color: var(--md-sys-color-on-surface-variant);
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: all var(--md-sys-motion-spring-fast-effects);
-    }
-    .pill-btn:hover { background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface); }
-    .pill-btn.active {
-      background-color: var(--md-sys-color-primary);
-      color: var(--md-sys-color-on-primary);
-      border-color: var(--md-sys-color-primary);
-    }
-
-    /* Grid & Metrics */
-    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
-    .metric-card {
-      background-color: var(--md-sys-color-surface-container-high);
-      border-radius: var(--md-sys-shape-corner-medium);
-      padding: 16px;
-      border: 1px solid var(--md-sys-color-outline-variant);
-    }
-    .metric-label { font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; font-weight: 600; }
-    .metric-value { font-size: 1.75rem; font-weight: 700; color: var(--md-sys-color-primary); }
-    .metric-sub { font-size: 0.8rem; color: var(--md-sys-color-on-surface-variant); margin-top: 4px; }
-
-    /* Parameters Grid */
-    .params-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 16px;
-      background-color: var(--md-sys-color-surface-container-low);
-      padding: 18px;
-      border-radius: var(--md-sys-shape-corner-medium);
-      margin-bottom: 20px;
-      border: 1px solid var(--md-sys-color-outline-variant);
-    }
-    .param-item { display: flex; flex-direction: column; gap: 6px; }
-
-    /* Badges & Progress */
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: var(--md-sys-shape-corner-full);
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-    .badge-success { background-color: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
-    .badge-warning { background-color: #ffe082; color: #3e2723; }
-    .badge-error { background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
-
-    .progress-container {
-      width: 100%;
-      height: 10px;
-      background-color: var(--md-sys-color-surface-container-highest);
-      border-radius: var(--md-sys-shape-corner-full);
-      overflow: hidden;
-      margin: 8px 0;
-    }
-    .progress-bar {
-      height: 100%;
-      border-radius: var(--md-sys-shape-corner-full);
-      transition: width var(--md-sys-motion-spring-default-spatial), background-color var(--md-sys-motion-spring-fast-effects);
-    }
-    .progress-bar.high { background-color: var(--md-sys-color-tertiary); }
-    .progress-bar.medium { background-color: #f9ab00; }
-    .progress-bar.low { background-color: var(--md-sys-color-error); }
-
-    /* Tables */
-    .table-container { overflow-x: auto; border-radius: var(--md-sys-shape-corner-medium); border: 1px solid var(--md-sys-color-outline-variant); }
-    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
-    th { background-color: var(--md-sys-color-surface-container-high); color: var(--md-sys-color-on-surface-variant); padding: 12px 16px; font-weight: 600; border-bottom: 1px solid var(--md-sys-color-outline-variant); }
-    td { padding: 12px 16px; border-bottom: 1px solid var(--md-sys-color-outline-variant); color: var(--md-sys-color-on-surface); }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background-color: var(--md-sys-color-surface-container-high); }
-
-    /* Inputs */
-    .form-group { margin-bottom: 16px; }
-    .form-label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--md-sys-color-on-surface-variant); margin-bottom: 6px; }
-    .form-input {
-      width: 100%;
-      padding: 10px 14px;
-      border-radius: var(--md-sys-shape-corner-small);
-      border: 1px solid var(--md-sys-color-outline);
-      background-color: var(--md-sys-color-surface-container);
-      color: var(--md-sys-color-on-surface);
-      font-family: inherit;
-      font-size: 0.9rem;
-      outline: none;
-      transition: border-color var(--md-sys-motion-spring-fast-effects);
-    }
-    .form-input:focus { border-color: var(--md-sys-color-primary); box-shadow: 0 0 0 2px var(--md-sys-color-primary-container); }
-    .form-hint { font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); margin-top: 4px; }
-
-    /* Modals */
-    .modal-backdrop {
-      position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.6);
-      display: flex; align-items: center; justify-content: center; z-index: 200;
-      opacity: 0; pointer-events: none; transition: opacity var(--md-sys-motion-spring-fast-effects); padding: 16px;
-    }
-    .modal-backdrop.open { opacity: 1; pointer-events: auto; }
-    .modal-sheet {
-      background-color: var(--md-sys-color-surface-container-high);
-      border-radius: var(--md-sys-shape-corner-extra-large);
-      border: 1px solid var(--md-sys-color-outline-variant);
-      max-width: 540px; width: 100%; padding: 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      transform: scale(0.92); transition: transform var(--md-sys-motion-spring-default-spatial);
-    }
-    .modal-backdrop.open .modal-sheet { transform: scale(1); }
-    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-    .modal-title { font-size: 1.25rem; font-weight: 600; }
-
-    /* Toasts */
-    .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
-    .toast {
-      padding: 12px 20px; border-radius: var(--md-sys-shape-corner-medium);
-      font-size: 0.875rem; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      animation: toastIn var(--md-sys-motion-spring-fast-spatial);
-    }
-    .toast-success { background-color: var(--md-sys-color-tertiary-container); color: var(--md-sys-color-on-tertiary-container); }
-    .toast-error { background-color: var(--md-sys-color-error-container); color: var(--md-sys-color-on-error-container); }
-    @keyframes toastIn { from { transform: translateY(20px) scale(0.9); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
-
-    .empty-state { text-align: center; padding: 32px 16px; color: var(--md-sys-color-on-surface-variant); }
-    .spin { animation: spin 1s linear infinite; }
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-  /* Provider switcher: one card per provider instead of a row of pills, so the
-     pool size and the credential mode are visible before the provider is picked. */
-  .provider-bar {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary:#BAC3FF;            --on-primary:#1B2779;
+    --primary-container:#333E90;  --on-primary-container:#DEE0FF;
+    --secondary:#C3C4DD;          --on-secondary:#2C2E42;
+    --secondary-container:#424459;--on-secondary-container:#DFE0F9;
+    --tertiary:#4FD8DC;           --on-tertiary:#00363A;
+    --tertiary-container:#004F53; --on-tertiary-container:#B4ECEE;
+    --error:#FFB4AB;              --on-error:#690005;
+    --error-container:#93000A;    --on-error-container:#FFDAD6;
+    --surface:#121318;
+    --surface-lowest:#0D0E12;
+    --surface-low:#1A1B21;
+    --surface-container:#1E1F25;
+    --surface-high:#282A2F;
+    --surface-highest:#33343A;
+    --on-surface:#E4E1E9;
+    --on-surface-variant:#C7C5D0;
+    --outline:#90909A;
+    --outline-variant:#46464F;
+    --scrim:rgba(0,0,0,.6);
   }
-  .provider-card {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    padding: 14px 16px;
-    border-radius: var(--md-sys-shape-corner-medium);
-    border: 1px solid var(--md-sys-color-outline-variant);
-    background: var(--md-sys-color-surface-container-low);
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition: border-color .15s ease, background .15s ease;
-  }
-  .provider-card:hover { border-color: var(--md-sys-color-primary); }
-  .provider-card.active {
-    border-color: var(--md-sys-color-primary);
-    background: var(--md-sys-color-primary-container);
-  }
-  .provider-card-name {
-    font-size: 1rem;
-    font-weight: 700;
-    letter-spacing: .2px;
-  }
-  .provider-card-meta {
-    font-size: .8rem;
-    opacity: .7;
-  }
+}
+html[data-theme="light"] { color-scheme: light; }
+html[data-theme="dark"]  { color-scheme: dark; }
+html[data-theme="light"] body { --primary:#4A5AC7; --on-primary:#fff; --primary-container:#DEE0FF; --on-primary-container:#00105C; --secondary:#5B5D72; --secondary-container:#DFE0F9; --on-secondary-container:#181A2C; --tertiary:#00696D; --tertiary-container:#B4ECEE; --on-tertiary-container:#002021; --error:#B3261E; --error-container:#F9DEDC; --on-error-container:#410E0B; --surface:#FBF8FD; --surface-lowest:#fff; --surface-low:#F5F2FA; --surface-container:#EFEDF4; --surface-high:#E9E7EF; --surface-highest:#E3E1E9; --on-surface:#1B1B21; --on-surface-variant:#46464F; --outline:#767680; --outline-variant:#C7C5D0; }
+html[data-theme="dark"] body { --primary:#BAC3FF; --on-primary:#1B2779; --primary-container:#333E90; --on-primary-container:#DEE0FF; --secondary:#C3C4DD; --secondary-container:#424459; --on-secondary-container:#DFE0F9; --tertiary:#4FD8DC; --tertiary-container:#004F53; --on-tertiary-container:#B4ECEE; --error:#FFB4AB; --error-container:#93000A; --on-error-container:#FFDAD6; --surface:#121318; --surface-lowest:#0D0E12; --surface-low:#1A1B21; --surface-container:#1E1F25; --surface-high:#282A2F; --surface-highest:#33343A; --on-surface:#E4E1E9; --on-surface-variant:#C7C5D0; --outline:#90909A; --outline-variant:#46464F; }
 
-  /* Account picker: a card per account, because accounts differ by mailbox and
-     quota, which a <select> cannot show. */
-  .account-picker {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .account-tile {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: var(--md-sys-shape-corner-small);
-    border: 1px solid var(--md-sys-color-outline-variant);
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-  .account-tile:hover { border-color: var(--md-sys-color-primary); }
-  .account-tile.active {
-    border-color: var(--md-sys-color-primary);
-    background: var(--md-sys-color-primary-container);
-  }
-  .account-tile-email { font-size: .9rem; font-weight: 600; }
-  .account-tile-meta { font-size: .78rem; opacity: .7; }
-  .account-tile-id { font-family: monospace; font-size: .72rem; opacity: .55; }
+/* ============ reset ============ */
+*,*::before,*::after { box-sizing:border-box; }
+html,body { margin:0; padding:0; }
+body {
+  background:var(--surface); color:var(--on-surface);
+  font-family:var(--font); font-size:16px; line-height:24px;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  min-height:100dvh;
+}
+h1,h2,h3,h4,p { margin:0; }
+button,input,select,textarea { font:inherit; color:inherit; }
+button { cursor:pointer; background:none; border:0; }
+svg { display:block; }
+:focus-visible { outline:3px solid var(--primary); outline-offset:2px; border-radius:var(--r-xs); }
+::selection { background:var(--primary-container); color:var(--on-primary-container); }
 
-  </style>
+.skip {
+  position:fixed; left:12px; top:-60px; z-index:100;
+  background:var(--primary); color:var(--on-primary);
+  padding:10px 16px; border-radius:var(--r-full); text-decoration:none;
+  transition:top var(--dur-effects) var(--ease);
+}
+.skip:focus { top:12px; }
+
+/* ============ shell ============ */
+.appbar {
+  position:sticky; top:0; z-index:30;
+  display:flex; align-items:center; gap:var(--s3);
+  height:64px; padding:0 var(--s5);
+  background:color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+  border-bottom:1px solid var(--outline-variant);
+}
+.brand { display:flex; align-items:center; gap:10px; min-width:0; }
+.brand-mark {
+  width:34px; height:34px; border-radius:11px; flex:none;
+  display:grid; place-items:center; color:var(--on-primary-container);
+  background:linear-gradient(135deg, var(--primary-container), var(--tertiary-container));
+}
+.brand-name { font-size:16px; font-weight:600; letter-spacing:.01em; }
+.brand-sub { font-size:11px; color:var(--on-surface-variant); letter-spacing:.06em; text-transform:uppercase; }
+.appbar-spacer { flex:1; }
+
+.shell { display:flex; min-height:calc(100dvh - 64px); }
+.rail {
+  width:96px; flex:none; padding:var(--s4) 8px var(--s5);
+  display:flex; flex-direction:column; gap:6px; align-items:center;
+  border-right:1px solid var(--outline-variant); background:var(--surface-low);
+  position:sticky; top:64px; height:calc(100dvh - 64px); overflow-y:auto;
+}
+.rail-item, .bottom-item {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:4px; width:100%; padding:10px 4px; border-radius:var(--r-lg);
+  color:var(--on-surface-variant); font-size:11px; line-height:14px; text-align:center;
+  transition:background var(--dur-effects) var(--ease), color var(--dur-effects) var(--ease);
+}
+.rail-item:hover, .bottom-item:hover { background:var(--surface-container); color:var(--on-surface); }
+.rail-item[aria-current="page"], .bottom-item[aria-current="page"] {
+  background:var(--secondary-container); color:var(--on-secondary-container);
+}
+.rail-item[aria-current="page"] .nav-icon, .bottom-item[aria-current="page"] .nav-icon { transform:scale(1.06); }
+.nav-icon { width:24px; height:24px; transition:transform var(--dur-spatial) var(--spring); }
+
+main {
+  flex:1; min-width:0; max-width:1320px; padding:var(--s5) var(--s5) var(--s7);
+  margin:0 auto; width:100%;
+}
+.bottom-nav { display:none; }
+
+/* ============ page furniture ============ */
+.page-head { display:flex; align-items:flex-end; gap:var(--s4); flex-wrap:wrap; margin-bottom:var(--s5); }
+.page-head h1 { font-size:28px; line-height:36px; font-weight:600; letter-spacing:-.01em; }
+.page-head .lead { color:var(--on-surface-variant); font-size:14px; line-height:20px; max-width:60ch; margin-top:2px; }
+.page-head .spacer { flex:1; }
+
+.grid { display:grid; gap:var(--s4); grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr)); }
+.grid.two { grid-template-columns:repeat(auto-fit,minmax(min(430px,100%),1fr)); }
+.stack { display:flex; flex-direction:column; gap:var(--s4); }
+.row { display:flex; align-items:center; gap:var(--s3); flex-wrap:wrap; }
+.muted { color:var(--on-surface-variant); }
+.small { font-size:13px; line-height:18px; }
+.mono { font-family:var(--mono); font-size:13px; letter-spacing:-.01em; }
+.mt3 { margin-top:var(--s3); } .mt4 { margin-top:var(--s4); }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+.card {
+  background:var(--surface-container); border-radius:var(--r-lg);
+  padding:var(--s4); border:1px solid transparent;
+  transition:background var(--dur-effects) var(--ease);
+}
+.card.outlined { background:var(--surface-low); border-color:var(--outline-variant); }
+.card-head { display:flex; align-items:center; gap:var(--s2); margin-bottom:var(--s3); }
+.card-title { font-size:16px; font-weight:600; line-height:24px; }
+.card-sub { font-size:12px; line-height:16px; color:var(--on-surface-variant); }
+
+/* ============ pills, chips, badges ============ */
+.pill {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 12px; border-radius:var(--r-full);
+  background:var(--surface-high); color:var(--on-surface-variant);
+  font-size:12px; line-height:16px; font-weight:500; white-space:nowrap;
+}
+.pill .dot { width:8px; height:8px; border-radius:var(--r-full); background:currentColor; flex:none; }
+.pill.ok { background:var(--tertiary-container); color:var(--on-tertiary-container); }
+.pill.err { background:var(--error-container); color:var(--on-error-container); }
+.pill.accent { background:var(--primary-container); color:var(--on-primary-container); }
+.pill.warn { background:var(--secondary-container); color:var(--on-secondary-container); }
+.chip {
+  display:inline-flex; align-items:center; gap:6px; max-width:100%;
+  padding:6px 12px; border-radius:var(--r-sm);
+  background:var(--surface-high); font-size:12px; line-height:16px;
+  border:1px solid var(--outline-variant);
+}
+.chip button { color:var(--on-surface-variant); display:grid; place-items:center; border-radius:var(--r-full); }
+.chip button:hover { color:var(--error); }
+.badge {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:22px; height:22px; padding:0 7px; border-radius:var(--r-full);
+  background:var(--primary-container); color:var(--on-primary-container);
+  font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;
+}
+.kv { display:flex; align-items:baseline; justify-content:space-between; gap:var(--s3); padding:6px 0; border-bottom:1px solid var(--outline-variant); }
+.kv:last-child { border-bottom:0; }
+.kv dt { color:var(--on-surface-variant); font-size:13px; }
+.kv dd { margin:0; font-size:13px; font-weight:500; text-align:right; }
+
+/* ============ KPI ============ */
+.kpi { display:flex; flex-direction:column; gap:2px; }
+.kpi-label { font-size:12px; letter-spacing:.04em; text-transform:uppercase; color:var(--on-surface-variant); }
+.kpi-value { font-size:34px; line-height:40px; font-weight:600; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+.kpi-value.err { color:var(--error); }
+.kpi-note { font-size:12px; color:var(--on-surface-variant); }
+
+/* ============ buttons ============ */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  height:40px; padding:0 20px; border-radius:var(--r-full);
+  font-size:14px; font-weight:500; letter-spacing:.01em; white-space:nowrap;
+  transition:transform var(--dur-spatial) var(--spring), background var(--dur-effects) var(--ease), box-shadow var(--dur-effects) var(--ease);
+}
+.btn .nav-icon { width:18px; height:18px; }
+.btn:active { transform:scale(.97); }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
+.btn-filled { background:var(--primary); color:var(--on-primary); }
+.btn-filled:hover:not(:disabled) { box-shadow:0 1px 3px rgba(0,0,0,.22); }
+.btn-tonal { background:var(--secondary-container); color:var(--on-secondary-container); }
+.btn-tonal:hover:not(:disabled) { background:color-mix(in srgb, var(--secondary-container) 82%, var(--on-secondary-container)); }
+.btn-outlined { border:1px solid var(--outline); color:var(--primary); }
+.btn-outlined:hover:not(:disabled) { background:color-mix(in srgb, var(--primary) 8%, transparent); }
+.btn-text { color:var(--primary); padding:0 12px; }
+.btn-text:hover:not(:disabled) { background:color-mix(in srgb, var(--primary) 10%, transparent); }
+.btn-danger { background:var(--error-container); color:var(--on-error-container); }
+.btn-icon { width:40px; height:40px; padding:0; border-radius:var(--r-full); color:var(--on-surface-variant); }
+.btn-icon:hover { background:var(--surface-high); color:var(--on-surface); }
+.btn-sm { height:32px; padding:0 14px; font-size:13px; }
+
+/* ============ form controls ============ */
+.field { display:flex; flex-direction:column; gap:6px; }
+.label { font-size:12px; line-height:16px; letter-spacing:.03em; text-transform:uppercase; color:var(--on-surface-variant); font-weight:500; }
+.input, .select, .textarea {
+  height:44px; padding:0 14px; border-radius:var(--r-sm);
+  background:var(--surface-lowest); color:var(--on-surface);
+  border:1px solid var(--outline-variant);
+  transition:border-color var(--dur-effects) var(--ease), background var(--dur-effects) var(--ease);
+  width:100%;
+}
+.textarea { height:auto; min-height:76px; padding:10px 14px; resize:vertical; }
+.input:hover, .select:hover, .textarea:hover { border-color:var(--outline); }
+.input:focus, .select:focus, .textarea:focus { border-color:var(--primary); outline:2px solid color-mix(in srgb, var(--primary) 34%, transparent); outline-offset:0; }
+.hint { font-size:12px; line-height:16px; color:var(--on-surface-variant); }
+
+.segmented {
+  display:inline-flex; padding:4px; gap:2px; border-radius:var(--r-full);
+  background:var(--surface-high);
+}
+.segmented button {
+  padding:7px 14px; border-radius:var(--r-full); font-size:13px; font-weight:500;
+  color:var(--on-surface-variant); white-space:nowrap;
+  transition:background var(--dur-effects) var(--ease), color var(--dur-effects) var(--ease), transform var(--dur-spatial) var(--spring);
+}
+.segmented button:hover:not(:disabled) { color:var(--on-surface); }
+.segmented button[aria-checked="true"] {
+  background:var(--surface-lowest); color:var(--primary);
+  box-shadow:0 1px 2px rgba(0,0,0,.14);
+}
+.segmented button:disabled { opacity:.45; cursor:not-allowed; }
+
+.switch {
+  position:relative; width:52px; height:32px; flex:none; border-radius:var(--r-full);
+  background:var(--surface-highest); border:2px solid var(--outline);
+  transition:background var(--dur-effects) var(--ease), border-color var(--dur-effects) var(--ease);
+}
+.switch::after {
+  content:""; position:absolute; top:50%; left:6px; width:16px; height:16px; border-radius:var(--r-full);
+  background:var(--outline); transform:translateY(-50%);
+  transition:left var(--dur-spatial) var(--spring), width var(--dur-spatial) var(--spring), background var(--dur-effects) var(--ease);
+}
+.switch[aria-checked="true"] { background:var(--primary); border-color:var(--primary); }
+.switch[aria-checked="true"]::after { left:26px; width:20px; height:20px; background:var(--on-primary); }
+.switch:disabled { opacity:.45; cursor:not-allowed; }
+
+/* ============ tables ============ */
+.table-wrap { overflow-x:auto; border-radius:var(--r-md); }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th, td { text-align:left; padding:11px 12px; }
+thead th {
+  font-size:11px; letter-spacing:.06em; text-transform:uppercase; font-weight:600;
+  color:var(--on-surface-variant); border-bottom:1px solid var(--outline-variant);
+  position:sticky; top:0; background:var(--surface-container); z-index:1;
+}
+tbody tr { border-bottom:1px solid var(--outline-variant); }
+tbody tr:last-child { border-bottom:0; }
+tbody tr:hover { background:color-mix(in srgb, var(--surface-high) 70%, transparent); }
+td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+
+/* ============ bars ============ */
+.bar-track { height:8px; border-radius:var(--r-full); background:var(--surface-highest); overflow:hidden; }
+.bar-fill { height:100%; border-radius:var(--r-full); background:var(--primary); transition:width var(--dur-spatial) var(--spring); }
+.bar-fill.ok { background:var(--tertiary); }
+.bar-fill.warn { background:var(--secondary); }
+.bar-fill.err { background:var(--error); }
+
+.chart { display:flex; align-items:flex-end; gap:10px; height:112px; padding-top:6px; }
+.chart-col { flex:1; display:flex; flex-direction:column; justify-content:flex-end; gap:6px; align-items:center; min-width:0; }
+.chart-count { font-size:11px; font-variant-numeric:tabular-nums; color:var(--on-surface-variant); white-space:nowrap; }
+.chart-bar { width:100%; max-width:38px; border-radius:var(--r-xs) var(--r-xs) 2px 2px; background:var(--primary); opacity:.85; transition:height var(--dur-spatial) var(--spring); }
+.chart-bar:hover { opacity:1; }
+.chart-day { font-size:11px; color:var(--on-surface-variant); white-space:nowrap; }
+
+/* ============ states ============ */
+.empty { display:flex; flex-direction:column; align-items:center; gap:8px; padding:var(--s6) var(--s4); text-align:center; color:var(--on-surface-variant); }
+.empty svg { width:32px; height:32px; opacity:.6; }
+.notice { display:flex; gap:10px; padding:12px 14px; border-radius:var(--r-md); background:var(--secondary-container); color:var(--on-secondary-container); font-size:13px; line-height:19px; }
+.notice.danger { background:var(--error-container); color:var(--on-error-container); }
+.notice svg { width:18px; height:18px; flex:none; margin-top:1px; }
+
+.skeleton { background:linear-gradient(90deg, var(--surface-container), var(--surface-high), var(--surface-container)); background-size:200% 100%; animation:shimmer 1.4s linear infinite; border-radius:var(--r-sm); height:16px; }
+@keyframes shimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
+
+/* ============ snackbar + dialog ============ */
+.snackbar {
+  position:fixed; left:50%; bottom:24px; transform:translate(-50%, 24px);
+  max-width:min(560px, calc(100vw - 32px));
+  display:flex; align-items:flex-start; gap:10px;
+  padding:14px 18px; border-radius:var(--r-md);
+  background:var(--surface-highest); color:var(--on-surface);
+  box-shadow:0 4px 12px rgba(0,0,0,.24);
+  font-size:14px; line-height:20px;
+  opacity:0; pointer-events:none; z-index:60;
+  transition:opacity var(--dur-effects) var(--ease), transform var(--dur-spatial) var(--spring);
+}
+.snackbar.show { opacity:1; transform:translate(-50%,0); pointer-events:auto; }
+.snackbar.err { background:var(--error-container); color:var(--on-error-container); }
+.snackbar svg { width:20px; height:20px; flex:none; margin-top:1px; }
+
+dialog {
+  border:0; padding:0; border-radius:var(--r-xl); background:var(--surface-container);
+  color:var(--on-surface); max-width:min(520px, calc(100vw - 32px)); width:100%;
+  box-shadow:0 12px 32px rgba(0,0,0,.34);
+}
+dialog::backdrop { background:var(--scrim); backdrop-filter:blur(2px); }
+.dialog-body { padding:var(--s5); display:flex; flex-direction:column; gap:var(--s4); }
+.dialog-title { font-size:22px; line-height:28px; font-weight:600; }
+.dialog-actions { display:flex; justify-content:flex-end; gap:8px; }
+
+/* ============ responsive ============ */
+@media (max-width: 900px) {
+  .rail { display:none; }
+  main { padding:var(--s4) var(--s4) 104px; }
+  .appbar { padding:0 var(--s4); }
+  .bottom-nav {
+    display:flex; position:fixed; bottom:0; left:0; right:0; z-index:40;
+    background:color-mix(in srgb, var(--surface-container) 92%, transparent);
+    backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px);
+    border-top:1px solid var(--outline-variant);
+    padding:6px 8px calc(6px + env(safe-area-inset-bottom)); gap:2px;
+  }
+  .bottom-item { padding:8px 2px; }
+  .page-head h1 { font-size:24px; line-height:30px; }
+  .hide-sm { display:none; }
+  .snackbar { bottom:88px; }
+}
+@media (max-width: 560px) {
+  .grid { grid-template-columns:1fr; }
+  .kpi-value { font-size:28px; line-height:34px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,*::before,*::after { animation-duration:.001ms !important; transition-duration:.001ms !important; }
+}
+</style>
 </head>
 <body>
+<a class="skip" href="#main">К содержимому</a>
 
-  <!-- Top App Bar -->
-  <header class="app-bar">
-    <div class="brand-section">
-      <div class="brand-logo">P</div>
-      <div>
-        <span class="brand-title">providermux</span>
-        <span id="daemon-mode" class="brand-badge">local</span>
-      </div>
+<svg hidden aria-hidden="true" focusable="false">
+  <symbol id="i-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/></symbol>
+  <symbol id="i-overview" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></symbol>
+  <symbol id="i-providers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></symbol>
+  <symbol id="i-models" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8.5V6a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 6v9a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/><circle cx="18" cy="18" r="3"/></symbol>
+  <symbol id="i-quota" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 17a9 9 0 1 1 17 0"/><path d="m12 13 4-4"/><circle cx="12" cy="17" r="1.6"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2.2"/><circle cx="15" cy="12" r="2.2"/><circle cx="8" cy="18" r="2.2"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.3-8.3M16 7l2.5 2.5M13.5 9.5 16 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 21 20H3z"/><path d="M12 9v5M12 17h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-8.5 8.5"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18a8 8 0 1 1 16 0"/><path d="m12 14 4-4"/></symbol>
+</svg>
+
+<header class="appbar">
+  <div class="brand">
+    <span class="brand-mark"><svg class="nav-icon" aria-hidden="true"><use href="#i-logo"/></svg></span>
+    <span>
+      <span class="brand-name">providermux</span>
+      <span class="brand-sub" id="brand-sub">панель шлюза</span>
+    </span>
+  </div>
+  <div class="appbar-spacer"></div>
+  <span class="pill" id="health-pill" aria-live="polite"><span class="dot"></span><span id="health-text">проверка…</span></span>
+  <button class="btn btn-icon" id="btn-refresh" data-act="refresh" title="Обновить" aria-label="Обновить данные">
+    <svg class="nav-icon"><use href="#i-refresh"/></svg>
+  </button>
+  <button class="btn btn-icon" data-act="theme" id="btn-theme" title="Тема" aria-label="Переключить тему">
+    <svg class="nav-icon"><use href="#i-sun"/></svg>
+  </button>
+  <button class="btn btn-outlined btn-sm" data-act="token-open">
+    <svg class="nav-icon" aria-hidden="true"><use href="#i-lock"/></svg>
+    <span id="token-label">Токен</span>
+  </button>
+</header>
+
+<div class="shell">
+  <nav class="rail" id="rail" aria-label="Разделы"></nav>
+  <main id="main" tabindex="-1">
+    <div class="stack">
+      <div class="skeleton" style="width:220px;height:34px"></div>
+      <div class="grid"><div class="card"><div class="skeleton" style="width:60%"></div></div><div class="card"><div class="skeleton" style="width:60%"></div></div><div class="card"><div class="skeleton" style="width:60%"></div></div></div>
     </div>
-    <div class="app-actions">
-      <button id="refresh-btn" class="btn-icon" title="Обновить данные">
-        <svg id="refresh-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
-      </button>
-      <button id="token-btn" class="btn btn-outlined" title="Настройки токена доступа">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <span>Токен</span>
-      </button>
-      <button id="theme-toggle" class="btn-icon" title="Сменить тему">
-        <svg id="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
-      </button>
-    </div>
-  </header>
-
-  <main class="main-container">
-
-    <!-- Primary Navigation Rail -->
-    <div class="shell">
-      <nav class="rail" aria-label="Разделы панели">
-        <span class="rail-label">Разделы</span>
-        <button class="tab-btn active" data-tab="overview">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-          <span>Обзор</span>
-        </button>
-        <button class="tab-btn" data-tab="providers">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <span>Провайдеры</span>
-        </button>
-        <button class="tab-btn" data-tab="models">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-          <span>Каталог моделей</span>
-        </button>
-        <button class="tab-btn" data-tab="global-settings">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          <span>Глобальные параметры</span>
-        </button>
-      </nav>
-      <div class="content">
-
-    <!-- 1. TAB: OVERVIEW -->
-    <section id="pane-overview" class="tab-pane active">
-      <div class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-label">Uptime</div>
-          <div id="stat-uptime" class="metric-value">--</div>
-          <div id="stat-listen" class="metric-sub">Слушает: --</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Запросов сегодня</div>
-          <div id="stat-requests" class="metric-value">0</div>
-          <div id="stat-errors" class="metric-sub">Ошибок: 0</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Токенов сегодня</div>
-          <div id="stat-tokens" class="metric-value">0</div>
-          <div id="stat-tokens-sub" class="metric-sub">0 вх / 0 вых</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Провайдеры</div>
-          <div id="stat-providers" class="metric-value">0</div>
-          <div id="stat-models-count" class="metric-sub">0 моделей объявлено</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Статус провайдеров</h2>
-        </div>
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Провайдер</th>
-                <th>Моделей</th>
-                <th>Бесплатных</th>
-                <th>Ключей</th>
-                <th>Режим</th>
-                <th>Ротация</th>
-              </tr>
-            </thead>
-            <tbody id="overview-providers-tbody">
-              <tr><td colspan="6" class="empty-state">Загрузка данных...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Исходящие адреса (Egress IP)</h2>
-        </div>
-        <div id="egress-list" class="metrics-grid"></div>
-      </div>
-    </section>
-
-    <!-- 2. TAB: PROVIDERS (Dedicated separation by provider) -->
-    <section id="pane-providers" class="tab-pane">
-      <div class="pane-header">
-        <div>
-          <h2>Провайдеры</h2>
-          <p class="pane-sub">Сначала провайдер, потом аккаунт и модель. Изменения сохраняются сразу.</p>
-        </div>
-      </div>
-      <div class="provider-bar" id="providers-pill-nav"></div>
-      <div id="provider-views-container">
-        <!-- Provider views rendered here -->
-      </div>
-    </section>
-
-    <!-- 3. TAB: GLOBAL SETTINGS -->
-    <section id="pane-global-settings" class="tab-pane">
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Глобальные параметры демона providermux</h2>
-        </div>
-        <p style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-bottom: 20px;">
-          Параметры применяются на лету для работающего демона и сохраняются в конфигурационный файл.
-        </p>
-
-        <div class="params-grid">
-          <div class="param-item">
-            <label class="form-label">IP Family (Сетевой стек)</label>
-            <select id="global-opt-family" class="form-input">
-              <option value="auto">auto (автовыбор)</option>
-              <option value="v4">v4 (только IPv4)</option>
-              <option value="v6">v6 (только IPv6)</option>
-            </select>
-            <div class="form-hint">Протокол для исходящих запросов к API</div>
-          </div>
-
-          <div class="param-item">
-            <label class="form-label">Credential (что предъявляем провайдеру)</label>
-            <select id="global-opt-credential" class="form-input">
-              <option value="anonymous">anonymous (без ключа)</option>
-              <option value="account">account (ключ из пула)</option>
-            </select>
-            <div class="form-hint">Действует на провайдеров без собственного credential</div>
-          </div>
-
-          <div class="param-item">
-            <label class="form-label">Key Rotation (ротация ключей)</label>
-            <select id="global-opt-rotation" class="form-input">
-              <option value="on">on (брать следующий ключ)</option>
-              <option value="off">off (держать один)</option>
-            </select>
-            <div class="form-hint">Не действует при credential = anonymous</div>
-          </div>
-
-          <div class="param-item">
-            <label class="form-label">Глобальный транспорт</label>
-            <select id="global-opt-transport" class="form-input">
-              <option value="direct">direct</option>
-            </select>
-            <div class="form-hint">Транспорт по умолчанию для всех провайдеров</div>
-          </div>
-
-          <div class="param-item">
-            <label class="form-label">Режим шлюза (Mode)</label>
-            <select id="global-opt-mode" class="form-input">
-              <option value="local">local (локальный сокет)</option>
-              <option value="server">server (сервер с токеном)</option>
-            </select>
-            <div class="form-hint">При смене на server требуется заданный токен</div>
-          </div>
-        </div>
-
-        <button id="save-global-opts-btn" class="btn btn-primary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-          <span>Применить глобальные параметры</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- 4. TAB: ALL MODELS CATALOG -->
-    <section id="pane-models" class="tab-pane">
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Каталог всех объявленных моделей</h2>
-          <input type="text" id="models-search" class="form-input" style="max-width: 320px;" placeholder="Поиск по ID или провайдеру...">
-        </div>
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>ID модели</th>
-                <th>Провайдер</th>
-                <th>Контекст</th>
-                <th>Max Output</th>
-                <th>Параметры</th>
-                <th>Тип</th>
-              </tr>
-            </thead>
-            <tbody id="models-tbody">
-              <tr><td colspan="6" class="empty-state">Загрузка моделей...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-      </div>
-    </div>
-
   </main>
+</div>
 
-  <!-- MODAL: ADD ANTIGRAVITY ACCOUNT -->
-  <div id="ag-modal" class="modal-backdrop">
-    <div class="modal-sheet">
-      <div class="modal-header">
-        <h3 class="modal-title">Добавить аккаунт Antigravity</h3>
-        <button class="btn-icon close-modal">✕</button>
-      </div>
+<nav class="bottom-nav" id="bottom-nav" aria-label="Разделы"></nav>
 
-      <div class="tabs-bar" style="margin-bottom: 16px;">
-        <button id="tab-oauth-btn" class="tab-btn active" style="flex: 1; justify-content: center;">Google OAuth 2.0 (PKCE)</button>
-        <button id="tab-token-btn" class="tab-btn" style="flex: 1; justify-content: center;">Refresh Token</button>
-      </div>
+<div class="snackbar" id="snackbar" role="status" aria-live="polite"></div>
 
-      <div id="subform-oauth">
-        <p style="font-size: 0.85rem; color: var(--md-sys-color-on-surface-variant); margin-bottom: 16px;">
-          Авторизуйтесь через Google с предоставлением offline-доступа (refresh token).
-        </p>
-        <div style="margin-bottom: 16px;">
-          <button id="start-oauth-btn" class="btn btn-primary" style="width: 100%;">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
-            <span>1. Открыть авторизацию Google</span>
-          </button>
-        </div>
-        <div class="form-group">
-          <label class="form-label">2. Код авторизации (Authorization Code)</label>
-          <input type="text" id="oauth-code-input" class="form-input" placeholder="4/0A...">
-          <div class="form-hint">Вставьте код со страницы Google после подтверждения</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Project ID (необязательно)</label>
-          <input type="text" id="oauth-project-input" class="form-input" placeholder="custom-project-id">
-        </div>
-        <button id="submit-oauth-btn" class="btn btn-tonal" style="width: 100%; margin-top: 8px;">
-          Обменять код и добавить аккаунт
-        </button>
-      </div>
-
-      <div id="subform-token" style="display: none;">
-        <div class="form-group">
-          <label class="form-label">Refresh Token (или refresh_token|project_id)</label>
-          <input type="text" id="ag-token-input" class="form-input" placeholder="1//04...">
-          <div class="form-hint">Google Cloud Code refresh token</div>
-        </div>
-        <button id="submit-ag-token-btn" class="btn btn-primary" style="width: 100%;">
-          Добавить в пул
-        </button>
-      </div>
+<dialog id="token-dialog" aria-labelledby="token-dialog-title">
+  <form method="dialog" class="dialog-body" id="token-form">
+    <h2 class="dialog-title" id="token-dialog-title">Токен доступа</h2>
+    <p class="muted small">Нужен, когда демон работает в режиме <code class="mono">server</code>. В режиме <code class="mono">local</code> поле можно оставить пустым.</p>
+    <div class="field">
+      <label class="label" for="token-input">Bearer-токен</label>
+      <input class="input" id="token-input" type="password" autocomplete="off" spellcheck="false" placeholder="PROVIDERMUX_TOKEN">
     </div>
+    <div class="dialog-actions">
+      <button class="btn btn-text" value="cancel" data-act="token-clear" type="button">Сбросить</button>
+      <button class="btn btn-filled" value="save" data-act="token-save">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirm-dialog" aria-labelledby="confirm-title">
+  <form method="dialog" class="dialog-body">
+    <h2 class="dialog-title" id="confirm-title">Подтверждение</h2>
+    <p class="muted small" id="confirm-text"></p>
+    <div class="dialog-actions">
+      <button class="btn btn-text" value="cancel">Отмена</button>
+      <button class="btn btn-filled" value="ok" id="confirm-ok">Удалить</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+
+/* ---------- constants ---------- */
+const ROUTES = [
+  { id:"overview",  label:"Обзор",      icon:"i-overview",  title:"Обзор" },
+  { id:"providers", label:"Провайдеры", icon:"i-providers", title:"Провайдеры" },
+  { id:"models",    label:"Каталог",    icon:"i-models",    title:"Каталог моделей" },
+  { id:"quota",     label:"Квоты",      icon:"i-quota",     title:"Квоты AntiGravity" },
+  { id:"settings",  label:"Параметры",  icon:"i-settings",  title:"Параметры" },
+];
+const POLL_MS = 10000;
+const AXIS_HINT = {
+  mode:"Режим шлюза: local слушает только loopback, server требует токен",
+  credential:"anonymous — ключ не отправляется; account — ключ уходит провайдеру",
+  key_rotation:"Ротация ключей работает только под credential=account",
+  family:"Семейство адресов, по которому провайдер считает лимит",
+  transport:"Транспорт исходящих запросов",
+};
+
+/* ---------- state ---------- */
+const state = {
+  token: "",
+  theme: "auto",
+  route: "overview",
+  status: null,
+  stats: null,
+  options: null,
+  models: null,
+  keys: null,
+  quota: null,
+  loading: {},
+  errors: {},
+  oauth: null,
+  busy: new Set(),
+  handledCallback: false,
+  lastAt: 0,
+};
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+function esc(v) {
+  return String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+const num = (v) => new Intl.NumberFormat("ru-RU").format(Number(v || 0));
+const pct = (v) => (Number.isFinite(v) ? Math.round(v * 1000) / 10 : 0).toLocaleString("ru-RU") + "%";
+
+function fmtUptime(sec) {
+  const s = Math.max(0, Math.floor(Number(sec) || 0));
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d} д ${h} ч`;
+  if (h > 0) return `${h} ч ${m} мин`;
+  if (m > 0) return `${m} мин`;
+  return `${s} с`;
+}
+function relTime(ms) {
+  if (!ms) return "—";
+  const diff = Date.now() - Number(ms);
+  if (diff < 0) return "только что";
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "только что";
+  if (m < 60) return `${m} ${m === 1 ? "минуту" : m < 5 ? "минуты" : "минут"} назад`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} ч назад`;
+  return `${Math.floor(h / 24)} д назад`;
+}
+function isoIn(iso) {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return esc(iso);
+  const mins = Math.round((t - Date.now()) / 60000);
+  if (mins <= 0) return "скоро сбросится";
+  if (mins >= 2880) return `через ${Math.round(mins / 1440)} д`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h >= 1) return m ? `через ${h} ч ${m} мин` : `через ${h} ч`;
+  return `через ${m} мин`;
+}
+function dayLabel(day) {
+  const d = new Date(day + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return day;
+  return d.toLocaleDateString("ru-RU", { day:"2-digit", month:"2-digit" });
+}
+function fmtDur(v) {
+  if (!v) return "—";
+  const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?$/.exec(String(v).trim());
+  if (!m) return String(v);
+  const h = Number(m[1] || 0), mi = Number(m[2] || 0), s = Math.round(Number(m[3] || 0));
+  const parts = [];
+  if (h) parts.push(h + " ч");
+  if (mi) parts.push(mi + " мин");
+  if (s && !h) parts.push(s + " с");
+  return parts.join(" ") || "0 с";
+}
+function safeUrl(u) {
+  try {
+    const p = new URL(u);
+    return p.protocol === "https:" || p.protocol === "http:" ? p.href : "";
+  } catch { return ""; }
+}
+function icon(id, cls = "nav-icon") {
+  return `<svg class="${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
+}
+
+/* ---------- snackbar ---------- */
+let snackTimer = null;
+function toast(message, kind = "ok") {
+  const el = $("#snackbar");
+  el.className = "snackbar show" + (kind === "err" ? " err" : "");
+  el.innerHTML = (kind === "err" ? icon("i-warn") : icon("i-check")) + `<span>${esc(message)}</span>`;
+  clearTimeout(snackTimer);
+  snackTimer = setTimeout(() => { el.className = "snackbar"; }, kind === "err" ? 6500 : 3500);
+}
+
+/* ---------- transport ---------- */
+async function api(path, opts = {}) {
+  const headers = { Accept: "application/json" };
+  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  if (state.token) headers.Authorization = "Bearer " + state.token;
+  let res;
+  try {
+    res = await fetch(path, { method: opts.method || "GET", headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body) });
+  } catch (err) {
+    throw new Error("демон не отвечает: " + err.message);
+  }
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = { error: text }; }
+  if (!res.ok) {
+    if (res.status === 401) openTokenDialog(true);
+    const msg = (data && data.error) || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+/* ---------- data loading ---------- */
+async function loadStatus() {
+  try {
+    state.status = await api("/_control/status");
+    state.lastAt = Date.now();
+    state.errors.status = null;
+  } catch (err) {
+    state.errors.status = err.message;
+    throw err;
+  }
+}
+async function loadStats() {
+  try { state.stats = await api("/_control/stats"); } catch { /* optional */ }
+}
+async function loadOptions() {
+  state.options = await api("/_control/options");
+}
+async function loadModels(force) {
+  if (state.models && !force) return;
+  state.models = await api("/_control/models");
+}
+async function loadKeys() {
+  state.keys = await api("/_control/keys");
+}
+async function loadQuota() {
+  state.quota = await api("/_control/antigravity/quota");
+}
+
+async function refreshCurrent(force) {
+  const r = state.route;
+  try {
+    if (r === "overview") { await loadStatus(); await loadStats(); }
+    else if (r === "providers") { await Promise.all([loadStatus(), loadOptions(), loadKeys()]); }
+    else if (r === "models") { await loadModels(force); await loadStatus().catch(() => {}); }
+    else if (r === "quota") { await loadQuota(); }
+    else if (r === "settings") { await loadOptions(); await loadStatus().catch(() => {}); }
+    render();
+  } catch (err) {
+    renderError(err);
+  }
+}
+
+function renderError(err) {
+  const html = `
+    <section class="page-head"><div><h1>Нет связи с демоном</h1>
+      <p class="lead">Запрос к <code class="mono">/_control</code> не удался. Проверьте, что служба запущена: <code class="mono">systemctl --user status providermux</code>.</p></div></section>
+    <div class="card outlined"><div class="notice danger">${icon("i-warn")}<div><b>${esc(err.message)}</b><div class="small mt3 muted">После исправления нажмите «Обновить».</div></div></div></div>`;
+  $("#main").innerHTML = html;
+}
+
+/* ---------- rendering ---------- */
+function render(force) {
+  const active = document.activeElement;
+  const typing = active && ["INPUT", "SELECT", "TEXTAREA"].includes(active.tagName) && active.closest("#main");
+  if (typing && !force) return;
+
+  const scroll = window.scrollY;
+  const views = { overview: viewOverview, providers: viewProviders, models: viewModels, quota: viewQuota, settings: viewSettings };
+  $("#main").innerHTML = (views[state.route] || viewOverview)();
+  wireView();
+  window.scrollTo(0, scroll);
+  updateHealth();
+  updateTokenLabel();
+}
+
+function updateHealth() {
+  const pill = $("#health-pill"), txt = $("#health-text");
+  if (state.errors.status && !state.status) {
+    pill.className = "pill err"; txt.textContent = "нет связи";
+  } else if (state.status) {
+    pill.className = "pill ok";
+    txt.textContent = "работает · " + fmtUptime(state.status.uptime_seconds);
+  } else {
+    pill.className = "pill"; txt.textContent = "проверка…";
+  }
+  $("#brand-sub").textContent = state.status ? state.status.listen : "панель шлюза";
+}
+function updateTokenLabel() {
+  $("#token-label").textContent = state.token ? "Токен задан" : "Токен";
+}
+
+function pageHead(title, lead, actions = "") {
+  return `<section class="page-head"><div><h1>${esc(title)}</h1>${lead ? `<p class="lead">${lead}</p>` : ""}</div><div class="spacer"></div>${actions}</section>`;
+}
+
+/* ----- overview ----- */
+function viewOverview() {
+  if (!state.status) return pageHead("Обзор", "Загрузка состояния…") + `<div class="card"><div class="skeleton" style="width:50%;height:20px"></div></div>`;
+  const st = state.status;
+  const t = st.totals_today || { ok:0, refused:0, aborted:0, by_model:[], by_address:[] };
+  const total = (t.ok || 0) + (t.refused || 0) + (t.aborted || 0);
+  const rate = total ? t.ok / total : 0;
+  const providers = st.providers || [];
+
+  const days = (state.stats && state.stats.days ? state.stats.days.slice(0, 7).slice().reverse() : []);
+  const maxOk = Math.max(1, ...days.map((d) => d.ok || 0));
+  const chart = days.length ? `
+    <div class="chart">
+      ${days.map((d) => {
+        const h = Math.max(4, Math.round(((d.ok || 0) / maxOk) * 64));
+        return `<div class="chart-col">
+          <div class="chart-count">${num(d.ok)}</div>
+          <div class="chart-bar" style="height:${h}px" title="${esc(d.day)}: ${num(d.ok)} ok"></div>
+          <div class="chart-day">${esc(dayLabel(d.day))}</div>
+        </div>`;
+      }).join("")}
+    </div>` : `<div class="empty">${icon("i-info")}<div>История появится после первых запросов</div></div>`;
+
+  const addr = (st.addresses || []).map((a) => a.error
+    ? `<div class="kv"><dt><span class="pill warn">${esc(a.family)}</span></dt><dd class="small muted" style="max-width:60%">${esc(a.error)}</dd></div>`
+    : `<div class="kv"><dt><span class="pill accent">${esc(a.family)}</span></dt><dd><span class="mono">${esc(a.address)}</span><div class="small muted">${relTime(Date.now() - (a.age_ms || 0))}</div></dd></div>`
+  ).join("") || `<div class="empty">${icon("i-warn")}<div>Адрес выхода ещё не определён</div></div>`;
+
+  const provRows = providers.map((p) => `
+    <div class="kv">
+      <dt><b>${esc(p.id)}</b><div class="small muted">${esc(p.credential)}${p.key_used ? " · ключ используется" : ""}</div></dt>
+      <dd><span class="badge">${num(p.free_models)}/${num(p.models)}</span><div class="small muted">ключей: ${num(p.keys)}</div></dd>
+    </div>`).join("") || `<div class="empty">${icon("i-info")}<div>Провайдеры не объявлены</div></div>`;
+
+  const byModel = (t.by_model || []).map((m) => `
+    <tr><td><span class="mono">${esc(m.model)}</span></td>
+      <td class="num">${num(m.ok)}</td><td class="num">${num(m.refused)}</td><td class="num hide-sm">${num(m.aborted)}</td>
+      <td class="num hide-sm muted small">${relTime(m.last_seen)}</td></tr>`).join("");
+
+  const byAddr = (t.by_address || []).map((a) => `
+    <tr><td><span class="mono">${esc(a.address || "—")}</span> <span class="pill">${esc(a.family)}</span></td>
+      <td class="num">${num(a.ok)}</td><td class="num">${num(a.refused)}</td><td class="num hide-sm">${num(a.aborted)}</td></tr>`).join("");
+
+  return `
+  ${pageHead("Обзор", `Сегодня ${esc(t.day || "—")} · режим <b>${esc(st.mode)}</b> · слушает <span class="mono">${esc(st.listen)}</span>`,
+    `<button class="btn btn-tonal" data-act="refresh">${icon("i-refresh")}<span>Обновить</span></button>`)}
+
+  <div class="grid">
+    <div class="card"><div class="kpi"><span class="kpi-label">Успешно</span><span class="kpi-value">${num(t.ok)}</span><span class="kpi-note">ответов отдано клиентам</span></div></div>
+    <div class="card"><div class="kpi"><span class="kpi-label">Отказы</span><span class="kpi-value err">${num(t.refused)}</span><span class="kpi-note">переданы дословно</span></div></div>
+    <div class="card"><div class="kpi"><span class="kpi-label">Оборвано</span><span class="kpi-value">${num(t.aborted)}</span><span class="kpi-note">клиент закрыл поток</span></div></div>
+    <div class="card"><div class="kpi"><span class="kpi-label">Доля успеха</span><span class="kpi-value">${pct(rate)}</span>
+      <div class="bar-track mt3"><div class="bar-fill ok" style="width:${Math.round(rate*100)}%"></div></div></div></div>
   </div>
 
-  <!-- MODAL: ADD GENERIC KEY -->
-  <div id="key-modal" class="modal-backdrop">
-    <div class="modal-sheet">
-      <div class="modal-header">
-        <h3 class="modal-title">Добавить ключ в пул</h3>
-        <button class="btn-icon close-modal">✕</button>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Провайдер</label>
-        <select id="generic-key-provider" class="form-input"></select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">API Key / Token</label>
-        <input type="password" id="generic-key-val" class="form-input" placeholder="sk-...">
-      </div>
-      <button id="submit-generic-key-btn" class="btn btn-primary" style="width: 100%;">
-        Сохранить ключ
-      </button>
-    </div>
+  <div class="grid two mt4">
+    <section class="card"><div class="card-head"><h2 class="card-title">Динамика за неделю</h2></div>${chart}</section>
+    <section class="card"><div class="card-head"><h2 class="card-title">Адреса выхода</h2><span class="pill">${esc(st.mode)}</span></div>${addr}
+      <p class="hint mt3">Лимиты бесплатных моделей считаются по адресу, поэтому семейство адресов — ось конфигурации.</p></section>
   </div>
 
-  <!-- MODAL: TOKEN CONFIG -->
-  <div id="token-modal" class="modal-backdrop">
-    <div class="modal-sheet">
-      <div class="modal-header">
-        <h3 class="modal-title">Токен доступа к providermux</h3>
-        <button class="btn-icon close-modal">✕</button>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Bearer Token</label>
-        <input type="password" id="app-token-input" class="form-input" placeholder="Секретный токен">
-      </div>
-      <button id="save-token-btn" class="btn btn-primary" style="width: 100%;">
-        Сохранить
-      </button>
-    </div>
+  <div class="grid two mt4">
+    <section class="card"><div class="card-head"><h2 class="card-title">Провайдеры</h2><a class="btn btn-text btn-sm" href="#providers">Настроить</a></div>${provRows}</section>
+    <section class="card"><div class="card-head"><h2 class="card-title">Трафик по адресам</h2></div>
+      ${byAddr ? `<div class="table-wrap"><table><thead><tr><th>Адрес</th><th class="num">OK</th><th class="num">Отказ</th><th class="num hide-sm">Обрыв</th></tr></thead><tbody>${byAddr}</tbody></table></div>` : `<div class="empty">${icon("i-info")}<div>Счётчики появятся с первыми запросами</div></div>`}</section>
   </div>
 
-  <div id="toast-container" class="toast-container"></div>
+  <section class="card mt4"><div class="card-head"><h2 class="card-title">Модели сегодня</h2></div>
+    ${byModel ? `<div class="table-wrap"><table><thead><tr><th>Модель</th><th class="num">OK</th><th class="num">Отказ</th><th class="num hide-sm">Обрыв</th><th class="num hide-sm">Активность</th></tr></thead><tbody>${byModel}</tbody></table></div>` : `<div class="empty">${icon("i-info")}<div>Сегодня запросов ещё не было</div></div>`}
+  </section>`;
+}
 
-  <script>
-    const appState = {
-      token: localStorage.getItem('pmux_token') || (new URLSearchParams(window.location.search).get('token') || ''),
-      activeTab: 'overview',
-      activeProvider: 'antigravity',
-      oauthVerifier: '',
-      providers: [],
-      models: [],
-      options: null,
-      agQuota: null,
-      keys: null
-    };
+/* ----- providers ----- */
+function providerData(id) {
+  const st = (state.status && state.status.providers || []).find((p) => p.id === id) || {};
+  const cur = (state.options && state.options.current && state.options.current.providers && state.options.current.providers[id]) || {};
+  const keys = (state.keys && state.keys.providers || []).find((p) => p.provider === id) || {};
+  return { st, cur, fingerprints: keys.keys || [] };
+}
 
-    if (appState.token) {
-      localStorage.setItem('pmux_token', appState.token);
-    }
+function ask(text, okLabel = "Удалить") {
+  const dialog = $("#confirm-dialog");
+  $("#confirm-text").textContent = text;
+  $("#confirm-ok").textContent = okLabel;
+  dialog.returnValue = "";
+  dialog.showModal();
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "ok"), { once: true });
+  });
+}
 
-    function showToast(msg, type = 'success') {
-      const c = document.getElementById('toast-container');
-      const t = document.createElement('div');
-      t.className = `toast toast-${type}`;
-      t.textContent = msg;
-      c.appendChild(t);
-      setTimeout(() => {
-        t.style.opacity = '0';
-        t.style.transform = 'translateY(10px)';
-        setTimeout(() => t.remove(), 200);
-      }, 4000);
-    }
+function segmented(name, values, current, attrs) {
+  return `<div class="segmented" role="radiogroup" aria-label="${esc(name)}">${values.map((v) =>
+    `<button type="button" role="radio" aria-checked="${v === current}" ${attrs} data-value="${esc(v)}">${esc(v)}</button>`).join("")}</div>`;
+}
 
-    async function apiRequest(path, options = {}) {
-      const headers = options.headers || {};
-      if (appState.token) headers['Authorization'] = `Bearer ${appState.token}`;
-      headers['Content-Type'] = 'application/json';
+function providerCard(id) {
+  const { st, cur, fingerprints } = providerData(id);
+  const credential = cur.credential || st.credential || "anonymous";
+  const rotation = cur.key_rotation ? cur.key_rotation : (st.key_rotation ? "on" : "off");
+  const transport = cur.transport || "direct";
+  const accountDisabled = credential !== "account" || fingerprints.length === 0;
+  const transports = (state.options && state.options.transports) || ["direct"];
+  const accounts = fingerprints.map((fp, i) => ({ fp, n: i + 1 }));
+  const currentAccount = cur.account || "";
+  const busy = (k) => (state.busy.has(k) ? "disabled aria-busy=\"true\"" : "");
 
-      let url = path;
-      if (appState.token && !headers['Authorization']) {
-        const sep = url.includes('?') ? '&' : '?';
-        url = `${url}${sep}token=${encodeURIComponent(appState.token)}`;
-      }
+  return `
+  <section class="card outlined">
+    <div class="card-head">
+      <h2 class="card-title">${esc(id)}</h2>
+      <span class="pill ${st.key_used ? "accent" : ""}">${st.key_used ? "ключ в деле" : "без ключа"}</span>
+      <div class="appbar-spacer"></div>
+      <span class="badge">${num(st.free_models)}/${num(st.models)}</span>
+    </div>
 
-      const res = await fetch(url, { ...options, headers });
-      if (res.status === 401) {
-        showToast('Требуется авторизация (укажите токен)', 'error');
-        openModal('token-modal');
-        throw new Error('Unauthorized');
-      }
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `HTTP error ${res.status}`);
-      }
-      return await res.json();
-    }
+    <dl style="margin:0 0 16px">
+      <div class="kv"><dt>Моделей бесплатных</dt><dd>${num(st.free_models)} из ${num(st.models)}</dd></div>
+      <div class="kv"><dt>Ключей в пуле</dt><dd>${num(st.keys)}</dd></div>
+      <div class="kv"><dt>Ротация активна</dt><dd>${st.key_rotation ? "да" : "нет"}</dd></div>
+    </dl>
 
-    function openModal(id) {
-      const m = document.getElementById(id);
-      if (m) m.classList.add('open');
-    }
-    function closeModal(id) {
-      const m = document.getElementById(id);
-      if (m) m.classList.remove('open');
-    }
-    document.querySelectorAll('.close-modal').forEach(b => {
-      b.addEventListener('click', (e) => e.target.closest('.modal-backdrop').classList.remove('open'));
+    <div class="field"><span class="label" id="lbl-cred-${esc(id)}">Credential</span>
+      ${segmented("Credential " + id, ["account", "anonymous"], credential, `data-act="set-axis" data-provider="${esc(id)}" data-axis="credential" ${busy("credential-" + id)}`)}
+      <span class="hint">${esc(AXIS_HINT.credential)}</span>
+    </div>
+
+    <div class="row mt4" style="justify-content:space-between">
+      <div><div class="card-sub">Ротация ключей</div><div class="hint">${esc(AXIS_HINT.key_rotation)}</div></div>
+      <button class="switch" type="button" role="switch" aria-checked="${rotation === "on"}"
+        aria-label="Ротация ключей ${esc(id)}" data-act="toggle-rotation" data-provider="${esc(id)}"
+        ${credential !== "account" ? "disabled" : ""} ${busy("key_rotation-" + id)}></button>
+    </div>
+
+    <div class="field mt4"><label class="label" for="tr-${esc(id)}">Транспорт</label>
+      <select class="select" id="tr-${esc(id)}" data-act="set-axis" data-provider="${esc(id)}" data-axis="transport" ${busy("transport-" + id)}>
+        ${transports.map((t) => `<option value="${esc(t)}" ${t === transport ? "selected" : ""}>${esc(t)}</option>`).join("")}
+      </select>
+    </div>
+
+    <div class="field mt4"><label class="label" for="acc-${esc(id)}">Аккаунт (пин)</label>
+      <select class="select" id="acc-${esc(id)}" data-act="set-account" data-provider="${esc(id)}" ${accountDisabled ? "disabled" : ""} ${busy("account-" + id)}>
+        <option value="">авто — любой из пула</option>
+        ${accounts.map((a) => `<option value="${esc(a.fp)}" ${a.fp === currentAccount ? "selected" : ""}>${a.n}. ${esc(a.fp)}</option>`).join("")}
+      </select>
+      <span class="hint">${accountDisabled ? "Нужен credential=account и хотя бы один ключ" : "К какому ключу привязывать запросы"}</span>
+    </div>
+
+    <div class="mt4">
+      <div class="card-sub">Ключи</div>
+      <div class="row mt3" id="keys-${esc(id)}">
+        ${fingerprints.length ? fingerprints.map((fp) => `<span class="chip"><span class="mono">${esc(fp)}</span>
+          <button type="button" data-act="remove-key" data-provider="${esc(id)}" data-key="${esc(fp)}" aria-label="Удалить ключ ${esc(fp)}">${icon("i-close","nav-icon")}</button></span>`).join("")
+        : `<span class="small muted">пул пуст</span>`}
+      </div>
+      <form class="row mt3" id="keyform-${esc(id)}" data-provider="${esc(id)}">
+        <input class="input" style="flex:1;min-width:180px" type="password" autocomplete="off" spellcheck="false"
+          name="key" placeholder="вставить ключ провайдера" aria-label="Новый ключ для ${esc(id)}" required>
+        <button class="btn btn-tonal" type="submit">${icon("i-plus")}<span>Добавить</span></button>
+      </form>
+      <p class="hint mt3">Ключи из панели живут в памяти демона и исчезают при рестарте. Долговечное место — <span class="mono">~/.config/providermux/keys.env</span>.</p>
+    </div>
+
+    ${id === "antigravity" ? `<a class="btn btn-text btn-sm mt3" href="#quota">${icon("i-link")}<span>Квоты и OAuth</span></a>` : ""}
+  </section>`;
+}
+
+function viewProviders() {
+  if (!state.options) return pageHead("Провайдеры", "Загрузка…") + `<div class="card"><div class="skeleton" style="width:40%;height:20px"></div></div>`;
+  const ids = (state.options.providers || []).slice();
+  return `
+  ${pageHead("Провайдеры", "Каждая ось применяется на лету и сохраняется в <span class='mono'>config.json</span>. Живой демон держит настройку до рестарта — она уже записана в файл.", `<button class="btn btn-tonal" data-act="refresh">${icon("i-refresh")}<span>Обновить</span></button>`)}
+  <div class="grid two">${ids.map(providerCard).join("") || `<div class="card"><div class="empty">${icon("i-info")}<div>Провайдеры не объявлены</div></div></div>`}</div>`;
+}
+
+/* ----- models ----- */
+function viewModels() {
+  if (!state.models) return pageHead("Каталог моделей", "Загрузка…") + `<div class="card"><div class="skeleton" style="width:40%;height:20px"></div></div>`;
+  const all = state.models.models || [];
+  const q = (state.modelQuery || "").toLowerCase();
+  const prov = state.modelProvider || "";
+  const rows = all.filter((m) => (!prov || m.provider === prov) && (!q ||
+    (m.id + " " + (m.name || "") + " " + m.provider).toLowerCase().includes(q)));
+  const provs = Array.from(new Set(all.map((m) => m.provider)));
+
+  const caps = (m) => [
+    m.vision ? "vision" : "", m.reasoning ? "reasoning" : "", m.free ? "free" : ""
+  ].filter(Boolean).map((c) => `<span class="pill ${c === "free" ? "ok" : ""}">${c}</span>`).join(" ");
+
+  const body = rows.map((m) => `
+    <tr>
+      <td><div style="font-weight:500">${esc(m.name || m.id)}</div><div class="mono muted">${esc(m.id)}</div></td>
+      <td class="hide-sm"><span class="pill">${esc(m.provider)}</span></td>
+      <td class="num">${m.context ? num(m.context) : "—"}</td>
+      <td class="num hide-sm">${m.max_output ? num(m.max_output) : "—"}</td>
+      <td class="hide-sm">${caps(m)}</td>
+      <td class="num"><button class="btn btn-icon btn-sm" data-act="copy" data-copy="${esc(m.provider + "/" + m.id)}" aria-label="Скопировать идентификатор ${esc(m.id)}" title="Скопировать ${esc(m.provider)}/${esc(m.id)}">${icon("i-copy")}</button></td>
+    </tr>`).join("");
+
+  return `
+  ${pageHead("Каталог моделей", `Объявлено ${num(all.length)} моделей у ${num(provs.length)} провайдеров. Необъявленная возможность не выдумывается — модель просто не попадает в список.`,
+    `<button class="btn btn-tonal" data-act="refresh-force">${icon("i-refresh")}<span>Перечитать</span></button>`)}
+  <section class="card">
+    <div class="row" style="margin-bottom:16px">
+      <div class="field" style="flex:1;min-width:220px">
+        <label class="label" for="model-search">Поиск</label>
+        <input class="input" id="model-search" type="search" placeholder="имя, идентификатор, провайдер" value="${esc(state.modelQuery || "")}" autocomplete="off">
+      </div>
+      <div class="segmented" role="group" aria-label="Фильтр по провайдеру" style="align-self:flex-end">
+        <button type="button" data-act="filter-provider" data-value="" aria-pressed="${!prov}">все</button>
+        ${provs.map((p) => `<button type="button" data-act="filter-provider" data-value="${esc(p)}" aria-pressed="${prov === p}">${esc(p)}</button>`).join("")}
+      </div>
+    </div>
+    ${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Модель</th><th class="hide-sm">Провайдер</th><th class="num">Контекст</th><th class="num hide-sm">Выход</th><th class="hide-sm">Возможности</th><th class="num"><span class="sr-only">Действия</span></th></tr></thead><tbody>${body}</tbody></table></div>`
+      : `<div class="empty">${icon("i-info")}<div>Ничего не найдено<button class="btn btn-text btn-sm" data-act="reset-filter">Сбросить фильтр</button></div></div>`}
+  </section>`;
+}
+
+/* ----- quota ----- */
+function viewQuota() {
+  const q = state.quota;
+  const oauthCard = `
+    <section class="card outlined">
+      <div class="card-head"><h2 class="card-title">Подключить аккаунт Google</h2></div>
+      <p class="hint">Кодовая страница открывается один раз. После согласия браузер вернёт на адрес с <span class="mono">code=…</span> — вставьте его ниже.</p>
+      <div class="row mt4">
+        <button class="btn btn-filled" data-act="oauth-start" ${state.oauth && state.oauth.started ? "disabled" : ""}>${icon("i-link")}<span>Начать вход</span></button>
+        ${state.oauth && safeUrl(state.oauth.auth_url) ? `<a class="btn btn-outlined" href="${esc(safeUrl(state.oauth.auth_url))}" target="_blank" rel="noopener">${icon("i-external")}<span>Открыть страницу</span></a>` : ""}
+      </div>
+      <form class="stack mt4" id="oauth-form">
+        <div class="field"><label class="label" for="oauth-code">Код или адрес возврата</label>
+          <textarea class="textarea" id="oauth-code" placeholder="http://localhost:51121/oauth-callback?code=…&amp;state=…" required></textarea></div>
+        <div class="field"><label class="label" for="oauth-project">Project ID (необязательно)</label>
+          <input class="input" id="oauth-project" placeholder="aicode-consumers" autocomplete="off"></div>
+        <div class="row"><button class="btn btn-tonal" type="submit">${icon("i-check")}<span>Обменять код на ключ</span></button>
+          ${state.oauth && state.oauth.verifier ? `<span class="pill">verifier ${esc(state.oauth.verifier.slice(0, 8))}…</span>` : ""}</div>
+      </form>
+      <p class="hint mt3">Полученный ключ тоже живёт только до рестарта; для постоянного — положите его в <span class="mono">keys.env</span>.</p>
+    </section>`;
+
+  if (!q) {
+    return `${pageHead("Квоты AntiGravity", "Расход лимитов по аккаунтам и окнам.")}${oauthCard}`;
+  }
+  const accounts = q.accounts || [];
+  const accountCards = accounts.map((a) => `
+    <section class="card">
+      <div class="card-head"><h2 class="card-title">${esc(a.email || a.account_id)}</h2>
+        <span class="pill ${q.key_used ? "accent" : ""}">${q.key_used ? "используется" : "в резерве"}</span></div>
+      <div class="mono muted small" style="margin-bottom:12px">${esc(a.account_id)}</div>
+      ${(a.groups || []).map((g) => `
+        <div class="mt4"><div class="card-sub">${esc(g.group)}</div>
+          <div class="hint">${esc(g.description || "")} · моделей: ${num(g.model_count)}</div>
+          ${(g.windows || []).map((w) => {
+            const f = Math.max(0, Math.min(1, Number(w.remaining_fraction) || 0));
+            const tone = f <= 0.1 ? "err" : f <= 0.35 ? "warn" : "ok";
+            return `<div class="mt3">
+              <div class="row" style="justify-content:space-between"><span class="small">${esc(w.display_name || w.window)}</span><span class="small muted">${pct(f)} · ${isoIn(w.reset_time)}</span></div>
+              <div class="bar-track mt3" role="img" aria-label="${esc(w.display_name || w.window)}: осталось ${pct(f)}"><div class="bar-fill ${tone}" style="width:${Math.round(f*100)}%"></div></div>
+            </div>`;
+          }).join("")}
+        </div>`).join("")}
+    </section>`).join("");
+
+  return `
+  ${pageHead("Квоты AntiGravity", `Credential: <b>${esc(q.credential)}</b> · ротация: <b>${q.rotation ? "вкл" : "выкл"}</b> · ключ: <b>${q.key_used ? "используется" : "нет"}</b>`,
+    `<button class="btn btn-tonal" data-act="refresh">${icon("i-refresh")}<span>Обновить</span></button>`)}
+  ${q.configured === false ? `<div class="notice mt4">${icon("i-info")}<div>AntiGravity не объявлен в конфигурации — квот нет, но аккаунт можно подключить.</div></div>` : ""}
+  <div class="grid two mt4">${accountCards || `<div class="card"><div class="empty">${icon("i-gauge")}<div>Аккаунтов с квотами нет</div></div></div>`}</div>
+  <div class="mt4">${oauthCard}</div>`;
+}
+
+/* ----- settings ----- */
+function axisRow(axis, label, values, current, hint) {
+  return `
+    <div class="card outlined">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div style="min-width:180px"><div class="card-title">${esc(label)}</div><div class="hint">${esc(hint || AXIS_HINT[axis] || "")}</div></div>
+        ${segmented(label, values, current, `data-act="set-global" data-axis="${esc(axis)}" ${state.busy.has("g-" + axis) ? "disabled" : ""}`)}
+      </div>
+    </div>`;
+}
+
+function viewSettings() {
+  const c = (state.options && state.options.current) || {};
+  const opts = state.options || {};
+  const timeouts = [["first_event_timeout", "Первый фрейм"], ["idle_timeout", "Простой"], ["reasoning_idle_timeout", "Простой рассуждения"]];
+  return `
+  ${pageHead("Параметры", "Глобальные оси шлюза. Панель меняет только то, что демон умеет менять на лету; таймауты и адрес слушателя живут во флагах, окружении и <span class='mono'>config.json</span>.")}
+  <div class="stack">
+    ${axisRow("mode", "Режим", opts.modes || ["local", "server"], c.mode, AXIS_HINT.mode)}
+    ${axisRow("credential", "Credential", ["anonymous", "account"], c.credential, AXIS_HINT.credential)}
+    ${axisRow("key_rotation", "Ротация ключей", opts.toggle || ["on", "off"], c.key_rotation, AXIS_HINT.key_rotation)}
+    ${axisRow("family", "Семейство адресов", ["auto", "v4", "v6"], c.family, AXIS_HINT.family)}
+    ${axisRow("transport", "Транспорт", opts.transports || ["direct"], c.transport, AXIS_HINT.transport)}
+
+    <section class="card">
+      <div class="card-head"><h2 class="card-title">Таймауты</h2><span class="pill">только чтение</span></div>
+      <dl style="margin:0">${timeouts.map(([k, label]) => `<div class="kv"><dt>${esc(label)}</dt><dd class="mono">${esc(fmtDur(c[k]))}</dd></div>`).join("")}</dl>
+      <p class="hint mt3">Меняются флагами <span class="mono">--first-event-timeout</span>, <span class="mono">--idle-timeout</span>, <span class="mono">--reasoning-idle-timeout</span> и требуют рестарта.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2 class="card-title">Доступ</h2></div>
+      <div class="row" style="justify-content:space-between">
+        <div><div class="card-sub">Токен панели</div><div class="hint">${state.token ? "задан в этом браузере" : "не задан — подходит для local"}</div></div>
+        <button class="btn btn-tonal" data-act="token-open">${icon("i-lock")}<span>Изменить</span></button>
+      </div>
+      <div class="row mt4" style="justify-content:space-between">
+        <div><div class="card-sub">Тема</div><div class="hint">Сейчас: ${state.theme === "auto" ? "как в системе" : state.theme === "dark" ? "тёмная" : "светлая"}</div></div>
+        <button class="btn btn-tonal" data-act="theme">${icon(state.theme === "dark" ? "i-sun" : "i-moon")}<span>Переключить</span></button>
+      </div>
+    </section>
+  </div>`;
+}
+
+/* ---------- view wiring ---------- */
+function wireView() {
+  const main = $("#main");
+  const search = $("#model-search", main);
+  if (search) {
+    search.addEventListener("input", (e) => {
+      state.modelQuery = e.target.value;
+      const at = e.target.selectionStart;
+      render(true);
+      const again = $("#model-search");
+      if (again) { again.focus(); again.setSelectionRange(at, at); }
     });
-    document.querySelectorAll('.modal-backdrop').forEach(m => {
-      m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('open'); });
+  }
+  $$(".segmented[role='radiogroup']", main).forEach((group) => {
+    const radios = $$("button[role='radio']", group);
+    const current = radios.findIndex((b) => b.getAttribute("aria-checked") === "true");
+    radios.forEach((b, i) => { b.tabIndex = i === Math.max(0, current) ? 0 : -1; });
+    group.addEventListener("keydown", (e) => {
+      const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      const at = radios.indexOf(document.activeElement);
+      const next = radios[(at + step + radios.length) % radios.length];
+      radios.forEach((b) => { b.tabIndex = b === next ? 0 : -1; });
+      next.focus();
+      next.click();
     });
-
-    // Theme toggle
-    document.getElementById('theme-toggle').addEventListener('click', () => {
-      const cur = document.documentElement.getAttribute('data-theme');
-      const nxt = cur === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', nxt);
-      localStorage.setItem('pmux_theme', nxt);
+  });
+  $$("select[data-act]", main).forEach((sel) => {
+    sel.addEventListener("change", () => {
+      if (sel.dataset.act === "set-account") setAxis(sel.dataset.provider, "account", sel.value, "account-" + sel.dataset.provider);
+      else setAxis(sel.dataset.provider, sel.dataset.axis, sel.value, sel.dataset.axis + "-" + sel.dataset.provider);
     });
-    const savedTheme = localStorage.getItem('pmux_theme');
-    if (savedTheme) {
-      document.documentElement.setAttribute('data-theme', savedTheme);
-    }
-
-    // Tab Navigation
-    document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const target = btn.getAttribute('data-tab');
-        document.querySelectorAll('.tab-btn[data-tab]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-        const pane = document.getElementById(`pane-${target}`);
-        if (pane) pane.classList.add('active');
-        appState.activeTab = target;
-        refreshCurrentTab();
-      });
-    });
-
-    function formatUptime(seconds) {
-      if (!seconds) return '0s';
-      const d = Math.floor(seconds / 86400);
-      const h = Math.floor((seconds % 86400) / 3600);
-      const m = Math.floor((seconds % 3600) / 60);
-      const s = seconds % 60;
-      if (d > 0) return `${d}д ${h}ч ${m}м`;
-      if (h > 0) return `${h}ч ${m}м`;
-      if (m > 0) return `${m}м ${s}с`;
-      return `${s}с`;
-    }
-
-    // 1. Overview Load
-    async function loadOverview() {
+  });
+  $$("form[id^='keyform-']", main).forEach((form) => {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const provider = form.dataset.provider;
+      const input = form.querySelector("input[name='key']");
+      const key = input.value.trim();
+      if (!key) return;
+      input.value = "";
       try {
-        const data = await apiRequest('/_control/status');
-        document.getElementById('daemon-mode').textContent = data.mode || 'local';
-        document.getElementById('stat-uptime').textContent = formatUptime(data.uptime_seconds);
-        document.getElementById('stat-listen').textContent = `Слушает: ${data.listen || '--'}`;
-
-        const totals = data.totals_today || {};
-        document.getElementById('stat-requests').textContent = totals.requests || totals.ok || 0;
-        document.getElementById('stat-errors').textContent = `Ошибок: ${totals.errors || totals.refused || 0}`;
-
-        const inTokens = totals.input_tokens || 0;
-        const outTokens = totals.output_tokens || 0;
-        document.getElementById('stat-tokens').textContent = (inTokens + outTokens).toLocaleString();
-        document.getElementById('stat-tokens-sub').textContent = `${inTokens.toLocaleString()} вх / ${outTokens.toLocaleString()} вых`;
-
-        const provs = data.providers || [];
-        appState.providers = provs;
-        document.getElementById('stat-providers').textContent = provs.length;
-
-        let totalModels = 0;
-        const tbody = document.getElementById('overview-providers-tbody');
-        tbody.innerHTML = '';
-        provs.forEach(p => {
-          totalModels += p.models || 0;
-          const tr = document.createElement('tr');
-          tr.innerHTML = `
-            <td style="font-weight:600; color:var(--md-sys-color-primary); cursor:pointer;" onclick="selectProvider('${p.id}')">${p.id}</td>
-            <td>${p.models || 0}</td>
-            <td>${p.free_models || 0}</td>
-            <td><span class="badge ${p.keys > 0 ? 'badge-success' : 'badge-warning'}">${p.keys}</span></td>
-            <td>${p.credential || 'default'}</td>
-            <td>${p.key_rotation ? '✅ Вкл' : '—'}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-        document.getElementById('stat-models-count').textContent = `${totalModels} моделей объявлено`;
-
-        const egressCont = document.getElementById('egress-list');
-        egressCont.innerHTML = '';
-        if (data.addresses && data.addresses.length > 0) {
-          data.addresses.forEach(a => {
-            const el = document.createElement('div');
-            el.className = 'metric-card';
-            el.innerHTML = `
-              <div class="metric-label">${a.family || 'IP'}</div>
-              <div style="font-size:1.1rem; font-weight:600; font-family:monospace;">${a.address || a.error || 'N/A'}</div>
-            `;
-            egressCont.appendChild(el);
-          });
-        }
-      } catch (err) {
-        console.warn('Overview err:', err);
-      }
-    }
-
-    // 2. Options Load
-    async function loadOptions() {
-      try {
-        const data = await apiRequest('/_control/options');
-        appState.options = data;
-
-        // Populate global settings tab
-        if (data.current) {
-          document.getElementById('global-opt-credential').value = data.current.credential || 'anonymous';
-          document.getElementById('global-opt-rotation').value = data.current.key_rotation || 'on';
-          document.getElementById('global-opt-family').value = data.current.family || 'auto';
-          document.getElementById('global-opt-mode').value = data.current.mode || 'local';
-
-          const tSel = document.getElementById('global-opt-transport');
-          tSel.innerHTML = '';
-          (data.transports || ['direct']).forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t; opt.textContent = t;
-            if (t === data.current.transport) opt.selected = true;
-            tSel.appendChild(opt);
-          });
-        }
-      } catch (err) {
-        console.warn('Options load err:', err);
-      }
-    }
-
-    // Save Global Options
-    document.getElementById('save-global-opts-btn').addEventListener('click', async () => {
-      const credential = document.getElementById('global-opt-credential').value;
-      const rotation = document.getElementById('global-opt-rotation').value;
-      const family = document.getElementById('global-opt-family').value;
-      const transport = document.getElementById('global-opt-transport').value;
-      const mode = document.getElementById('global-opt-mode').value;
-
-      try {
-        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'credential', value: credential }) });
-        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'key_rotation', value: rotation }) });
-        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'family', value: family }) });
-        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'transport', value: transport }) });
-        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ axis: 'mode', value: mode }) });
-        showToast('Глобальные параметры успешно применены');
-        loadOptions();
-        loadOverview();
-      } catch (err) {
-        showToast('Ошибка сохранения параметров: ' + err.message, 'error');
-      }
+        await api("/_control/keys/add", { method:"POST", body:{ provider, key } });
+        toast(`Ключ добавлен: ${provider}`);
+        await loadKeys(); await loadStatus();
+        render();
+      } catch (err) { toast(err.message, "err"); }
     });
-
-    // 3. Provider Dedicated View (Separation by Provider)
-    function renderProviderPills() {
-      const nav = document.getElementById('providers-pill-nav');
-      nav.innerHTML = '';
-      const list = (appState.options && appState.options.providers) || (appState.providers.map(p => p.id));
-      if (!list || list.length === 0) return;
-
-      if (!list.includes(appState.activeProvider)) {
-        appState.activeProvider = list[0];
-      }
-
-      list.forEach(pId => {
-        const st = appState.providers.find(p => p.id === pId) || {};
-        const keys = st.keys || 0;
-        const models = st.models || 0;
-        const cred = st.credential || 'anonymous';
-        const btn = document.createElement('button');
-        btn.className = `provider-card ${pId === appState.activeProvider ? 'active' : ''}`;
-        btn.innerHTML = `
-          <span class="provider-card-name">${pId}</span>
-          <span class="provider-card-meta">${cred} · ключей: ${keys} · моделей: ${models}</span>
-        `;
-        btn.onclick = () => selectProvider(pId);
-        nav.appendChild(btn);
-      });
-    }
-
-    window.selectProvider = function(pId) {
-      appState.activeProvider = pId;
-      renderProviderPills();
-      renderActiveProviderView();
-      // Also switch to providers tab if from overview
-      document.querySelectorAll('.tab-btn[data-tab]').forEach(b => {
-        b.classList.toggle('active', b.getAttribute('data-tab') === 'providers');
-      });
-      document.querySelectorAll('.tab-pane').forEach(p => {
-        p.classList.toggle('active', p.id === 'pane-providers');
-      });
-      appState.activeTab = 'providers';
-    };
-
-    async function renderActiveProviderView() {
-      const cont = document.getElementById('provider-views-container');
-      const pId = appState.activeProvider;
-      if (!pId) return;
-
-      const pStatus = appState.providers.find(p => p.id === pId) || {};
-      const currentOpts = (appState.options && appState.options.current && appState.options.current.providers && appState.options.current.providers[pId]) || {};
-      const curCred = currentOpts.credential || pStatus.credential || 'anonymous';
-      const curRot = currentOpts.key_rotation || (pStatus.key_rotation ? 'on' : 'off');
-      const curTrans = currentOpts.transport || 'direct';
-
-      let extraSectionHTML = '';
-
-      // If Antigravity -> render Quota & Google Accounts section
-      if (pId === 'antigravity') {
-        extraSectionHTML = `
-          <div class="card">
-            <div class="card-header"><h3 class="card-title">Аккаунт для запросов</h3></div>
-            <p class="pane-sub" style="margin:0 0 12px">Ключ, который уходит в запрос. «Авто» — ротация выбирает сама.</p>
-            <div id="ag-account-picker" class="account-picker">
-              <div class="empty-state">Загрузка аккаунтов...</div>
-            </div>
-          </div>
-          <div class="card">
-            <div class="card-header">
-              <h3 class="card-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                Google Antigravity Квоты
-              </h3>
-              <button class="btn btn-primary" onclick="openModal('ag-modal')">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Добавить аккаунт
-              </button>
-            </div>
-            <div id="ag-provider-quota-container">
-              <div class="empty-state">Загрузка квот...</div>
-            </div>
-          </div>
-        `;
-      }
-
-      cont.innerHTML = `
-        <div class="provider-view-layout">
-          <div class="provider-sidebar">
-            <div class="card">
-              <div class="card-header"><h3 class="card-title">Авторизация</h3></div>
-              <div class="param-item">
-                <label class="form-label">Режим (Credential)</label>
-                <select id="prov-param-cred" class="form-input">
-                  <option value="account" ${curCred === 'account' ? 'selected' : ''}>account (с ключом)</option>
-                  ${pId !== 'antigravity' ? `<option value="anonymous" ${curCred === 'anonymous' ? 'selected' : ''}>anonymous</option>` : ''}
-                </select>
-              </div>
-              <div class="param-item">
-                <label class="form-label">Ротация ключей</label>
-                <select id="prov-param-rot" class="form-input">
-                  <option value="on" ${curRot === 'on' ? 'selected' : ''}>on</option>
-                  <option value="off" ${curRot === 'off' ? 'selected' : ''}>off</option>
-                </select>
-              </div>
-              <div class="param-item">
-                <label class="form-label">Транспорт</label>
-                <select id="prov-param-trans" class="form-input">
-                  ${(appState.options?.transports || ['direct']).map(t => `<option value="${t}" ${curTrans === t ? 'selected' : ''}>${t}</option>`).join('')}
-                </select>
-              </div>
-              <button id="save-prov-params-btn" class="btn btn-primary" style="margin-top:16px; width:100%">Применить</button>
-            </div>
-            ${extraSectionHTML}
-          </div>
-          <div class="provider-content">
-            <div class="card">
-              <div class="card-header">
-                <h3 class="card-title">Пул ключей: ${pId}</h3>
-                <button class="btn btn-tonal" onclick="openKeyModalFor('${pId}')">Добавить</button>
-              </div>
-              <div id="prov-keys-container"></div>
-            </div>
-            <div class="card">
-              <div class="card-header"><h3 class="card-title">Модели: ${pId}</h3></div>
-              <div id="prov-models-tbody"></div>
-            </div>
-          </div>
-        </div>
-      `;
-
-      // Event: Save provider params on the fly
-      document.getElementById('save-prov-params-btn').addEventListener('click', async () => {
-        const cred = document.getElementById('prov-param-cred').value;
-        const rot = document.getElementById('prov-param-rot').value;
-        const trans = document.getElementById('prov-param-trans').value;
+  });
+  const oauth = $("#oauth-form", main);  if (oauth) {
+    oauth.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const raw = $("#oauth-code").value.trim();
+      const project = $("#oauth-project").value.trim();
+      if (!raw) return;
+      let code = raw, redirect = "";
+      if (/^https?:\/\//i.test(raw)) {
         try {
-          await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ provider: pId, axis: 'credential', value: cred }) });
-          await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ provider: pId, axis: 'key_rotation', value: rot }) });
-          await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ provider: pId, axis: 'transport', value: trans }) });
-          showToast(`Параметры провайдера ${pId} обновлены на лету!`);
-          loadOverview();
-          loadOptions();
-        } catch (err) {
-          showToast('Ошибка сохранения: ' + err.message, 'error');
-        }
-      });
-
-      // Load keys for this provider
-      loadProviderKeys(pId);
-      // Load models for this provider
-      renderProviderModels(pId);
-      // If antigravity -> load quota
-      if (pId === 'antigravity') {
-        loadAccountPicker(pId);
-        loadAntigravityQuotaInProvider();
+          const u = new URL(raw);
+          code = u.searchParams.get("code") || "";
+          redirect = u.origin + u.pathname;
+        } catch { /* keep raw */ }
       }
-    }
-
-    async function loadProviderKeys(pId) {
-      const cont = document.getElementById('prov-keys-container');
-      if (!cont) return;
+      if (!code) { toast("В адресе нет параметра code", "err"); return; }
+      const body = { code, verifier: state.oauth ? state.oauth.verifier : "" };
+      if (redirect) body.redirect_uri = redirect;
+      if (project) body.project_id = project;
       try {
-        const data = await apiRequest('/_control/keys');
-        const pObj = (data.providers || []).find(p => p.provider === pId);
-        if (!pObj || !pObj.keys || pObj.keys.length === 0) {
-          cont.innerHTML = '<div class="empty-state">В пуле нет активных ключей</div>';
-          return;
-        }
-        cont.innerHTML = pObj.keys.map(k => `
-          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--md-sys-color-surface-container-high); border-radius:var(--md-sys-shape-corner-small); margin-bottom:8px; border:1px solid var(--md-sys-color-outline-variant);">
-            <div style="font-family:monospace; font-size:0.9rem;">${k}</div>
-            <button class="btn btn-danger btn-icon" title="Удалить ключ" onclick="removeAccount('${pId}', '${k}')">✕</button>
-          </div>
-        `).join('');
-      } catch (err) {
-        cont.innerHTML = `<div class="empty-state" style="color:var(--md-sys-color-error);">Ошибка: ${err.message}</div>`;
-      }
-    }
-
-    function renderProviderModels(pId) {
-      const tbody = document.getElementById('prov-models-tbody');
-      if (!tbody) return;
-      const provModels = (appState.models || []).filter(m => m.provider === pId);
-      if (provModels.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Модели не найдены</td></tr>';
-        return;
-      }
-      tbody.innerHTML = provModels.map(m => `
-        <tr>
-          <td style="font-weight:600;">${m.id}</td>
-          <td>${(m.context || 0).toLocaleString()}</td>
-          <td>${(m.max_output || 0).toLocaleString()}</td>
-          <td>
-            ${m.vision ? '<span class="badge badge-success" style="margin-right:4px;">Vision</span>' : ''}
-            ${m.reasoning ? '<span class="badge badge-warning">Reasoning</span>' : ''}
-          </td>
-          <td>${m.free ? '<span class="badge badge-success">Бесплатная</span>' : 'Стандартная'}</td>
-        </tr>
-      `).join('');
-    }
-
-    function formatRefreshTime(resetTime, dayUnit = 'd', now = Date.now()) {
-      if (!resetTime) return '0m';
-      const target = new Date(resetTime).getTime();
-      if (Number.isNaN(target)) return resetTime;
-      const diffMs = target - now;
-      if (diffMs <= 0) return '0m';
-      const diffMinutes = Math.floor(diffMs / (60 * 1000));
-      const hours = Math.floor(diffMinutes / 60);
-      const remMinutes = diffMinutes % 60;
-
-      if (hours >= 24) {
-        const days = Math.floor(hours / 24);
-        return `${days}${dayUnit} ${hours % 24}h ${remMinutes}m`;
-      }
-      if (hours > 0) {
-        return `${hours}h ${remMinutes}m`;
-      }
-      return `${remMinutes}m`;
-    }
-
-    function quotaTone(fraction) {
-      if (fraction < 0.3) return '#ef4444'; // Red
-      if (fraction <= 0.6) return '#f59e0b'; // Orange
-      return '#22c55e'; // Green
-    }
-
-    // Account pin: the gateway stores which key serves the provider, so the pick
-    // survives a reload, a harness restart and a model-catalog refresh.
-    function escText(v) {
-      return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    }
-
-    async function loadAccountPicker(pId) {
-      const cont = document.getElementById('ag-account-picker');
-      if (!cont) return;
-      const cur = ((appState.options && appState.options.current && appState.options.current.providers) || {})[pId] || {};
-      const pinned = cur.account || '';
-      let accounts = [];
-      try {
-        const res = await apiRequest('/_control/antigravity/quota');
-        accounts = (res && res.accounts) || [];
-      } catch (err) {
-        cont.innerHTML = `<div class="empty-state">Не удалось загрузить аккаунты: ${escText(err.message)}</div>`;
-        return;
-      }
-      const tiles = [{ id: '', email: 'Авто', meta: 'ротация выбирает ключ сама', active: pinned === '' }];
-      accounts.forEach(a => {
-        const id = a.account_id || '';
-        const same = pinned !== '' && (pinned === id || id.startsWith(pinned));
-        tiles.push({
-          id: id,
-          email: a.email || 'Google Account',
-          meta: a.error ? `ошибка: ${a.error}` : (a.project ? `проект ${a.project}` : 'без проекта'),
-          active: same,
-        });
-      });
-      if (pinned !== '' && !tiles.some(t => t.active)) tiles[0].active = true;
-      cont.innerHTML = tiles.map(t => `
-        <button class="account-tile ${t.active ? 'active' : ''}" data-account="${escText(t.id)}">
-          <span class="account-tile-email">${escText(t.email)}</span>
-          <span class="account-tile-meta">${escText(t.meta)}</span>
-          ${t.id ? `<span class="account-tile-id">${escText(t.id.slice(0, 12))}</span>` : ''}
-        </button>`).join('');
-      cont.querySelectorAll('.account-tile').forEach(el => {
-        el.onclick = () => pinAccount(pId, el.getAttribute('data-account') || '');
-      });
-    }
-
-    async function pinAccount(pId, value) {
-      try {
-        await apiRequest('/_control/options', { method: 'POST', body: JSON.stringify({ provider: pId, axis: 'account', value: value }) });
-        showToast(value ? 'Аккаунт закреплён за провайдером' : 'Аккаунт снова выбирается ротацией');
-        await loadOptions();
-        await loadModels();
-        renderActiveProviderView();
-      } catch (err) {
-        showToast('Не удалось выбрать аккаунт: ' + err.message, 'error');
-      }
-    }
-
-    async function loadAntigravityQuotaInProvider() {
-      const cont = document.getElementById('ag-provider-quota-container');
-      if (!cont) return;
-      try {
-        const data = await apiRequest('/_control/antigravity/quota');
-        if (!data.accounts || data.accounts.length === 0) {
-          cont.innerHTML = `
-            <div class="empty-state">
-              <div>Нет добавленных аккаунтов Antigravity. Нажмите «Добавить аккаунт» выше.</div>
-            </div>
-          `;
-          return;
-        }
-
-        cont.innerHTML = data.accounts.map(acc => {
-          let groupsHTML = '';
-          const hasError = !!acc.error;
-
-          if (acc.groups && acc.groups.length > 0) {
-            groupsHTML = acc.groups.map(g => {
-              const groupTitle = g.group;
-              const groupDesc = g.description || (groupTitle.includes('GEMINI') ? 'Models within this group: Gemini Flash, Gemini Pro' : 'Models within this group: Claude Opus, Claude Sonnet, GPT-OSS');
-
-              const windowsHTML = (g.windows || []).map(w => {
-                const fraction = typeof w.remaining_fraction === 'number' ? w.remaining_fraction : 1;
-                const pctFormatted = (fraction * 100).toFixed(2) + '%';
-                const pctRounded = Math.round(fraction * 100);
-                const widthPct = Math.max(0, Math.min(100, fraction * 100));
-                const toneColor = quotaTone(fraction);
-                const windowName = w.display_name || (w.window === '5h' ? 'Five Hour Limit Remaining' : 'Weekly Limit Remaining');
-
-                // An untouched window carries reset = fetch time + window, so its
-                // countdown restarts on every poll and reads as a broken clock.
-                let subtext = `${pctRounded}% remaining`;
-                if (fraction >= 1) {
-                  subtext += ' · окно не начато';
-                } else if (w.reset_time) {
-                  const refreshStr = formatRefreshTime(w.reset_time);
-                  subtext += ` · Refreshes in ${refreshStr}`;
-                }
-
-                return `
-                  <div style="margin-bottom: 20px;">
-                    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom: 6px;">
-                      <span style="font-size:0.92rem; color:var(--md-sys-color-on-surface); font-weight:500;">${windowName}</span>
-                      <span style="font-size:0.95rem; font-weight:700; color:${toneColor};">${pctFormatted}</span>
-                    </div>
-                    <div class="progress-container" style="height:8px; margin:6px 0; background:rgba(128,128,128,0.2);">
-                      <div class="progress-bar" style="width:${widthPct}%; background-color:${toneColor}; height:100%;"></div>
-                    </div>
-                    <div style="font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">${subtext}</div>
-                  </div>
-                `;
-              }).join('');
-
-              return `
-                <div style="background:var(--md-sys-color-surface-container); border:1px solid var(--md-sys-color-outline-variant); border-radius:var(--md-sys-shape-corner-large); padding:20px 24px; margin-top:14px;">
-                  <div style="margin-bottom:18px;">
-                    <div style="font-size:0.95rem; font-weight:700; letter-spacing:0.04em; color:var(--md-sys-color-on-surface); text-transform:uppercase;">${groupTitle}</div>
-                    <div style="font-size:0.85rem; color:var(--md-sys-color-on-surface-variant); margin-top:4px;">${groupDesc}</div>
-                  </div>
-                  <div>${windowsHTML}</div>
-                </div>
-              `;
-            }).join('');
-          } else {
-            groupsHTML = `<div class="empty-state" style="padding:10px;">Квоты не получены</div>`;
-          }
-
-          return `
-            <div style="background:var(--md-sys-color-surface-container-high); border-radius:var(--md-sys-shape-corner-large); border:1px solid var(--md-sys-color-outline-variant); padding:20px; margin-bottom:16px;">
-              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; border-bottom:1px solid var(--md-sys-color-outline-variant); padding-bottom:12px;">
-                <div>
-                  <div style="font-weight:700; font-size:1.15rem; color:var(--md-sys-color-primary);">${acc.email || 'Google Account'}</div>
-                  <div style="font-family:monospace; font-size:0.8rem; color:var(--md-sys-color-on-surface-variant);">Account ID: ${acc.account_id} ${acc.project ? `| Project: ${acc.project}` : ''}</div>
-                </div>
-                <div style="display:flex; align-items:center; gap:8px;">
-                  <span class="badge ${hasError ? 'badge-error' : 'badge-success'}">${hasError ? 'Ошибка' : 'Активен'}</span>
-                  <button class="btn btn-danger btn-icon" title="Удалить аккаунт" onclick="removeAccount('antigravity', '${acc.account_id}')">✕</button>
-                </div>
-              </div>
-              ${hasError ? `<div style="color:var(--md-sys-color-error); font-size:0.85rem; margin-top:8px;">Ошибка: ${acc.error}</div>` : ''}
-              ${groupsHTML}
-            </div>
-          `;
-        }).join('');
-      } catch (err) {
-        cont.innerHTML = `<div class="empty-state" style="color:var(--md-sys-color-error);">Ошибка: ${err.message}</div>`;
-      }
-    }
-
-    // 4. Global Models Load
-    async function loadModels() {
-      const tbody = document.getElementById('models-tbody');
-      try {
-        const data = await apiRequest('/_control/models');
-        appState.models = data.models || [];
-        renderModelsTable(appState.models);
-      } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state" style="color:var(--md-sys-color-error);">Ошибка: ${err.message}</td></tr>`;
-      }
-    }
-
-    function renderModelsTable(models) {
-      const tbody = document.getElementById('models-tbody');
-      tbody.innerHTML = '';
-      if (!models || models.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">Модели не найдены</td></tr>`;
-        return;
-      }
-      models.forEach(m => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td style="font-weight:600;">${m.id}</td>
-          <td><span class="badge" style="background:var(--md-sys-color-surface-container-highest); cursor:pointer;" onclick="selectProvider('${m.provider}')">${m.provider}</span></td>
-          <td>${(m.context || 0).toLocaleString()}</td>
-          <td>${(m.max_output || 0).toLocaleString()}</td>
-          <td>
-            ${m.vision ? '<span class="badge badge-success" style="margin-right:4px;">Vision</span>' : ''}
-            ${m.reasoning ? '<span class="badge badge-warning">Reasoning</span>' : ''}
-          </td>
-          <td>${m.free ? '<span class="badge badge-success">Бесплатная</span>' : 'Стандартная'}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    document.getElementById('models-search').addEventListener('input', (e) => {
-      const q = e.target.value.toLowerCase().trim();
-      if (!q) { renderModelsTable(appState.models); return; }
-      const filtered = appState.models.filter(m =>
-        (m.id && m.id.toLowerCase().includes(q)) ||
-        (m.provider && m.provider.toLowerCase().includes(q))
-      );
-      renderModelsTable(filtered);
+        await api("/_control/antigravity/oauth/exchange", { method:"POST", body });
+        toast("Ключ получен и добавлен в пул");
+        state.oauth = null;
+        await loadQuota(); await loadStatus().catch(() => {});
+        render();
+      } catch (err) { toast(err.message, "err"); }
     });
+  }
+}
 
-    // Keys Modal
-    window.openKeyModalFor = function(prov) {
-      const sel = document.getElementById('generic-key-provider');
-      sel.innerHTML = '';
-      const list = (appState.options && appState.options.providers) || (appState.providers.map(p => p.id));
-      list.forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = p; opt.textContent = p;
-        if (p === prov) opt.selected = true;
-        sel.appendChild(opt);
-      });
-      openModal('key-modal');
-    };
+/* ---------- actions ---------- */
+async function setAxis(provider, axis, value, busyKey) {
+  state.busy.add(busyKey);
+  render();
+  const body = provider ? { provider, axis, value } : { axis, value };
+  try {
+    await api("/_control/options", { method:"POST", body });
+    await loadOptions();
+    toast(`${provider ? provider + ": " : ""}${axis} → ${value || "авто"}`);
+  } catch (err) {
+    toast(err.message, "err");
+  } finally {
+    state.busy.delete(busyKey);
+    if (state.route === "providers") await loadStatus().catch(() => {});
+    render();
+  }
+}
 
-    document.getElementById('submit-generic-key-btn').addEventListener('click', async () => {
-      const provider = document.getElementById('generic-key-provider').value;
-      const key = document.getElementById('generic-key-val').value.trim();
-      if (!key) { showToast('Введите ключ', 'error'); return; }
-      try {
-        await apiRequest('/_control/keys/add', { method: 'POST', body: JSON.stringify({ provider, key }) });
-        showToast('Ключ успешно добавлен');
-        closeModal('key-modal');
-        document.getElementById('generic-key-val').value = '';
-        loadOverview();
-        if (appState.activeTab === 'providers') renderActiveProviderView();
-      } catch (err) {
-        showToast('Ошибка: ' + err.message, 'error');
-      }
-    });
+document.addEventListener("click", async (e) => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const act = el.dataset.act;
 
-    window.removeAccount = async function(provider, fingerprint) {
-      if (!confirm(`Удалить ключ ${fingerprint} для ${provider}?`)) return;
-      try {
-        await apiRequest('/_control/keys/remove', { method: 'POST', body: JSON.stringify({ provider, key: fingerprint }) });
-        showToast('Ключ удален');
-        loadOverview();
-        if (appState.activeTab === 'providers') renderActiveProviderView();
-      } catch (err) {
-        showToast('Ошибка удаления: ' + err.message, 'error');
-      }
-    };
+  if (act === "refresh") { await refreshCurrent(true); return; }
+  if (act === "refresh-force") {
+    try { await loadModels(true); render(); } catch (err) { toast(err.message, "err"); }
+    return;
+  }
+  if (act === "theme") { cycleTheme(); return; }
+  if (act === "token-open") { openTokenDialog(false); return; }
+  if (act === "token-save") {
+    e.preventDefault();
+    state.token = $("#token-input").value.trim();
+    localStorage.setItem("pmux_token", state.token);
+    $("#token-dialog").close();
+    updateTokenLabel();
+    toast(state.token ? "Токен сохранён" : "Токен очищен");
+    await refreshCurrent(true);
+    return;
+  }
+  if (act === "token-clear") {
+    e.preventDefault();
+    state.token = "";
+    localStorage.removeItem("pmux_token");
+    $("#token-input").value = "";
+    $("#token-dialog").close();
+    updateTokenLabel();
+    toast("Токен очищен");
+    return;
+  }
+  if (act === "set-global") {
+    const value = el.dataset.value;
+    if (el.getAttribute("aria-checked") === "true") return;
+    await setAxis("", el.dataset.axis, value, "g-" + el.dataset.axis);
+    return;
+  }
+  if (act === "set-axis") {
+    if (el.tagName === "SELECT") return; /* the change listener owns selects */
+    const { provider, axis } = el.dataset;
+    const value = el.dataset.value;
+    await setAxis(provider, axis, value, axis + "-" + provider);
+    return;
+  }
+  if (act === "set-account") {
+    return; /* the change listener owns selects */
+  }
+  if (act === "toggle-rotation") {
+    const provider = el.dataset.provider;
+    const next = el.getAttribute("aria-checked") === "true" ? "off" : "on";
+    await setAxis(provider, "key_rotation", next, "key_rotation-" + provider);
+    return;
+  }
+  if (act === "remove-key") {
+    const { provider, key } = el.dataset;
+    if (!(await ask(`Удалить ключ ${key} из пула «${provider}»? Вернуть его можно только вставкой заново.`))) return;
+    try {
+      await api("/_control/keys/remove", { method:"POST", body:{ provider, key } });
+      toast(`Ключ ${key} удалён`);
+      await loadKeys(); await loadStatus();
+      render();
+    } catch (err) { toast(err.message, "err"); }
+    return;
+  }
+  if (act === "copy") {
+    const text = el.dataset.copy;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(`Скопировано: ${text}`);
+    } catch { toast("Буфер обмена недоступен", "err"); }
+    return;
+  }
+  if (act === "filter-provider") {
+    state.modelProvider = el.dataset.value;
+    render();
+    return;
+  }
+  if (act === "reset-filter") {
+    state.modelQuery = ""; state.modelProvider = ""; render(); return;
+  }
+  if (act === "oauth-start") {
+    try {
+      const res = await api("/_control/antigravity/oauth/start", { method:"POST", body:{ provider:"antigravity" } });
+      state.oauth = { ...res, started:true };
+      toast("Страница входа открыта в новой вкладке");
+      const target = safeUrl(res.auth_url); if (target) window.open(target, "_blank", "noopener");
+      render();
+    } catch (err) { toast(err.message, "err"); }
+    return;
+  }
+});
 
-    // Antigravity OAuth PKCE flow
-    const tabOAuth = document.getElementById('tab-oauth-btn');
-    const tabToken = document.getElementById('tab-token-btn');
-    const subOAuth = document.getElementById('subform-oauth');
-    const subToken = document.getElementById('subform-token');
+/* ---------- theme ---------- */
+function applyTheme() {
+  if (state.theme === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", state.theme);
+  const btn = $("#btn-theme");
+  if (btn) btn.innerHTML = icon(state.theme === "dark" ? "i-sun" : "i-moon");
+  const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+  if (meta) meta.setAttribute("content", state.theme === "dark" ? "#121318" : "#FBF8FD");
+}
+function cycleTheme() {
+  state.theme = state.theme === "auto" ? "light" : state.theme === "light" ? "dark" : "auto";
+  localStorage.setItem("pmux_theme", state.theme);
+  applyTheme();
+  if (state.route === "settings") render();
+}
 
-    tabOAuth.addEventListener('click', () => {
-      tabOAuth.classList.add('active'); tabToken.classList.remove('active');
-      subOAuth.style.display = 'block'; subToken.style.display = 'none';
-    });
-    tabToken.addEventListener('click', () => {
-      tabToken.classList.add('active'); tabOAuth.classList.remove('active');
-      subToken.style.display = 'block'; subOAuth.style.display = 'none';
-    });
+/* ---------- dialogs ---------- */
+let lastFocus = null;
+function openTokenDialog(unauthorized) {
+  const dlg = $("#token-dialog");
+  lastFocus = document.activeElement;
+  $("#token-input").value = state.token;
+  dlg.showModal();
+  $("#token-input").focus();
+  if (unauthorized) toast("Нужен токен: демон ответил 401", "err");
+  dlg.addEventListener("close", () => { if (lastFocus) lastFocus.focus(); }, { once:true });
+}
 
-    document.getElementById('start-oauth-btn').addEventListener('click', async () => {
-      try {
-        const projectId = document.getElementById('oauth-project-input')?.value.trim() || undefined;
-        const res = await apiRequest('/_control/antigravity/oauth/start', {
-          method: 'POST',
-          body: JSON.stringify({ project_id: projectId })
-        });
-        appState.oauthVerifier = res.verifier;
-        window.open(res.auth_url, '_blank');
-        showToast(res.listening ? 'Авторизация Google открыта. После входа аккаунт добавится автоматически!' : 'Авторизация Google открыта в новой вкладке');
+/* ---------- routing ---------- */
+function buildNav() {
+  const items = ROUTES.map((r) => `
+    <a href="#${r.id}" class="rail-item" data-route="${r.id}">
+      ${icon(r.icon)}<span>${r.label}</span>
+    </a>`).join("");
+  $("#rail").innerHTML = items;
+  $("#bottom-nav").innerHTML = ROUTES.map((r) => `
+    <a href="#${r.id}" class="bottom-item" data-route="${r.id}">
+      ${icon(r.icon)}<span>${r.label}</span>
+    </a>`).join("");
+}
+function routeFromHash() {
+  const id = (location.hash || "").replace(/^#\/?/, "");
+  return ROUTES.some((r) => r.id === id) ? id : "overview";
+}
+function applyRoute() {
+  state.route = routeFromHash();
+  const meta = ROUTES.find((r) => r.id === state.route);
+  document.title = (meta ? meta.title + " · " : "") + "providermux";
+  $$("[data-route]").forEach((a) => {
+    if (a.dataset.route === state.route) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+  refreshCurrent(false);
+}
 
-        if (appState.oauthPollTimer) clearInterval(appState.oauthPollTimer);
-        const initialCount = (appState.antigravityQuota?.accounts || []).length;
-        appState.oauthPollTimer = setInterval(async () => {
-          try {
-            const data = await apiRequest('/_control/antigravity/quota');
-            const newCount = (data?.accounts || []).length;
-            if (newCount > initialCount) {
-              clearInterval(appState.oauthPollTimer);
-              appState.oauthPollTimer = null;
-              appState.antigravityQuota = data;
-              showToast('Аккаунт Google успешно подключен!');
-              closeModal('ag-modal');
-              loadOverview();
-              if (appState.activeTab === 'providers') renderActiveProviderView();
-            }
-          } catch (_) {}
-        }, 1500);
-      } catch (err) {
-        showToast('Ошибка запуска OAuth: ' + err.message, 'error');
-      }
-    });
+/* ---------- boot ---------- */
+function boot() {
+  const params = new URLSearchParams(location.search);
+  const urlToken = params.get("token");
+  state.token = urlToken || localStorage.getItem("pmux_token") || "";
+  if (urlToken) {
+    localStorage.setItem("pmux_token", urlToken);
+    params.delete("token");
+    const qs = params.toString();
+    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + location.hash);
+  }
+  state.theme = localStorage.getItem("pmux_theme") || "auto";
+  applyTheme();
+  buildNav();
+  updateTokenLabel();
+  window.addEventListener("hashchange", applyRoute);
+  $("#token-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    state.token = $("#token-input").value.trim();
+    if (state.token) localStorage.setItem("pmux_token", state.token);
+    else localStorage.removeItem("pmux_token");
+    $("#token-dialog").close();
+    updateTokenLabel();
+    toast(state.token ? "Токен сохранён" : "Токен очищен");
+    await refreshCurrent(true);
+  });
+  applyRoute();
+  setInterval(() => {
+    if (document.visibilityState !== "visible") return;
+    if (!["overview", "providers"].includes(state.route)) return;
+    refreshCurrent(false);
+  }, POLL_MS);
+}
 
-    document.getElementById('submit-oauth-btn').addEventListener('click', async () => {
-      const code = document.getElementById('oauth-code-input').value.trim();
-      const projectId = document.getElementById('oauth-project-input').value.trim();
-      if (!code) { showToast('Введите код авторизации Google', 'error'); return; }
-      if (!appState.oauthVerifier) { showToast('Сначала нажмите шаг 1 для запуска OAuth', 'error'); return; }
-
-      try {
-        const res = await apiRequest('/_control/antigravity/oauth/exchange', {
-          method: 'POST',
-          body: JSON.stringify({ code, verifier: appState.oauthVerifier, project_id: projectId || undefined })
-        });
-        showToast(`Аккаунт ${res.email || res.fingerprint} успешно добавлен!`);
-        closeModal('ag-modal');
-        document.getElementById('oauth-code-input').value = '';
-        appState.oauthVerifier = '';
-        loadOverview();
-        if (appState.activeTab === 'providers') renderActiveProviderView();
-      } catch (err) {
-        showToast('Ошибка обмена кода: ' + err.message, 'error');
-      }
-    });
-
-    document.getElementById('submit-ag-token-btn').addEventListener('click', async () => {
-      const token = document.getElementById('ag-token-input').value.trim();
-      if (!token) { showToast('Введите refresh token', 'error'); return; }
-      try {
-        await apiRequest('/_control/keys/add', { method: 'POST', body: JSON.stringify({ provider: 'antigravity', key: token }) });
-        showToast('Аккаунт Antigravity добавлен');
-        closeModal('ag-modal');
-        document.getElementById('ag-token-input').value = '';
-        loadOverview();
-        if (appState.activeTab === 'providers') renderActiveProviderView();
-      } catch (err) {
-        showToast('Ошибка: ' + err.message, 'error');
-      }
-    });
-
-    // Token Modal
-    document.getElementById('token-btn').addEventListener('click', () => {
-      document.getElementById('app-token-input').value = appState.token;
-      openModal('token-modal');
-    });
-    document.getElementById('save-token-btn').addEventListener('click', () => {
-      const val = document.getElementById('app-token-input').value.trim();
-      appState.token = val;
-      localStorage.setItem('pmux_token', val);
-      closeModal('token-modal');
-      showToast('Токен сохранен');
-      refreshAll();
-    });
-
-    async function refreshCurrentTab() {
-      if (appState.activeTab === 'overview') await loadOverview();
-      if (appState.activeTab === 'providers') {
-        renderProviderPills();
-        renderActiveProviderView();
-      }
-      if (appState.activeTab === 'global-settings') await loadOptions();
-      if (appState.activeTab === 'models') await loadModels();
-    }
-
-    async function refreshAll() {
-      const icon = document.getElementById('refresh-icon');
-      icon.classList.add('spin');
-      try {
-        await loadOverview();
-        await loadOptions();
-        await loadModels();
-        renderProviderPills();
-        if (appState.activeTab === 'providers') renderActiveProviderView();
-      } finally {
-        setTimeout(() => icon.classList.remove('spin'), 400);
-      }
-    }
-
-    document.getElementById('refresh-btn').addEventListener('click', refreshAll);
-
-    // Initial load
-    refreshAll();
-    setInterval(refreshAll, 20000);
-  </script>
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();
+</script>
 </body>
 </html>

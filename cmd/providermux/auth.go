@@ -39,6 +39,17 @@ func requireToken(next http.Handler, cfg *config.Config) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// THE PANEL SHELL IS THE ONE EXCEPTION. It is a static page with no data
+		// and no secret, and it is the page that asks for the token. Closing it
+		// made server mode a dead end: the browser received a JSON 401 instead
+		// of HTML, so the token dialog could never appear and the only way in
+		// was pasting ?token= into the address bar. Everything the shell talks
+		// to — /v1/* and /_control/* — stays behind the check, and the shell
+		// itself renders nothing until its first call comes back with 401.
+		if r.Method == http.MethodGet && r.URL.Path == "/" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		// Server mode without a token is a configuration the daemon refuses to
 		// start with, and the live switch refuses it too. Denying here is the
 		// last line of defence: comparing against an empty secret would accept

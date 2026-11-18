@@ -46,6 +46,39 @@ func TestTokenCoversEveryPath(t *testing.T) {
 	}
 }
 
+// TestPanelShellLoadsWithoutToken — the static page is served, its data is not.
+//
+// The shell carries no data and no secret, and it is the page that asks for the
+// token. Gating it turned server mode into a dead end: the browser got a JSON
+// 401 and the token dialog inside the panel could never appear.
+func TestPanelShellLoadsWithoutToken(t *testing.T) {
+	inside := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := requireToken(inside, newServerConfig(t, "secret"))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET / without a token = %d, want 200", rec.Code)
+	}
+
+	// The exception is the shell only: methods and paths that carry data stay
+	// closed.
+	for _, probe := range []struct{ method, path string }{
+		{http.MethodPost, "/"},
+		{http.MethodGet, "/index.html"},
+		{http.MethodGet, "/v1/models"},
+		{http.MethodGet, "/_control/options"},
+	} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(probe.method, probe.path, nil))
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("%s %s without a token = %d, want 401", probe.method, probe.path, rec.Code)
+		}
+	}
+}
+
 // TestTokenAcceptsBearerAndBare — both header forms are accepted.
 //
 // Different clients behave differently, and demanding strictly one form would
