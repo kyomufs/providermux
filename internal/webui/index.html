@@ -148,6 +148,9 @@ svg { display:block; }
    reads as a staggered row even when every centre is the same. */
 .appbar .btn-icon { width:32px; height:32px; }
 .appbar .pill { height:32px; padding:0 var(--s3); }
+/* When the last successful read happened. The counters below it refresh on a
+   timer, so without a stamp one cannot tell a quiet gateway from a dead poll. */
+.stamp { font-size:11.5px; line-height:16px; color:var(--on-surface-variant); white-space:nowrap; font-variant-numeric:tabular-nums; }
 
 .shell { display:flex; min-height:calc(100dvh - var(--appbar-h)); }
 .rail {
@@ -170,6 +173,20 @@ svg { display:block; }
 }
 .rail-item[aria-current="page"] .nav-icon { color:var(--primary); }
 .nav-icon { width:18px; height:18px; flex:none; }
+/* The drawer's own footer: address, version, uptime. A nav column with nothing
+   under the last item reads as a broken layout, and these are the three facts
+   one wants before touching any control. */
+.rail-foot {
+  margin-top:auto; padding:var(--s3) var(--s3) 0;
+  border-top:1px solid var(--outline-variant);
+  display:flex; flex-direction:column; gap:4px;
+  font-size:11px; line-height:16px; color:var(--on-surface-variant);
+}
+.rail-foot b { font-weight:500; color:var(--on-surface); }
+/* A refresh that repaints nothing is indistinguishable from a dead button, so
+   the press itself has to be visible: the icon turns while the request is out. */
+@keyframes pmux-spin { to { transform:rotate(360deg); } }
+.is-loading .nav-icon { animation:pmux-spin 900ms linear infinite; }
 
 main {
   flex:1; min-width:0; max-width:1120px; padding:var(--s5) var(--s5) var(--s6);
@@ -178,14 +195,23 @@ main {
 .bottom-nav { display:none; }
 
 /* ============ page furniture ============ */
-.page-head { display:flex; align-items:center; gap:var(--s4); flex-wrap:wrap; min-height:var(--s7); margin-bottom:var(--s5); }
-.page-head h1 { font-size:22px; line-height:28px; font-weight:400; letter-spacing:0; }
+/* A rule under the title costs one line and gives the screen a top edge; without
+   it the heading floats in the same grey as the cards and the page reads flat. */
+.page-head {
+  display:flex; align-items:center; gap:var(--s4); flex-wrap:wrap;
+  min-height:var(--s7); margin-bottom:var(--s5);
+  padding-bottom:var(--s4); border-bottom:1px solid var(--outline-variant);
+}
+.page-head h1 { font-size:22px; line-height:28px; font-weight:600; letter-spacing:-.015em; }
 .page-head .lead { color:var(--on-surface-variant); font-size:13px; line-height:19px; max-width:72ch; margin-top:2px; }
 .page-head .spacer { flex:1; }
 
 .grid { display:grid; gap:var(--s4); grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); }
 .grid.kpi-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .grid.two { grid-template-columns:repeat(auto-fit,minmax(min(400px,100%),1fr)); }
+/* A 2:1 split keeps a chart or a table next to a short side card without the
+   ragged bottom an auto-fit pair produces when the two sides differ in height. */
+.grid.split { grid-template-columns:minmax(0,2fr) minmax(0,1fr); }
 .stack { display:flex; flex-direction:column; gap:var(--s3); }
 .row { display:flex; align-items:center; gap:var(--s3); flex-wrap:wrap; }
 .muted { color:var(--on-surface-variant); }
@@ -193,18 +219,23 @@ main {
 /* Grid and flex children shrink to their content by default, so one wide
    child (a long URL, a chart) stretches the whole card instead of wrapping. */
 .grid > * { min-width:0; }
+/* Paired cards share a row, so they must share a height: a short card sitting
+   next to a long one leaves a visible notch in an otherwise flat grid. */
+.grid > .card { height:100%; }
 .mono { font-family:var(--mono); font-size:12px; letter-spacing:-.01em; overflow-wrap:anywhere; }
 .mt3 { margin-top:var(--s3); } .mt4 { margin-top:var(--s4); }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
 
-/* M3 card: filled container, 12dp radius, no ringing border. */
+/* Every card is the same raised surface on the same page ground: a second card
+   variant that differs only in background makes two identical panels look like
+   they belong to different designs. */
 .card {
   background:var(--surface-lowest); border:1px solid var(--outline-variant);
   border-radius:var(--r-md); padding:var(--s4);
 }
-.card.outlined { background:var(--surface); }
+.card.outlined { background:var(--surface-lowest); }
 .card-head { display:flex; align-items:center; gap:var(--s2); min-height:24px; margin-bottom:var(--s4); }
-.card-title { font-size:14px; line-height:20px; font-weight:500; }
+.card-title { font-size:14px; line-height:20px; font-weight:600; }
 .card-sub { font-size:12px; line-height:17px; color:var(--on-surface-variant); }
 
 /* ============ chips, badges, key-value ============ */
@@ -244,7 +275,7 @@ main {
 /* Equal height so the card carrying a bar instead of a note lines up with its row. */
 .kpi { display:flex; flex-direction:column; gap:2px; min-height:72px; }
 .kpi-label { font-size:11px; line-height:16px; letter-spacing:.05em; text-transform:uppercase; color:var(--on-surface-variant); }
-.kpi-value { font-size:28px; line-height:36px; font-weight:400; letter-spacing:0; font-variant-numeric:tabular-nums; }
+.kpi-value { font-size:30px; line-height:38px; font-weight:600; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
 .kpi-value.err { color:var(--error); }
 .kpi-note { font-size:11.5px; line-height:16px; color:var(--on-surface-variant); }
 
@@ -330,10 +361,10 @@ main {
 table { width:100%; border-collapse:collapse; font-size:12.5px; }
 th, td { text-align:left; vertical-align:middle; padding:10px 12px; }
 thead th {
-  height:40px; padding:0 12px;
-  font-size:11px; line-height:16px; letter-spacing:.04em; text-transform:uppercase; font-weight:500;
-  color:var(--on-surface-variant); border-bottom:1px solid var(--outline-variant);
-  position:sticky; top:0; background:var(--surface-lowest); z-index:1;
+  height:36px; padding:0 12px;
+  font-size:10.5px; line-height:16px; letter-spacing:.08em; text-transform:uppercase; font-weight:600;
+  color:var(--on-surface-variant); border-bottom:1px solid var(--outline);
+  position:sticky; top:0; background:var(--surface-low); z-index:1;
 }
 tbody tr { border-bottom:1px solid var(--outline-variant); }
 tbody tr:last-child { border-bottom:0; }
@@ -347,10 +378,10 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 .bar-fill.warn { background:var(--warn); }
 .bar-fill.err { background:var(--error); }
 
-.chart { display:flex; align-items:flex-end; gap:8px; height:96px; padding-top:4px; }
+.chart { display:flex; align-items:flex-end; gap:8px; height:96px; padding-top:4px; border-bottom:1px solid var(--outline-variant); }
 .chart-col { flex:1; display:flex; flex-direction:column; justify-content:flex-end; gap:4px; align-items:center; min-width:0; }
 .chart-count { font-size:11px; font-variant-numeric:tabular-nums; color:var(--on-surface-variant); white-space:nowrap; }
-.chart-bar { width:100%; max-width:28px; border-radius:var(--r-xs) var(--r-xs) 0 0; background:var(--primary); }
+.chart-bar { width:100%; max-width:48px; border-radius:var(--r-xs) var(--r-xs) 0 0; background:var(--primary); }
 .chart-day { font-size:11px; color:var(--on-surface-variant); white-space:nowrap; }
 
 /* ============ states ============ */
@@ -422,6 +453,9 @@ dialog::backdrop { background:var(--scrim); }
   .hide-sm { display:none; }
   .snackbar { bottom:76px; }
   .grid.kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  /* One column: a 2:1 split on a tablet squeezes the narrow side into a strip. */
+  .grid.split { grid-template-columns:minmax(0,1fr); }
+  .stamp { display:none; }
 }
 @media (max-width: 560px) {
   /* On a phone the bar fits only the mark, two icons and one action; the
@@ -479,6 +513,7 @@ dialog::backdrop { background:var(--scrim); }
     </span>
   </div>
   <div class="appbar-spacer"></div>
+  <span class="stamp" id="last-updated"></span>
   <span class="pill" id="health-pill" aria-live="polite"><span class="dot"></span><span id="health-text">проверка…</span></span>
   <button class="btn btn-icon" id="btn-refresh" data-act="refresh" title="Обновить" aria-label="Обновить данные">
     <svg class="nav-icon"><use href="#i-refresh"/></svg>
@@ -584,6 +619,8 @@ function esc(v) {
 const NUM_FMT = new Intl.NumberFormat("ru-RU");
 const num = (v) => NUM_FMT.format(Number(v || 0));
 const pct = (v) => (Number.isFinite(v) ? Math.round(v * 1000) / 10 : 0).toLocaleString("ru-RU") + "%";
+const CLOCK_FMT = new Intl.DateTimeFormat("ru-RU", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+const clock = (ts) => (ts ? CLOCK_FMT.format(new Date(ts)) : "");
 
 function fmtUptime(sec) {
   const s = Math.max(0, Math.floor(Number(sec) || 0));
@@ -615,8 +652,23 @@ function isoIn(iso) {
   if (h >= 1) return m ? `через ${h} ч ${m} мин` : `через ${h} ч`;
   return `через ${m} мин`;
 }
-function dayLabel(day) {
-  const d = new Date(day + "T00:00:00");
+// Dialer errors are whole sentences with URLs in them. A card that shows two of
+// them becomes a wall of text, so the row carries the reason and the raw string
+// stays in the title.
+const ERR_REASONS = [
+  [/no route to host/i, "нет маршрута"],
+  [/network is unreachable/i, "сеть недоступна"],
+  [/connection refused/i, "соединение отклонено"],
+  [/timeout|deadline exceeded/i, "таймаут"],
+  [/no such host/i, "DNS не отвечает"],
+];
+function shortErr(msg) {
+  const text = String(msg || "");
+  const hit = ERR_REASONS.find(([re]) => re.test(text));
+  if (hit) return hit[1];
+  return text.length > 72 ? text.slice(0, 69) + "…" : text;
+}
+function dayLabel(day) {  const d = new Date(day + "T00:00:00");
   if (Number.isNaN(d.getTime())) return day;
   return d.toLocaleDateString("ru-RU", { day:"2-digit", month:"2-digit" });
 }
@@ -708,9 +760,32 @@ async function refreshCurrent(force) {
     else if (r === "models") { await loadModels(force); await loadStatus().catch(() => {}); }
     else if (r === "quota") { await loadQuota(); }
     else if (r === "settings") { await loadOptions(); await loadStatus().catch(() => {}); }
-    render();
+    state.loadedAt = Date.now();
+    // A manual refresh repaints even when every byte of data is identical: the
+    // press has to answer, otherwise the button looks broken. The timer poll
+    // keeps the cheap path and skips the rebuild.
+    render(force);
   } catch (err) {
+    state.errors.status = err.message;
     renderError(err);
+  }
+}
+
+// Manual refresh: the request is usually instant, so the busy state is held for
+// one frame at least — otherwise the spinner never appears and the press reads
+// as ignored again.
+async function manualRefresh(btn) {
+  if (state.refreshing) return;
+  state.refreshing = true;
+  if (btn) { btn.classList.add("is-loading"); btn.setAttribute("aria-busy", "true"); btn.disabled = true; }
+  const started = Date.now();
+  try {
+    await refreshCurrent(true);
+    await new Promise((r) => setTimeout(r, Math.max(0, 400 - (Date.now() - started))));
+    toast(state.errors.status ? "Обновить не удалось" : "Данные обновлены", state.errors.status ? "err" : "ok");
+  } finally {
+    state.refreshing = false;
+    if (btn) { btn.classList.remove("is-loading"); btn.removeAttribute("aria-busy"); btn.disabled = false; }
   }
 }
 
@@ -779,6 +854,20 @@ function updateHealth() {
     pill.className = "pill"; txt.textContent = "проверка…";
   }
   $("#brand-sub").textContent = state.status ? state.status.listen : "панель шлюза";
+  const stamp = $("#last-updated");
+  if (stamp) stamp.textContent = state.loadedAt ? "обновлено " + clock(state.loadedAt) : "";
+  updateRailMeta();
+}
+
+// The drawer footer carries the same facts as the app bar, in the place where a
+// nav column otherwise ends in emptiness.
+function updateRailMeta() {
+  const box = $("#rail-meta");
+  if (!box) return;
+  const st = state.status;
+  box.innerHTML = st
+    ? `<div><b>${esc(st.listen)}</b></div><div>режим ${esc(st.mode)}</div><div>аптайм ${esc(fmtUptime(st.uptime_seconds))}</div>`
+    : `<div>нет данных</div>`;
 }
 function updateTokenLabel() {
   $("#token-label").textContent = state.token ? "Токен задан" : "Токен";
@@ -811,9 +900,17 @@ function viewOverview() {
       }).join("")}
     </div>` : `<div class="empty">${icon("i-info")}<div>История появится после первых запросов</div></div>`;
 
+  // Counters live on the same row as the address they belong to: a separate
+  // table of one or two rows is the kind of card that makes a dashboard look
+  // unfinished, and it repeats the family column the row already carries.
+  const counters = (a) => {
+    const c = (t.by_address || []).find((x) => (x.family || "") === a.family);
+    if (!c) return "";
+    return `<div class="small muted">${num(c.ok)} ok · ${num(c.refused)} отказ · ${num(c.aborted)} обрыв</div>`;
+  };
   const addr = (st.addresses || []).map((a) => a.error
-    ? `<div class="kv"><dt><span class="pill warn">${esc(a.family)}</span></dt><dd class="small muted" style="max-width:60%">${esc(a.error)}</dd></div>`
-    : `<div class="kv"><dt><span class="pill accent">${esc(a.family)}</span></dt><dd><span class="mono">${esc(a.address)}</span><div class="small muted">${relTime(Date.now() - (a.age_ms || 0))}</div></dd></div>`
+    ? `<div class="kv"><dt><span class="pill warn">${esc(a.family)}</span></dt><dd><span class="small muted" title="${esc(a.error)}">${esc(shortErr(a.error))}</span></dd></div>`
+    : `<div class="kv"><dt><span class="pill accent">${esc(a.family)}</span></dt><dd><span class="mono">${esc(a.address)}</span>${counters(a)}<div class="small muted">${relTime(Date.now() - (a.age_ms || 0))}</div></dd></div>`
   ).join("") || `<div class="empty">${icon("i-warn")}<div>Адрес выхода ещё не определён</div></div>`;
 
   const provRows = providers.map((p) => `
@@ -827,12 +924,8 @@ function viewOverview() {
       <td class="num">${num(m.ok)}</td><td class="num">${num(m.refused)}</td><td class="num hide-sm">${num(m.aborted)}</td>
       <td class="num hide-sm muted small">${relTime(m.last_seen)}</td></tr>`).join("");
 
-  const byAddr = (t.by_address || []).map((a) => `
-    <tr><td><span class="mono">${esc(a.address || "—")}</span> <span class="pill">${esc(a.family)}</span></td>
-      <td class="num">${num(a.ok)}</td><td class="num">${num(a.refused)}</td><td class="num hide-sm">${num(a.aborted)}</td></tr>`).join("");
-
   return `
-  ${pageHead("Обзор", `Сегодня ${esc(t.day || "—")} · режим <b>${esc(st.mode)}</b> · слушает <span class="mono">${esc(st.listen)}</span>`,
+  ${pageHead("Обзор", `Сегодня ${esc(t.day || "—")} · режим <b>${esc(st.mode)}</b>`,
     `<button class="btn btn-tonal" data-act="refresh">${icon("i-refresh")}<span>Обновить</span></button>`)}
 
   <div class="grid kpi-grid">
@@ -843,21 +936,18 @@ function viewOverview() {
       <div class="bar-track mt3"><div class="bar-fill ok" style="width:${Math.round(rate*100)}%"></div></div></div></div>
   </div>
 
-  <div class="grid two mt4">
+  <div class="grid split mt4">
     <section class="card"><div class="card-head"><h2 class="card-title">Динамика за неделю</h2></div>${chart}</section>
     <section class="card"><div class="card-head"><h2 class="card-title">Адреса выхода</h2><span class="pill">${esc(st.mode)}</span></div>${addr}
       <p class="hint mt3">Лимиты бесплатных моделей считаются по адресу, поэтому семейство адресов — ось конфигурации.</p></section>
   </div>
 
-  <div class="grid two mt4">
+  <div class="grid split mt4">
+    <section class="card"><div class="card-head"><h2 class="card-title">Модели сегодня</h2></div>
+      ${byModel ? `<div class="table-wrap"><table><thead><tr><th>Модель</th><th class="num">OK</th><th class="num">Отказ</th><th class="num hide-sm">Обрыв</th><th class="num hide-sm">Активность</th></tr></thead><tbody>${byModel}</tbody></table></div>` : `<div class="empty">${icon("i-info")}<div>Сегодня запросов ещё не было</div></div>`}
+    </section>
     <section class="card"><div class="card-head"><h2 class="card-title">Провайдеры</h2><a class="btn btn-text btn-sm" href="#providers">Настроить</a></div>${provRows}</section>
-    <section class="card"><div class="card-head"><h2 class="card-title">Трафик по адресам</h2></div>
-      ${byAddr ? `<div class="table-wrap"><table><thead><tr><th>Адрес</th><th class="num">OK</th><th class="num">Отказ</th><th class="num hide-sm">Обрыв</th></tr></thead><tbody>${byAddr}</tbody></table></div>` : `<div class="empty">${icon("i-info")}<div>Счётчики появятся с первыми запросами</div></div>`}</section>
-  </div>
-
-  <section class="card mt4"><div class="card-head"><h2 class="card-title">Модели сегодня</h2></div>
-    ${byModel ? `<div class="table-wrap"><table><thead><tr><th>Модель</th><th class="num">OK</th><th class="num">Отказ</th><th class="num hide-sm">Обрыв</th><th class="num hide-sm">Активность</th></tr></thead><tbody>${byModel}</tbody></table></div>` : `<div class="empty">${icon("i-info")}<div>Сегодня запросов ещё не было</div></div>`}
-  </section>`;
+  </div>`;
 }
 
 /* ----- providers ----- */
@@ -1205,11 +1295,8 @@ document.addEventListener("click", async (e) => {
   if (!el) return;
   const act = el.dataset.act;
 
-  if (act === "refresh") { await refreshCurrent(true); return; }
-  if (act === "refresh-force") {
-    try { await loadModels(true); render(); } catch (err) { toast(err.message, "err"); }
-    return;
-  }
+  if (act === "refresh") { await manualRefresh(el); return; }
+  if (act === "refresh-force") { await manualRefresh(el); return; }
   if (act === "theme") { cycleTheme(); return; }
   if (act === "token-open") { openTokenDialog(false); return; }
   if (act === "token-save") {
@@ -1299,8 +1386,8 @@ function applyTheme() {
   else document.documentElement.setAttribute("data-theme", state.theme);
   const btn = $("#btn-theme");
   if (btn) btn.innerHTML = icon(state.theme === "dark" ? "i-sun" : "i-moon");
-  const meta = document.querySelector('meta[name="theme-color"]:not([media])');
-  if (meta) meta.setAttribute("content", state.theme === "dark" ? "#121318" : "#FBF8FD");
+  // Both theme-color tags are media-scoped, so the browser chrome follows the OS
+  // scheme on its own; the manual override repaints the page only.
 }
 function cycleTheme() {
   state.theme = state.theme === "auto" ? "light" : state.theme === "light" ? "dark" : "auto";
@@ -1327,7 +1414,7 @@ function buildNav() {
     <a href="#${r.id}" class="rail-item" data-route="${r.id}">
       ${icon(r.icon)}<span>${r.label}</span>
     </a>`).join("");
-  $("#rail").innerHTML = items;
+  $("#rail").innerHTML = items + `<div class="rail-foot" id="rail-meta"></div>`;
   $("#bottom-nav").innerHTML = ROUTES.map((r) => `
     <a href="#${r.id}" class="bottom-item" data-route="${r.id}">
       ${icon(r.icon)}<span>${r.label}</span>
