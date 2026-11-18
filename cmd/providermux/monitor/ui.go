@@ -35,19 +35,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() tea.View {
-	// Simple grid-like dashboard
-	header := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#5A56E0")).
-		Render("Providermux Dashboard")
+	// Plain weight and the terminal's own foreground: a monitor is read for its
+	// numbers, and a fixed accent colour fights every theme it lands in.
+	header := lipgloss.NewStyle().Bold(true).Render("providermux monitor")
 
 	status := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		Padding(1).
-		Width(30).
+		Border(lipgloss.NormalBorder()).
+		Padding(0, 1).
 		Render(fmt.Sprintf("Mode: %s\nAddress: %s\nTransport: %s", m.cfg.Mode.Val, m.cfg.Listen.Val, m.cfg.Transport.Val))
 
-	content := lipgloss.JoinVertical(lipgloss.Left, header, status)
+	footer := lipgloss.NewStyle().Faint(true).Render("q — quit")
+
+	content := lipgloss.JoinVertical(lipgloss.Left, header, "", status, "", footer)
 
 	v := tea.NewView(content)
 	v.AltScreen = true
