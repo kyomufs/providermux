@@ -144,6 +144,10 @@ svg { display:block; }
 .brand-name { display:block; font-size:16px; line-height:22px; font-weight:500; letter-spacing:.01em; }
 .brand-sub { display:block; font-size:11px; line-height:16px; color:var(--on-surface-variant); }
 .appbar-spacer { flex:1; }
+/* Right cluster on a single 32px line: a 40px icon button next to a 24px pill
+   reads as a staggered row even when every centre is the same. */
+.appbar .btn-icon { width:32px; height:32px; }
+.appbar .pill { height:32px; padding:0 var(--s3); }
 
 .shell { display:flex; min-height:calc(100dvh - var(--appbar-h)); }
 .rail {
@@ -174,18 +178,22 @@ main {
 .bottom-nav { display:none; }
 
 /* ============ page furniture ============ */
-.page-head { display:flex; align-items:flex-end; gap:var(--s4); flex-wrap:wrap; margin-bottom:var(--s5); }
+.page-head { display:flex; align-items:center; gap:var(--s4); flex-wrap:wrap; min-height:var(--s7); margin-bottom:var(--s5); }
 .page-head h1 { font-size:22px; line-height:28px; font-weight:400; letter-spacing:0; }
 .page-head .lead { color:var(--on-surface-variant); font-size:13px; line-height:19px; max-width:72ch; margin-top:2px; }
 .page-head .spacer { flex:1; }
 
-.grid { display:grid; gap:var(--s3); grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); }
+.grid { display:grid; gap:var(--s4); grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); }
+.grid.kpi-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .grid.two { grid-template-columns:repeat(auto-fit,minmax(min(400px,100%),1fr)); }
 .stack { display:flex; flex-direction:column; gap:var(--s3); }
 .row { display:flex; align-items:center; gap:var(--s3); flex-wrap:wrap; }
 .muted { color:var(--on-surface-variant); }
 .small { font-size:12px; line-height:17px; }
-.mono { font-family:var(--mono); font-size:12px; letter-spacing:-.01em; }
+/* Grid and flex children shrink to their content by default, so one wide
+   child (a long URL, a chart) stretches the whole card instead of wrapping. */
+.grid > * { min-width:0; }
+.mono { font-family:var(--mono); font-size:12px; letter-spacing:-.01em; overflow-wrap:anywhere; }
 .mt3 { margin-top:var(--s3); } .mt4 { margin-top:var(--s4); }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
 
@@ -195,7 +203,7 @@ main {
   border-radius:var(--r-md); padding:var(--s4);
 }
 .card.outlined { background:var(--surface); }
-.card-head { display:flex; align-items:center; gap:var(--s2); margin-bottom:var(--s3); }
+.card-head { display:flex; align-items:center; gap:var(--s2); min-height:24px; margin-bottom:var(--s4); }
 .card-title { font-size:14px; line-height:20px; font-weight:500; }
 .card-sub { font-size:12px; line-height:17px; color:var(--on-surface-variant); }
 
@@ -226,13 +234,15 @@ main {
   background:var(--secondary-container); color:var(--on-secondary-container);
   font-size:11px; font-weight:500; font-variant-numeric:tabular-nums;
 }
-.kv { display:flex; align-items:baseline; justify-content:space-between; gap:var(--s3); padding:8px 0; border-bottom:1px solid var(--outline-variant); }
+/* Centre, not baseline: a 24px pill in dt would otherwise drop the whole row. */
+.kv { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); min-height:40px; padding:8px 0; border-bottom:1px solid var(--outline-variant); }
 .kv:last-child { border-bottom:0; }
 .kv dt { color:var(--on-surface-variant); font-size:12.5px; }
-.kv dd { margin:0; font-size:12.5px; font-weight:500; text-align:right; }
+.kv dd { margin:0; min-width:0; font-size:12.5px; font-weight:500; text-align:right; overflow-wrap:anywhere; }
 
 /* ============ KPI ============ */
-.kpi { display:flex; flex-direction:column; gap:2px; }
+/* Equal height so the card carrying a bar instead of a note lines up with its row. */
+.kpi { display:flex; flex-direction:column; gap:2px; min-height:72px; }
 .kpi-label { font-size:11px; line-height:16px; letter-spacing:.05em; text-transform:uppercase; color:var(--on-surface-variant); }
 .kpi-value { font-size:28px; line-height:36px; font-weight:400; letter-spacing:0; font-variant-numeric:tabular-nums; }
 .kpi-value.err { color:var(--error); }
@@ -260,6 +270,8 @@ main {
 .btn-icon:hover { background:var(--surface-container); color:var(--on-surface); }
 .btn-sm { height:32px; padding:0 14px; font-size:13px; }
 .btn-sm .nav-icon { width:16px; height:16px; }
+/* .btn-sm would otherwise stretch an icon button to 40x32 with 14px side padding. */
+.btn-icon.btn-sm { width:32px; height:32px; padding:0; }
 
 /* ============ form controls ============ */
 .field { display:flex; flex-direction:column; gap:4px; }
@@ -282,7 +294,7 @@ main {
   border-radius:var(--r-full); overflow:hidden; background:transparent;
 }
 .segmented button {
-  height:32px; padding:0 14px; font-size:13px; line-height:20px; font-weight:500;
+  height:38px; padding:0 14px; font-size:13px; line-height:20px; font-weight:500;
   color:var(--on-surface); white-space:nowrap;
   border-left:1px solid var(--outline);
   transition:background var(--dur) var(--ease), color var(--dur) var(--ease);
@@ -309,15 +321,16 @@ main {
 }
 .switch[aria-checked="true"] { background:var(--primary); border-color:var(--primary); }
 .switch[aria-checked="true"]::after {
-  left:50%; width:24px; height:24px; margin-top:-12px; background:var(--on-primary);
+  left:24px; width:24px; height:24px; margin-top:-12px; background:var(--on-primary);
 }
 .switch:disabled { opacity:.38; cursor:not-allowed; }
 
 /* ============ tables ============ */
 .table-wrap { overflow-x:auto; border-radius:var(--r-md); }
 table { width:100%; border-collapse:collapse; font-size:12.5px; }
-th, td { text-align:left; padding:10px 12px; }
+th, td { text-align:left; vertical-align:middle; padding:10px 12px; }
 thead th {
+  height:40px; padding:0 12px;
   font-size:11px; line-height:16px; letter-spacing:.04em; text-transform:uppercase; font-weight:500;
   color:var(--on-surface-variant); border-bottom:1px solid var(--outline-variant);
   position:sticky; top:0; background:var(--surface-lowest); z-index:1;
@@ -408,10 +421,22 @@ dialog::backdrop { background:var(--scrim); }
   .page-head h1 { font-size:20px; line-height:26px; }
   .hide-sm { display:none; }
   .snackbar { bottom:76px; }
+  .grid.kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 @media (max-width: 560px) {
+  /* On a phone the bar fits only the mark, two icons and one action; the
+     health pill and the address line live on the overview screen instead. */
+  .brand-sub { display:none; }
+  .brand-name { white-space:nowrap; }
+  .appbar { gap:var(--s2); }
+  .appbar .pill { display:none; }
   .grid { grid-template-columns:1fr; }
+  .grid.kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .kpi-value { font-size:24px; line-height:32px; }
+}
+@media (max-width: 400px) {
+  .appbar .btn-sm span { display:none; }
+  .appbar .btn-sm { width:40px; padding:0; }
 }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { animation-duration:.001ms !important; transition-duration:.001ms !important; }
@@ -810,7 +835,7 @@ function viewOverview() {
   ${pageHead("Обзор", `Сегодня ${esc(t.day || "—")} · режим <b>${esc(st.mode)}</b> · слушает <span class="mono">${esc(st.listen)}</span>`,
     `<button class="btn btn-tonal" data-act="refresh">${icon("i-refresh")}<span>Обновить</span></button>`)}
 
-  <div class="grid">
+  <div class="grid kpi-grid">
     <div class="card"><div class="kpi"><span class="kpi-label">Успешно</span><span class="kpi-value">${num(t.ok)}</span><span class="kpi-note">ответов отдано клиентам</span></div></div>
     <div class="card"><div class="kpi"><span class="kpi-label">Отказы</span><span class="kpi-value err">${num(t.refused)}</span><span class="kpi-note">переданы дословно</span></div></div>
     <div class="card"><div class="kpi"><span class="kpi-label">Оборвано</span><span class="kpi-value">${num(t.aborted)}</span><span class="kpi-note">клиент закрыл поток</span></div></div>
@@ -1038,7 +1063,7 @@ function viewQuota() {
 function axisRow(axis, label, values, current, hint) {
   return `
     <div class="card outlined">
-      <div class="row" style="justify-content:space-between;align-items:flex-start">
+      <div class="row" style="justify-content:space-between">
         <div style="min-width:180px"><div class="card-title">${esc(label)}</div><div class="hint">${esc(hint || AXIS_HINT[axis] || "")}</div></div>
         ${segmented(label, values, current, `data-act="set-global" data-axis="${esc(axis)}" ${state.busy.has("g-" + axis) ? "disabled" : ""}`)}
       </div>
