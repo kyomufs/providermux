@@ -38,7 +38,10 @@ type daemon struct {
 	egress *egress.Resolver
 	// rotate asks the proxy controller for another exit address. nil means the
 	// deployment cannot change its exit.
-	rotate  func(ctx context.Context) (string, error)
+	rotate func(ctx context.Context) (string, error)
+	// settle returns the exit to its default. nil means there is no default to
+	// return to.
+	settle  func(ctx context.Context) error
 	handler http.Handler
 }
 
@@ -152,6 +155,15 @@ func build(cfg *config.Config) (*daemon, error) {
 			d.closeIdle()
 			return name, nil
 		}
+		d.settle = func(ctx context.Context) error {
+			if err := rot.Settle(ctx); err != nil {
+				return err
+			}
+			// The same reason as above: the tunnels through the node are dead
+			// weight once the group is back on the direct exit.
+			d.closeIdle()
+			return nil
+		}
 	}
 
 	d.handler = d.buildHandler()
@@ -218,6 +230,7 @@ func (d *daemon) buildHandler() http.Handler {
 		// knows HOW to obtain one. Neither needs the other's configuration.
 		Retry:  gateway.RetryPolicy{Attempts: d.cfg.Retry.Attempts, Delay: d.cfg.Retry.Delay},
 		Rotate: d.rotate,
+		Settle: d.settle,
 	}
 	gw.AllRoutes(root)
 

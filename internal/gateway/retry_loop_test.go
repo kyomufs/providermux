@@ -361,3 +361,70 @@ func TestANodeSharingTheSpentAddressIsNotAnAnswer(t *testing.T) {
 		t.Fatalf("the refusal was repackaged: %q", rec.Body.String())
 	}
 }
+
+// TestTheExitReturnsToItsDefaultAfterAnAnswer — a rotation answers one refusal.
+// Once the answer has arrived, the exit goes back to its default: leaving it on
+// the node a refusal pushed it to is what kept a spent exit in use.
+func TestTheExitReturnsToItsDefaultAfterAnAnswer(t *testing.T) {
+	var hits atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 1 {
+			w.Header().Set("content-type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = io.WriteString(w, quotaBody)
+			return
+		}
+		streamHandler(w)
+	}))
+	defer upstream.Close()
+
+	h, p, _ := newTestHandler(t, upstream)
+	p.classif = quotaProvider(t, upstream).classif
+	h.Retry = RetryPolicy{Attempts: 2, Delay: time.Millisecond}
+	addr := &switchingAddress{addr: "203.0.113.7"}
+	h.Addresses = addr
+	h.Rotate = func(context.Context) (string, error) {
+		addr.set("198.51.100.9")
+		return "some-other-node", nil
+	}
+	settled := make(chan struct{}, 1)
+	h.Settle = func(context.Context) error {
+		settled <- struct{}{}
+		return nil
+	}
+
+	rec := postChat(t, h, chatRequest)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	select {
+	case <-settled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the exit did not return to its default after the answer")
+	}
+}
+
+// TestTheExitStaysWhereItWasWithoutARotation — the return is a consequence of a
+// rotation, not housekeeping: an answer from the default exit must not move it.
+func TestTheExitStaysWhereItWasWithoutARotation(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		streamHandler(w)
+	}))
+	defer upstream.Close()
+
+	h, _, _ := newTestHandler(t, upstream)
+	settled := make(chan struct{}, 1)
+	h.Settle = func(context.Context) error {
+		settled <- struct{}{}
+		return nil
+	}
+
+	if rec := postChat(t, h, chatRequest); rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	select {
+	case <-settled:
+		t.Fatal("the exit returned to its default without a rotation")
+	case <-time.After(50 * time.Millisecond):
+	}
+}

@@ -40,6 +40,11 @@ func (p RetryPolicy) attempts() int {
 // request.
 const rotationRefreshTimeout = 5 * time.Second
 
+// settleTimeout bounds the return to the default exit. It runs after the
+// client has its answer, so it may outlive the request; it may not outlive the
+// process's patience with a controller.
+const settleTimeout = 5 * time.Second
+
 // rotationTries bounds how many nodes one rotation walks through.
 //
 // A NODE IS NOT AN ADDRESS, and this is measured, not supposed: three different
@@ -146,4 +151,28 @@ func retryableRefusal(f provider.Failure) bool {
 		return true
 	}
 	return false
+}
+
+// settleAfterSuccess returns the exit to its default once an answer has
+// arrived on a rotated one.
+//
+// WHY AFTER THE ANSWER AND NOT BEFORE THE NEXT REQUEST. The client's bytes are
+// already on their way out when this runs, so the return costs the client
+// nothing; doing it before a request would spend a rotation on a guess. The
+// call is detached and bounded: a controller that is slow, or that refuses, is
+// a reason to log, never a reason to fail an answer that already arrived.
+func (h *Handler) settleAfterSuccess() {
+	if h.Settle == nil {
+		return
+	}
+	settle := h.Settle
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), settleTimeout)
+		defer cancel()
+		if err := settle(ctx); err != nil {
+			h.warn("egress: the exit did not return to its default: %v", err)
+			return
+		}
+		h.warn("egress: the exit returned to its default after an answer")
+	}()
 }

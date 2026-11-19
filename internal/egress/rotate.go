@@ -135,6 +135,32 @@ func (r *Rotator) Rotate(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("egress: no live node among %d candidate(s) of group %q", tried, r.group)
 }
 
+// Settle returns the group to its first member, which the profile keeps as the
+// direct exit.
+//
+// WHY THIS EXISTS. A rotation is an answer to one refusal, not a new permanent
+// home: without a way back, the gateway keeps the node a refusal pushed it to
+// long after the direct address answers again, and a spent node stays in use
+// forever. The profile puts the direct exit first for exactly this reason, so
+// the first member is the default by construction, not by name.
+//
+// Best effort by design: a controller that refuses the reset must not turn a
+// successful answer into a failure, so the caller logs and moves on.
+func (r *Rotator) Settle(ctx context.Context) error {
+	all, now, err := r.list(ctx)
+	if err != nil {
+		return err
+	}
+	if len(all) == 0 {
+		return fmt.Errorf("egress: group %q has no members", r.group)
+	}
+	home := all[0]
+	if now == home {
+		return nil
+	}
+	return r.selectNode(ctx, home)
+}
+
 // list returns the group's nodes and its current choice.
 func (r *Rotator) list(ctx context.Context) ([]string, string, error) {
 	var body struct {

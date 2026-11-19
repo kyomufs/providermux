@@ -144,6 +144,15 @@ type Handler struct {
 	// itself: the proxy controller is a separate process, and reaching it is a
 	// property of the deployment, not of the request path.
 	Rotate func(ctx context.Context) (string, error)
+
+	// Settle returns the exit to its default, and is called after an answer
+	// that arrived on a rotated exit.
+	//
+	// WHY. A rotation answers one refusal; it is not a new home. Without this,
+	// the node a refusal pushed the gateway to stays in use after the default
+	// exit answers again — measured: a node kept for hours after the address it
+	// replaced had recovered. nil means the exit has no default to return to.
+	Settle func(ctx context.Context) error
 }
 
 // RoundTripperFactory hands out the transport for requests.
@@ -607,6 +616,11 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 
 	attempts := h.Retry.attempts()
 
+	// Whether this request has already moved the exit. It is what makes the
+	// return to the default exit a consequence of an answer that worked, not a
+	// periodic housekeeping nobody asked for.
+	rotated := false
+
 	for attempt := 1; ; attempt++ {
 		// The egress address is read per attempt, not per request: a rotation
 		// between two attempts IS a change of this value, and the lanes a
@@ -723,6 +737,9 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 				return
 			}
 			h.recordSuccess(model.ID, address, h.fingerprint(key))
+			if rotated {
+				h.settleAfterSuccess()
+			}
 			return
 		}
 
@@ -766,6 +783,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 		// exit alone does not answer that, and neither does a wait alone — the
 		// exit whose day is spent stays spent.
 		if attempt < attempts && h.rotateAfterQuota(r.Context(), address, failure) && h.backoff(r.Context(), attempt) {
+			rotated = true
 			continue
 		}
 

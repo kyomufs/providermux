@@ -247,6 +247,12 @@ the group, re-reads its own address, and repeats. Without `rotation` a quota
 refusal reaches the client verbatim — the gateway does not repeat a counter that
 did not move.
 
+A rotation answers ONE refusal; it is not a new home. Once an answer arrives on
+the rotated exit, the gateway puts the group back on its first member — the
+profile keeps the direct exit there — so a spent node is not kept for hours after
+the address it replaced has recovered. That return runs after the client already
+has its answer, and a controller that refuses it only costs a log line.
+
 A key refusal, a malformed request and a content refusal are never repeated: no
 other address changes those answers.
 

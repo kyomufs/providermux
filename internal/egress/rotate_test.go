@@ -202,3 +202,32 @@ func TestRotateNeedsSomethingToRotateTo(t *testing.T) {
 		t.Fatal("a rotation with one node was reported as success")
 	}
 }
+
+// TestSettleReturnsToTheFirstMember — the default exit is the profile's first
+// member, and returning to it is one PUT that is skipped when it is already
+// chosen.
+func TestSettleReturnsToTheFirstMember(t *testing.T) {
+	ctrl := &fakeController{
+		nodes: []string{"DIRECT", "🇳🇱 Нидерланды TURBO #4"},
+		now:   "🇳🇱 Нидерланды TURBO #4",
+	}
+	rot, _ := newRotator(t, ctrl, 3)
+
+	if err := rot.Settle(context.Background()); err != nil {
+		t.Fatalf("Settle: %v", err)
+	}
+	if len(ctrl.chosen) != 1 || ctrl.chosen[0] != "DIRECT" {
+		t.Fatalf("chosen = %v, want exactly [DIRECT]", ctrl.chosen)
+	}
+	if len(ctrl.probes) != 0 {
+		t.Fatalf("Settle probed %v: returning home needs no liveness probe", ctrl.probes)
+	}
+
+	// Already home: nothing to write.
+	if err := rot.Settle(context.Background()); err != nil {
+		t.Fatalf("Settle home: %v", err)
+	}
+	if len(ctrl.chosen) != 1 {
+		t.Fatalf("chosen = %v, want the second call to be a no-op", ctrl.chosen)
+	}
+}
