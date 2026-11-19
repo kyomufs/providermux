@@ -273,6 +273,59 @@ has its answer, and a controller that refuses it only costs a log line.
 A key refusal, a malformed request and a content refusal are never repeated: no
 other address changes those answers.
 
+### Rebuilding the list the selector reads
+
+`egress_refresh` lets the gateway own its own list instead of trusting a timer
+outside: it runs the builder, loads the rebuilt file through the same controller
+and puts the group back on its first member.
+
+```json
+{
+  "egress_refresh": {
+    "enable": true,
+    "interval": "24h",
+    "out": "/home/you/.config/providermux/egress",
+    "command": "proxprobe",
+    "check": "http",
+    "sources": "/home/you/.config/proxprobe/sources.yaml"
+  }
+}
+```
+
+| Axis | Default | What it decides |
+|---|---|---|
+| `enable` | `false` | whether this deployment rebuilds its own list |
+| `interval` | `24h` | how often; `0s` turns the timer off and leaves the panel button working |
+| `out` | — | the directory the builder writes and the kernel reads |
+| `command` | `proxprobe` | the builder, started as `COMMAND --check=… --mihomo OUT --out OUT [--config SOURCES]` |
+| `check` | `http` | the check the builder runs on every node |
+| `sources` | — | the builder's own source file |
+
+`out` **must be the directory the kernel was started with** (`-d`): a reload
+refuses any other path, measured as `path is not subpath of home directory or
+SAFE_PATHS: … allowed paths: […]`. The kernel swaps the list in place, so no
+tunnel is dropped — a restart would drop all of them.
+
+The node count is read back from the builder's own summary line, and a failed
+build is reported in the panel without touching the live profile.
+
+### The exit panel
+
+`#/exit` in the panel shows the group's current and home member, every node with
+a ping and a choice, the last rebuild with its error, and the interval field.
+
+| Route | Method | What it does |
+|---|---|---|
+| `/_control/exit` | GET | group, current and home member, nodes, last rebuild, interval |
+| `/_control/exit/probe` | POST | `{"name": "node"}` — one node's delay; `{}` measures every node |
+| `/_control/exit/select` | POST | `{"name": "node"}` — moves the group |
+| `/_control/exit/refresh` | POST | starts the rebuild, answers `202` at once |
+| `/_control/exit/schedule` | GET, PUT | the interval: `{"interval": "6h"}`, or `"0s"` for off |
+
+The probe budget is ten seconds for the whole request: a list of hundreds of
+nodes is measured until the budget ends and the rest is reported as not
+measured.
+
 ### Providers
 
 ```json

@@ -39,6 +39,9 @@ type daemon struct {
 	// resolvers observes the address of each provider's own path. A provider
 	// without an entry leaves by the transport above and is described by it.
 	resolvers map[provider.ID]*egress.Resolver
+	// exit is the movable exit as the panel sees it: the selector group and the
+	// rebuild of its node list. nil means the deployment has no controller.
+	exit *egress.Exit
 	// rotate asks the proxy controller for another exit address. nil means the
 	// deployment cannot change its exit.
 	rotate func(ctx context.Context) (string, error)
@@ -177,6 +180,21 @@ func build(cfg *config.Config) (*daemon, error) {
 			d.closeIdle()
 			return name, nil
 		}
+		d.exit = &egress.Exit{Rotator: rot}
+		if cfg.Refresh.Enabled() {
+			f, err := egress.NewRefresher(egress.RefreshConfig{
+				Command: cfg.Refresh.Command,
+				Sources: cfg.Refresh.Sources,
+				Out:     cfg.Refresh.Out,
+				Check:   cfg.Refresh.Check,
+				Rotator: rot,
+				Log:     d.log,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("egress refresh: %w", err)
+			}
+			d.exit.Refresher = f
+		}
 		d.settle = func(ctx context.Context) error {
 			if err := rot.Settle(ctx); err != nil {
 				return err
@@ -273,6 +291,7 @@ func (d *daemon) buildHandler() http.Handler {
 		Log:         d.log,
 		Config:      d.cfg,
 		Transports:  transportIDs(),
+		Exit:        d.exitControl(),
 		Egress:      d.egress,
 		StartTime:   time.Now(),
 	}
@@ -293,6 +312,16 @@ func (d *daemon) buildHandler() http.Handler {
 	// does not check it a second time: a double check is not an error, but it
 	// would mean two places where one question is decided.
 	return requireToken(root, d.cfg)
+}
+
+// exitControl hands the panel the movable exit. It answers nil when the
+// deployment has none: a typed nil in an interface is not nil, and the routes
+// would then be registered with nothing behind them.
+func (d *daemon) exitControl() control.ExitControl {
+	if d.exit == nil {
+		return nil
+	}
+	return d.exit
 }
 
 // serve starts the daemon and runs until a stop signal.
@@ -332,6 +361,15 @@ func (d *daemon) serve(ctx context.Context) error {
 			d.log.Warn("egress: %v", err)
 		}
 		defer r.Stop()
+	}
+
+	// The rebuild of the exit's node list starts here, before the listener: a
+	// profile that was rebuilt by an earlier run is already loaded by the
+	// controller, and the interval is the one the file named. A failure is not
+	// fatal — the gateway works with the list the controller has.
+	if d.exit != nil && d.exit.Refresher != nil {
+		d.exit.SetInterval(d.cfg.Refresh.Interval)
+		d.exit.Refresher.Start(ctx)
 	}
 
 	// The catalog refresh starts before the listener too, and for the same

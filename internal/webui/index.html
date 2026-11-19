@@ -672,6 +672,7 @@ dialog::backdrop { background:var(--scrim); }
     <a class="rail-item" href="#/models" data-route="models"><m3e-icon name="view_list" optical-size="24" aria-hidden="true"></m3e-icon>Каталог моделей</a>
     <div class="rail-group">Управление</div>
     <a class="rail-item" href="#/providers" data-route="providers"><m3e-icon name="dns" optical-size="24" aria-hidden="true"></m3e-icon>Провайдеры</a>
+    <a class="rail-item" href="#/exit" data-route="exit"><m3e-icon name="swap_horiz" optical-size="24" aria-hidden="true"></m3e-icon>Выход</a>
     <a class="rail-item" href="#/quota" data-route="quota"><m3e-icon name="data_usage" optical-size="24" aria-hidden="true"></m3e-icon>Квоты</a>
     <a class="rail-item" href="#/settings" data-route="settings"><m3e-icon name="tune" optical-size="24" aria-hidden="true"></m3e-icon>Параметры</a>
     <div class="rail-foot" id="rail-meta"></div>
@@ -698,6 +699,7 @@ dialog::backdrop { background:var(--scrim); }
 <nav class="bottom-nav" aria-label="Разделы">
   <a class="bottom-item" href="#/overview" data-route="overview"><m3e-icon name="dashboard" optical-size="24" aria-hidden="true"></m3e-icon>Обзор</a>
   <a class="bottom-item" href="#/providers" data-route="providers"><m3e-icon name="dns" optical-size="24" aria-hidden="true"></m3e-icon>Провайдеры</a>
+  <a class="bottom-item" href="#/exit" data-route="exit"><m3e-icon name="swap_horiz" optical-size="24" aria-hidden="true"></m3e-icon>Выход</a>
   <a class="bottom-item" href="#/models" data-route="models"><m3e-icon name="view_list" optical-size="24" aria-hidden="true"></m3e-icon>Модели</a>
   <a class="bottom-item" href="#/quota" data-route="quota"><m3e-icon name="data_usage" optical-size="24" aria-hidden="true"></m3e-icon>Квоты</a>
   <a class="bottom-item" href="#/settings" data-route="settings"><m3e-icon name="tune" optical-size="24" aria-hidden="true"></m3e-icon>Параметры</a>
@@ -739,7 +741,7 @@ dialog::backdrop { background:var(--scrim); }
   "use strict";
 
   const POLL_MS = 10000;
-  const ROUTES = ["overview", "providers", "models", "quota", "settings"];
+  const ROUTES = ["overview", "providers", "exit", "models", "quota", "settings"];
   const THEMES = ["auto", "light", "dark"];
   const THEME_ICON = { auto: "i-auto", light: "i-sun", dark: "i-moon" };
 
@@ -775,6 +777,8 @@ dialog::backdrop { background:var(--scrim); }
     models: null,
     keys: null,
     quota: null,
+    exit: null,
+    probes: null,
     oauth: null,
     busy: new Set(),
     lastSig: "",
@@ -905,6 +909,7 @@ dialog::backdrop { background:var(--scrim); }
     models: () => api("/_control/models"),
     keys: () => api("/_control/keys"),
     quota: () => api("/_control/antigravity/quota"),
+    exit: () => api("/_control/exit"),
   };
 
   const ROUTE_DATA = {
@@ -912,6 +917,7 @@ dialog::backdrop { background:var(--scrim); }
     providers: ["status", "options", "stats", "keys"],
     models: ["models", "status"],
     quota: ["quota", "status"],
+    exit: ["exit", "status"],
     settings: ["options", "status"],
   };
 
@@ -970,6 +976,9 @@ dialog::backdrop { background:var(--scrim); }
       state.providerFilter,
       state.keys && JSON.stringify(state.keys.providers),
       state.quota && JSON.stringify(state.quota.accounts),
+      state.exit && JSON.stringify([state.exit.group, state.exit.now, state.exit.home,
+        state.exit.nodes, state.exit.interval, state.exit.refresh, state.exit.error]),
+      state.probes && JSON.stringify(state.probes),
       state.oauth && state.oauth.url,
       Array.from(state.busy),
     ]);
@@ -1489,11 +1498,96 @@ dialog::backdrop { background:var(--scrim); }
       "</div>";
   }
 
+  // ---------------------------------------------------------------- view: exit
+
+  function intervalField(raw) {
+    // The daemon speaks Go durations; the field shows the same unit the
+    // operator would type back, so a round trip does not reformat the value.
+    const text = String(raw || "").trim();
+    if (!text || text === "0s") return "0s";
+    return text.replace(/0m0s$/, "").replace(/^0h/, "");
+  }
+
+  function probePill(name) {
+    const probe = state.probes && state.probes[name];
+    if (!probe) return "";
+    if (probe.error) return '<span class="pill err" title="' + esc(probe.error) + '">не отвечает</span>';
+    return '<span class="pill ok">' + esc(String(probe.delay)) + " мс</span>";
+  }
+
+  function exitNodeRow(node) {
+    return '<div class="kv"><div class="kv-k"><div>' + esc(node.name) +
+      (node.now ? ' <span class="pill accent">выбран</span>' : "") + "</div></div>" +
+      '<div class="kv-v row">' + probePill(node.name) +
+      '<m3e-button variant="outlined" size="small" data-act="exit-probe" data-name="' + esc(node.name) + '">Пинг</m3e-button>' +
+      '<m3e-button variant="tonal" size="small" data-act="exit-select" data-name="' + esc(node.name) + '"' +
+      (node.now || state.busy.has("exit") ? " disabled" : "") + ">Выбрать</m3e-button></div></div>";
+  }
+
+  function exitCard() {
+    const e = state.exit;
+    if (!e) return '<section class="card"><div class="card-head"><h2 class="card-title">Выход</h2></div><div class="hint">Загрузка…</div></section>';
+    if (e.error) {
+      return '<section class="card"><div class="card-head"><h2 class="card-title">Выход</h2>' +
+        '<span class="spacer"></span><span class="pill err">нет связи с ядром</span></div>' +
+        '<div class="hint">' + esc(e.error) + "</div></section>";
+    }
+    const nodes = (e.nodes || []).map(exitNodeRow).join("") || '<div class="hint">Группа пуста.</div>';
+    return '<section class="card"><div class="card-head"><h2 class="card-title">Группа ' + esc(e.group) + "</h2>" +
+      '<span class="spacer"></span><span class="hint">' + (e.nodes || []).length + " узлов</span>" +
+      '<m3e-button variant="outlined" size="small" data-act="exit-probe"' + (state.busy.has("exit") ? " disabled" : "") + ">Проверить все</m3e-button></div>" +
+      '<div class="kv"><div class="kv-k"><div>Сейчас</div><div class="hint">Куда уходит трафик прямо сейчас</div></div>' +
+        '<div class="kv-v">' + esc(e.now) + "</div></div>" +
+      '<div class="kv"><div class="kv-k"><div>Дом</div><div class="hint">Куда возвращается выход после ответа</div></div>' +
+        '<div class="kv-v">' + esc(e.home) + "</div></div>" +
+      '<div class="stack mt4" style="gap:var(--s2)">' + nodes + "</div></section>";
+  }
+
+  function exitRefreshCard() {
+    const e = state.exit;
+    const r = (e && e.refresh) || {};
+    const running = Boolean(r.running);
+    // An unrun refresh carries the zero time, which reads as a real date.
+    const finished = r.finished && !r.finished.startsWith("0001-01-01")
+      ? r.finished.slice(0, 16).replace("T", " ") : "";
+    const refreshState = running ? "идёт сборка списка…"
+      : r.error ? "прошлая сборка не удалась"
+      : finished ? "список собран " + esc(finished)
+      : "сборка ещё не запускалась";
+    const rows = [
+      ["Подписки", refreshState],
+      ["Узлов в списке", r.nodes ? esc(r.nodes) : "—"],
+      ["Авто-обновление", e && e.interval ? esc(prettyDuration(e.interval)) : "выключено"],
+    ].map(([k, v]) => '<div class="kv"><div class="kv-k">' + k + '</div><div class="kv-v">' + v + "</div></div>").join("");
+    return '<section class="card"><div class="card-head"><h2 class="card-title">Подписки</h2>' +
+      '<span class="spacer"></span>' +
+      '<m3e-button variant="filled" size="small" data-act="exit-refresh"' + (running || state.busy.has("exit") ? " disabled" : "") + ">Обновить</m3e-button></div>" +
+      "<div>" + rows + "</div>" +
+      (r.error ? '<div class="hint mt3">' + esc(r.error) + "</div>" : "") +
+      '<form class="stack mt4" id="exit-schedule">' +
+        '<label class="field"><span class="label">Интервал авто-обновления</span>' +
+          '<input class="input" id="exit-interval" name="interval" autocomplete="off" spellcheck="false" value="' +
+          esc(intervalField(e && e.interval)) + '" placeholder="24h, 6h, 0s — выключить"></label>' +
+        '<div class="row"><m3e-button variant="tonal" size="small" type="submit"' + (state.busy.has("exit") ? " disabled" : "") + ">Сохранить</m3e-button>" +
+        '<span class="hint">0s выключает авто-обновление, ручная кнопка работает всегда.</span></div>' +
+      "</form></section>";
+  }
+
+  function viewExit() {
+    const e = state.exit;
+    const lead = e && !e.error
+      ? "Селектор " + esc(e.group) + " · трафик через него идёт только у провайдеров, привязанных к этому транспорту"
+      : "Состояние выхода";
+    return pageHead("Выход", lead, refreshButton()) +
+      '<div class="cols"><div class="c7">' + exitCard() + '</div><div class="c5 stack">' + exitRefreshCard() + "</div></div>";
+  }
+
   const VIEWS = {
     overview: viewOverview,
     providers: viewProviders,
     models: viewModels,
     quota: viewQuota,
+    exit: viewExit,
     settings: viewSettings,
   };
 
@@ -1592,6 +1686,28 @@ dialog::backdrop { background:var(--scrim); }
     }
   }
 
+  // A rebuild runs inside the daemon for minutes, so the panel follows it
+  // instead of pretending the button finished.
+  async function watchRefresh() {
+    const deadline = Date.now() + 30 * 60 * 1000;
+    for (;;) {
+      try {
+        state.exit = await loaders.exit();
+      } catch (err) {
+        toast(err.message, "err");
+        return;
+      }
+      render(true);
+      const report = state.exit && state.exit.refresh;
+      if (!report || !report.running || Date.now() > deadline) {
+        if (report && report.error) toast(report.error, "err");
+        else if (report && !report.running) toast("Список обновлён: " + (report.nodes || "без узлов"));
+        return;
+      }
+      await new Promise((done) => setTimeout(done, 4000));
+    }
+  }
+
   document.addEventListener("click", async (event) => {
     const el = event.target.closest("[data-act]");
     if (!el) return;
@@ -1652,6 +1768,60 @@ dialog::backdrop { background:var(--scrim); }
     }
     if (act === "copy") {
       await copyText(el.dataset.copy);
+      return;
+    }
+    if (act === "exit-probe") {
+      const name = el.dataset.name || "";
+      state.busy.add("exit");
+      render(true);
+      try {
+        const answer = await api("/_control/exit/probe", { body: { name } });
+        const probes = Object.assign({}, state.probes || {});
+        for (const node of (answer && answer.nodes) || []) {
+          probes[node.name] = { delay: node.delay, error: node.error || "" };
+        }
+        state.probes = probes;
+        const dead = ((answer && answer.nodes) || []).filter((n) => n.error).length;
+        toast(name ? (dead ? name + ": не отвечает" : name + ": " + probes[name].delay + " мс")
+          : "Проверено узлов: " + ((answer && answer.nodes) || []).length + (dead ? ", молчат: " + dead : ""));
+      } catch (err) {
+        toast(err.message, "err");
+      } finally {
+        state.busy.delete("exit");
+        render(true);
+      }
+      return;
+    }
+    if (act === "exit-select") {
+      const name = el.dataset.name;
+      state.busy.add("exit");
+      render(true);
+      try {
+        await api("/_control/exit/select", { body: { name } });
+        toast("Выход переключён на " + name);
+        await refreshCurrent(true);
+      } catch (err) {
+        toast(err.message, "err");
+        render(true);
+      } finally {
+        state.busy.delete("exit");
+        render(true);
+      }
+      return;
+    }
+    if (act === "exit-refresh") {
+      state.busy.add("exit");
+      render(true);
+      try {
+        await api("/_control/exit/refresh", { body: {} });
+        toast("Сборка списка запущена");
+        await watchRefresh();
+      } catch (err) {
+        toast(err.message, "err");
+      } finally {
+        state.busy.delete("exit");
+        render(true);
+      }
       return;
     }
     if (act === "filter-provider") {
@@ -1716,6 +1886,24 @@ dialog::backdrop { background:var(--scrim); }
         await refreshCurrent(true);
       } catch (err) {
         toast(err.message, "err");
+      }
+      return;
+    }
+
+    if (form.id === "exit-schedule") {
+      event.preventDefault();
+      const raw = ($("#exit-interval").value || "").trim();
+      state.busy.add("exit");
+      render(true);
+      try {
+        await api("/_control/exit/schedule", { method: "PUT", body: { interval: raw } });
+        toast(raw === "0s" ? "Авто-обновление выключено" : "Интервал: " + prettyDuration(raw));
+        await refreshCurrent(true);
+      } catch (err) {
+        toast(err.message, "err");
+      } finally {
+        state.busy.delete("exit");
+        render(true);
       }
       return;
     }

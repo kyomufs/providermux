@@ -65,6 +65,11 @@ type Handler struct {
 	// than an empty one.
 	Egress EgressStatus
 
+	// Exit — the movable exit: its nodes, the rebuild of the list and the
+	// interval between rebuilds. nil means the deployment has no controller, and
+	// the routes are then not registered.
+	Exit ExitControl
+
 	// Token and RequireToken — the access check.
 	Token        string
 	RequireToken bool
@@ -110,6 +115,16 @@ func (h *Handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.handleAntigravityOAuthExchange(w, r)
 	case "ui":
 		h.handleUI(w, r)
+	case "exit":
+		h.handleExitStatus(w, r)
+	case "exit/probe":
+		h.handleExitProbe(w, r)
+	case "exit/select":
+		h.handleExitSelect(w, r)
+	case "exit/refresh":
+		h.handleExitRefresh(w, r)
+	case "exit/schedule":
+		h.handleExitSchedule(w, r)
 	default:
 		http.NotFound(w, r)
 	}

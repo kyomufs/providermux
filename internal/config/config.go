@@ -201,6 +201,35 @@ func (c *Config) RotationTransport() string {
 	return c.Transport.Val
 }
 
+// RefreshPolicy describes the rebuild of the exit's node list.
+//
+// WHY IT IS A DEPLOYMENT SETTING AND NOT A TIMER FILE. The list of nodes and
+// the process that chooses one are halves of one thing; a refresh driven by a
+// unit whose timer lives elsewhere drifts from the gateway the first time
+// either side changes. Here the interval is one value the panel shows and
+// writes, and a failed refresh surfaces as an error next to the exit it was
+// meant to keep alive.
+type RefreshPolicy struct {
+	// Enable rebuilds the list on the interval.
+	Enable bool
+	// Interval is how often the list is rebuilt. Zero means never.
+	Interval time.Duration
+	// Sources is the file the builder reads its subscriptions from.
+	Sources string
+	// Out is the directory the rebuilt profile is written to, and the one the
+	// controller is pointed at.
+	Out string
+	// Command is the builder, usually proxprobe.
+	Command string
+	// Check is the liveness check every node is put through.
+	Check string
+}
+
+// Enabled reports whether the deployment rebuilds its own list.
+func (p RefreshPolicy) Enabled() bool {
+	return p.Enable && p.Interval > 0 && p.Out != ""
+}
+
 // Config — the fully resolved configuration.
 type Config struct {
 	// --- operating mode ----------------------------------------------------
@@ -271,6 +300,8 @@ type Config struct {
 	Retry RetryPolicy
 	// Rotation — where a different exit address comes from.
 	Rotation RotationPolicy
+	// Refresh — rebuilding the exit's node list.
+	Refresh RefreshPolicy
 
 	// --- misc --------------------------------------------------------------
 
@@ -601,6 +632,18 @@ const (
 	// apart, and six is enough to step over a run of dead neighbours without
 	// turning a rotation into a survey of the whole pool.
 	DefaultProbeCount = 6
+
+	// DefaultRefreshInterval is how often the node list is rebuilt when the
+	// deployment turns it on without naming a period: a subscription that hands
+	// out short-lived nodes is the reason the refresh exists at all.
+	DefaultRefreshInterval = 24 * time.Hour
+
+	// DefaultRefreshCommand is the builder the refresh runs.
+	DefaultRefreshCommand = "proxprobe"
+
+	// DefaultRefreshCheck is the liveness check the builder applies: an HTTP
+	// fetch through every node, which is what tells a dead node from a slow one.
+	DefaultRefreshCheck = "http"
 )
 
 // Default returns a configuration with the built-in values.
@@ -623,6 +666,7 @@ func Default() *Config {
 	c.ReasoningIdleTimeout.Set(DefaultReasoningIdleTimeout, SourceDefault)
 	c.Retry = RetryPolicy{Attempts: DefaultRetryAttempts, Delay: DefaultRetryDelay}
 	c.Rotation = RotationPolicy{ProbeURL: egress.DefaultURL, ProbeCount: DefaultProbeCount}
+	c.Refresh = RefreshPolicy{Interval: DefaultRefreshInterval, Command: DefaultRefreshCommand, Check: DefaultRefreshCheck}
 	return c
 }
 
@@ -714,6 +758,7 @@ type fileShape struct {
 	ReasoningIdleTimeout *string                   `json:"reasoning_idle_timeout"`
 	Retry                *retryShape               `json:"retry"`
 	Rotation             *rotationShape            `json:"rotation"`
+	Refresh              *refreshShape             `json:"egress_refresh"`
 	Providers            map[string]ProviderConfig `json:"providers"`
 }
 
@@ -733,6 +778,16 @@ type rotationShape struct {
 	Secret     *string `json:"secret"`
 	ProbeURL   *string `json:"probe_url"`
 	ProbeCount *int    `json:"probe_count"`
+}
+
+// refreshShape is the file form of RefreshPolicy.
+type refreshShape struct {
+	Enable   *bool   `json:"enable"`
+	Interval *string `json:"interval"`
+	Sources  *string `json:"sources"`
+	Out      *string `json:"out"`
+	Command  *string `json:"command"`
+	Check    *string `json:"check"`
 }
 
 // applyFile layers the file over the built-in values.
@@ -806,6 +861,32 @@ func (c *Config) applyFile(path string) error {
 				return fmt.Errorf("config: invalid retry.delay %q: %w", *shape.Retry.Delay, err)
 			}
 			c.Retry.Delay = v
+		}
+	}
+
+	if shape.Refresh != nil {
+		r := shape.Refresh
+		if r.Enable != nil {
+			c.Refresh.Enable = *r.Enable
+		}
+		if r.Interval != nil {
+			v, err := time.ParseDuration(*r.Interval)
+			if err != nil {
+				return fmt.Errorf("config: invalid egress_refresh.interval %q: %w", *r.Interval, err)
+			}
+			c.Refresh.Interval = v
+		}
+		if r.Sources != nil {
+			c.Refresh.Sources = *r.Sources
+		}
+		if r.Out != nil {
+			c.Refresh.Out = *r.Out
+		}
+		if r.Command != nil {
+			c.Refresh.Command = *r.Command
+		}
+		if r.Check != nil {
+			c.Refresh.Check = *r.Check
 		}
 	}
 
@@ -1161,6 +1242,23 @@ func (c *Config) Validate() error {
 		// and with one attempt there is no second attempt to choose it for.
 		if !c.Retry.Enabled() {
 			return fmt.Errorf("config: rotation is inert without retry.attempts > 1 (got %d)", c.Retry.Attempts)
+		}
+	}
+	// A refresh without an output directory would build a list nowhere and then
+	// reload the controller with a path that does not exist — the exit would be
+	// left as it was while the panel reported a successful refresh.
+	if c.Refresh.Enable {
+		if strings.TrimSpace(c.Refresh.Out) == "" {
+			return fmt.Errorf("config: egress_refresh.enable needs egress_refresh.out")
+		}
+		if c.Refresh.Interval <= 0 {
+			return fmt.Errorf("config: egress_refresh.interval must be positive (got %s)", c.Refresh.Interval)
+		}
+		if strings.TrimSpace(c.Refresh.Command) == "" {
+			return fmt.Errorf("config: egress_refresh.command must not be empty")
+		}
+		if !c.Rotation.Enabled() {
+			return fmt.Errorf("config: egress_refresh needs rotation, because the rebuilt profile is loaded through its controller")
 		}
 	}
 	return nil

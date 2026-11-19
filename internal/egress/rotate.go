@@ -283,3 +283,82 @@ func excerpt(body []byte) string {
 	}
 	return s
 }
+
+// Delay asks the controller how long a node takes to fetch the probe URL.
+//
+// The controller performs the request on the node's side, so the number says
+// both that the node is reachable and that it carries traffic. It is the same
+// measurement a rotation uses before it dares move the group, exposed because
+// the panel shows it: a list of names without a liveness number is a list the
+// operator cannot choose from.
+func (r *Rotator) Delay(ctx context.Context, name string) (int, error) {
+	var body struct {
+		Delay int `json:"delay"`
+	}
+	if err := r.get(ctx, name+"/delay", &body, probeTimeout, r.probeURL); err != nil {
+		return 0, err
+	}
+	return body.Delay, nil
+}
+
+// Select makes the group's choice the named node.
+//
+// The controller accepts any name it knows, so an unknown one is refused by the
+// controller rather than guessed at here: the list belongs to it.
+func (r *Rotator) Select(ctx context.Context, name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("egress: node name must not be empty")
+	}
+	return r.selectNode(ctx, name)
+}
+
+// Reload makes the controller read a profile from disk.
+//
+// WHY NOT A RESTART. A restart drops every established tunnel for the length of
+// the reload and takes the whole exit down; the reload swaps the node list in
+// place and leaves the selector's choice to be settled separately.
+func (r *Rotator) Reload(ctx context.Context, path string) error {
+	if strings.TrimSpace(path) == "" {
+		return fmt.Errorf("egress: profile path must not be empty")
+	}
+	payload, err := json.Marshal(map[string]string{"path": path})
+	if err != nil {
+		return err
+	}
+	u := *r.controller
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/configs"
+	q := url.Values{}
+	q.Set("force", "true")
+	u.RawQuery = q.Encode()
+
+	cctx, cancel := context.WithTimeout(ctx, controllerTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(cctx, http.MethodPut, u.String(), bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("content-type", "application/json")
+	r.authorize(req)
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("egress: reloading the profile: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("egress: reloading the profile: %s: %s", resp.Status, excerpt(detail))
+	}
+	return nil
+}
+
+// Members returns the group's nodes and its current choice.
+//
+// Exposed for the panel: the operator chooses a node by name, and the names are
+// the controller's, not a copy kept here.
+func (r *Rotator) Members(ctx context.Context) ([]string, string, error) {
+	return r.list(ctx)
+}
+
+// Group reports the selector this rotator moves.
+func (r *Rotator) Group() string { return r.group }
