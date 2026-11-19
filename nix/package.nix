@@ -1,53 +1,41 @@
-# providermux — the package, as a standalone derivation.
+# providermux — the build recipe, as one derivation.
 #
-# This is what the NixOS module builds when no package is supplied. It is kept
-# beside the module rather than inside it so that the same file can be used from
-# a plain `nix build`, a shell, or an overlay.
+# ONE RECIPE, TWO ENTRY POINTS. The flake builds this file from a checkout
+# (`nix build .`); a NixOS module builds it from a fetched source tree. Neither
+# owns the source or the version — the caller passes `src` and `version` — so
+# the same file describes a working tree, a release tag and a pinned commit
+# without being edited three different ways.
 #
-# UPDATING. `version`, `hash` and `vendorHash` move together:
+# The only field that lives here is `vendorHash`: it belongs to the Go
+# dependencies and changes when go.mod changes, not when the project's own code
+# changes. When it moves, the failing build prints the replacement:
 #
-#   version = "1.3.0";
-#   # then:
-#   nix-prefetch-url --unpack \
-#     https://github.com/kyomufs/providermux/archive/refs/tags/v1.2.0.tar.gz
-#   nix-hash --to-sri --type sha256 <the base32 output>
-#   # and vendorHash, if the dependencies changed:
-#   nix build .#providermux 2>&1 | grep 'got:'
-#
-# The `rev` is a tag rather than a commit on purpose: a name a human can check
-# against the release list. The hashes are what make the build reproducible —
-# without them Nix would have to trust whatever the network returned.
+#   nix build . 2>&1 | grep 'got:'
 { lib
 , buildGoModule
-, fetchFromGitHub
+, src ? ../.
+, version ? "dev"
 }:
 
-buildGoModule rec {
+buildGoModule {
   pname = "providermux";
-  version = "1.6.4";
+  inherit src version;
 
-  src = fetchFromGitHub {
-    owner = "kyomufs";
-    repo = "providermux";
-    rev = "v${version}";
-    hash = "sha256-OY/r6A1ImObXzcGz+5Z4XPgYgV7u9H8o2JDVrd9K+N0=";
-  };
-
-  # A static binary, so the unit needs neither LD_LIBRARY_PATH nor a wrapper, and
+  # A static binary: the unit needs neither LD_LIBRARY_PATH nor a wrapper, and
   # the build works on a machine with no C toolchain at all.
   env.CGO_ENABLED = "0";
 
-  # The version goes into the binary. Without it `version` answers "unknown", and
-  # a bug report becomes a guessing game about what exactly is running.
+  # The version goes into the binary. Without it `version` answers "unknown",
+  # and a bug report becomes a guessing game about what exactly is running.
   ldflags = [ "-s" "-w" "-X" "main.buildVersion=${version}" ];
 
-  # The Bubble Tea stack that the built-in monitor uses. The hash is mandatory:
+  # Bubble Tea and its transitive dependencies, vendored. The hash is mandatory:
   # without it the build would reach the network, which a Nix build must not do.
-  vendorHash = "sha256-qpcRouxzBsHE/fSMvwAeuYYq8mRIAzPpsiVfE77z8Y8=";
+  vendorHash = "sha256-SD4lb6oox77QZzzTEix7eEFUO+uM4oYwZrQR+vaoGC8=";
 
-  # The test suite runs during the build. It is hermetic — no test reaches the
-  # network — so this costs nothing but the time, and it means a broken release
-  # fails here rather than on the machine that installs it.
+  # The test suite is hermetic — no test reaches the network — so it runs here,
+  # and a broken tree fails at build time rather than on the machine that
+  # installed it.
   doCheck = true;
 
   meta = {
