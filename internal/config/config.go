@@ -214,8 +214,10 @@ type RefreshPolicy struct {
 	Enable bool
 	// Interval is how often the list is rebuilt. Zero means never.
 	Interval time.Duration
-	// Sources is the file the builder reads its subscriptions from.
-	Sources string
+	// Subscriptions is the store the panel edits: the list of subscriptions and
+	// the duplicate rule the builder applies to them. The gateway renders it for
+	// the builder on every run, so there is one place a subscription lives.
+	Subscriptions string
 	// Out is the directory the rebuilt profile is written to, and the one the
 	// controller is pointed at.
 	Out string
@@ -782,12 +784,12 @@ type rotationShape struct {
 
 // refreshShape is the file form of RefreshPolicy.
 type refreshShape struct {
-	Enable   *bool   `json:"enable"`
-	Interval *string `json:"interval"`
-	Sources  *string `json:"sources"`
-	Out      *string `json:"out"`
-	Command  *string `json:"command"`
-	Check    *string `json:"check"`
+	Enable        *bool   `json:"enable"`
+	Interval      *string `json:"interval"`
+	Subscriptions *string `json:"subscriptions"`
+	Out           *string `json:"out"`
+	Command       *string `json:"command"`
+	Check         *string `json:"check"`
 }
 
 // applyFile layers the file over the built-in values.
@@ -876,8 +878,8 @@ func (c *Config) applyFile(path string) error {
 			}
 			c.Refresh.Interval = v
 		}
-		if r.Sources != nil {
-			c.Refresh.Sources = *r.Sources
+		if r.Subscriptions != nil {
+			c.Refresh.Subscriptions = *r.Subscriptions
 		}
 		if r.Out != nil {
 			c.Refresh.Out = *r.Out
@@ -1250,6 +1252,11 @@ func (c *Config) Validate() error {
 	if c.Refresh.Enable {
 		if strings.TrimSpace(c.Refresh.Out) == "" {
 			return fmt.Errorf("config: egress_refresh.enable needs egress_refresh.out")
+		}
+		// Without a store the panel has nowhere to keep a subscription, and the
+		// refresh would run against a list nobody can edit.
+		if strings.TrimSpace(c.Refresh.Subscriptions) == "" {
+			return fmt.Errorf("config: egress_refresh.enable needs egress_refresh.subscriptions, the file the panel edits")
 		}
 		if c.Refresh.Interval <= 0 {
 			return fmt.Errorf("config: egress_refresh.interval must be positive (got %s)", c.Refresh.Interval)

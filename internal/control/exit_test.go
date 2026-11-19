@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"providermux/internal/egress"
+	"providermux/internal/subscriptions"
 )
 
 // fakeController is a mihomo controller with one selector group.
@@ -218,10 +220,18 @@ func TestAnIntervalIsWrittenAndZeroTurnsTheRefreshOff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the rotator: %v", err)
 	}
+	store, err := subscriptions.Open(filepath.Join(t.TempDir(), "subs.json"))
+	if err != nil {
+		t.Fatalf("opening the store: %v", err)
+	}
+	if _, err := store.Add(subscriptions.Item{ID: "main", URL: "https://sub.example.test/a"}); err != nil {
+		t.Fatalf("adding a subscription: %v", err)
+	}
 	refresher, err := egress.NewRefresher(egress.RefreshConfig{
 		Command: "proxprobe",
 		Out:     t.TempDir(),
 		Rotator: rot,
+		Sources: store,
 	})
 	if err != nil {
 		t.Fatalf("building the refresher: %v", err)

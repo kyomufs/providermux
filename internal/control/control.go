@@ -30,6 +30,7 @@ import (
 	"providermux/internal/gateway"
 	"providermux/internal/provider"
 	"providermux/internal/state"
+	"providermux/internal/subscriptions"
 	"providermux/internal/webui"
 )
 
@@ -69,6 +70,10 @@ type Handler struct {
 	// interval between rebuilds. nil means the deployment has no controller, and
 	// the routes are then not registered.
 	Exit ExitControl
+
+	// Subscriptions — the list the exit is built from. nil means the deployment
+	// does not keep one, and its routes answer 501 instead of pretending.
+	Subscriptions *subscriptions.Store
 
 	// Token and RequireToken — the access check.
 	Token        string
@@ -125,6 +130,10 @@ func (h *Handler) serve(w http.ResponseWriter, r *http.Request) {
 		h.handleExitRefresh(w, r)
 	case "exit/schedule":
 		h.handleExitSchedule(w, r)
+	case "subscriptions":
+		h.handleSubscriptions(w, r)
+	case "subscriptions/mode":
+		h.handleSubscriptionMode(w, r)
 	default:
 		http.NotFound(w, r)
 	}

@@ -19,6 +19,7 @@ import (
 	"providermux/internal/gateway"
 	"providermux/internal/provider"
 	"providermux/internal/state"
+	"providermux/internal/subscriptions"
 	"providermux/internal/transport"
 	"providermux/internal/webui"
 )
@@ -42,6 +43,9 @@ type daemon struct {
 	// exit is the movable exit as the panel sees it: the selector group and the
 	// rebuild of its node list. nil means the deployment has no controller.
 	exit *egress.Exit
+	// subscriptions is the list the exit is built from, edited in the panel.
+	// nil means this deployment keeps no list of its own.
+	subscriptions *subscriptions.Store
 	// rotate asks the proxy controller for another exit address. nil means the
 	// deployment cannot change its exit.
 	rotate func(ctx context.Context) (string, error)
@@ -182,9 +186,17 @@ func build(cfg *config.Config) (*daemon, error) {
 		}
 		d.exit = &egress.Exit{Rotator: rot}
 		if cfg.Refresh.Enabled() {
+			// The panel and the refresh share one list: the panel edits it and the
+			// builder is handed a rendering of it. Opening it here rather than when
+			// the panel asks keeps a broken file a startup error, not a dead button.
+			store, err := subscriptions.Open(cfg.Refresh.Subscriptions)
+			if err != nil {
+				return nil, err
+			}
+			d.subscriptions = store
 			f, err := egress.NewRefresher(egress.RefreshConfig{
 				Command: cfg.Refresh.Command,
-				Sources: cfg.Refresh.Sources,
+				Sources: store,
 				Out:     cfg.Refresh.Out,
 				Check:   cfg.Refresh.Check,
 				Rotator: rot,
@@ -285,15 +297,16 @@ func (d *daemon) buildHandler() http.Handler {
 
 	// The control surface.
 	ctrl := &control.Handler{
-		Providers:   d.providers,
-		KeyRotation: d.keys,
-		State:       d.state,
-		Log:         d.log,
-		Config:      d.cfg,
-		Transports:  transportIDs(),
-		Exit:        d.exitControl(),
-		Egress:      d.egress,
-		StartTime:   time.Now(),
+		Providers:     d.providers,
+		KeyRotation:   d.keys,
+		State:         d.state,
+		Log:           d.log,
+		Config:        d.cfg,
+		Transports:    transportIDs(),
+		Exit:          d.exitControl(),
+		Subscriptions: d.subscriptions,
+		Egress:        d.egress,
+		StartTime:     time.Now(),
 	}
 	ctrl.Routes(root)
 

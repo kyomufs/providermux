@@ -776,8 +776,9 @@ dialog::backdrop { background:var(--scrim); }
     options: null,
     models: null,
     keys: null,
-    quota: null,
-    exit: null,
+    quota: null,    exit: null,
+    subs: null,
+    subDraft: null,
     probes: null,
     oauth: null,
     busy: new Set(),
@@ -910,6 +911,7 @@ dialog::backdrop { background:var(--scrim); }
     keys: () => api("/_control/keys"),
     quota: () => api("/_control/antigravity/quota"),
     exit: () => api("/_control/exit"),
+    subs: () => api("/_control/subscriptions"),
   };
 
   const ROUTE_DATA = {
@@ -917,7 +919,7 @@ dialog::backdrop { background:var(--scrim); }
     providers: ["status", "options", "stats", "keys"],
     models: ["models", "status"],
     quota: ["quota", "status"],
-    exit: ["exit", "status"],
+    exit: ["exit", "subs", "status"],
     settings: ["options", "status"],
   };
 
@@ -979,6 +981,8 @@ dialog::backdrop { background:var(--scrim); }
       state.exit && JSON.stringify([state.exit.group, state.exit.now, state.exit.home,
         state.exit.nodes, state.exit.interval, state.exit.refresh, state.exit.error]),
       state.probes && JSON.stringify(state.probes),
+      state.subs && JSON.stringify([state.subs.store, state.subs.dedupe, state.subs.items]),
+      state.subDraft && JSON.stringify(state.subDraft),
       state.oauth && state.oauth.url,
       Array.from(state.busy),
     ]);
@@ -1573,13 +1577,79 @@ dialog::backdrop { background:var(--scrim); }
       "</form></section>";
   }
 
+  // The list the exit is built from. The gateway owns the store; this only
+  // edits it, so the builder and the panel never disagree about the source.
+  const SUB_DEDUPE = [
+    ["strict", "strict — один узел на конфиг (298 записей → 32 сервера)"],
+    ["host", "host — один узел на адрес сервера"],
+    ["none", "none — все записи, включая дубли"],
+  ];
+
+  function subsCard() {
+    const subs = state.subs;
+
+    if (!subs) {
+      return '<section class="card mt4"><div class="card-head"><h2 class="card-title">Подписки на узлы</h2></div>' +
+        '<div class="hint">Загрузка списка…</div></section>';
+    }
+
+    const draft = state.subDraft || { mode: "add", id: "", url: "", ua: "" };
+
+    const busy = state.busy.has("subs");
+
+    const items = subs.items || [];
+
+    const rows = items.length
+      ? items.map((item) =>
+        '<div class="kv"><div class="kv-k">' + esc(item.id) + "</div>" +
+        '<div class="kv-v"><span class="mono">' + esc(item.url) + "</span>" +
+        (item.ua ? '<span class="hint"> · ' + esc(item.ua) + "</span>" : "") + "</div>" +
+        '<div class="row">' +
+        '<m3e-button variant="text" size="small" data-act="sub-edit" data-id="' + esc(item.id) + '"' + (busy ? " disabled" : "") + ">Правка</m3e-button>" +
+        '<m3e-button variant="text" size="small" data-act="sub-del" data-id="' + esc(item.id) + '"' + (busy ? " disabled" : "") + ">Удалить</m3e-button>" +
+        "</div></div>").join("")
+      : '<div class="hint">Список пуст: добавьте адрес подписки, иначе сборке нечего читать.</div>';
+
+    const modeOptions = SUB_DEDUPE.map(([value, label]) =>
+      '<option value="' + value + '"' + (subs.dedupe === value ? " selected" : "") + ">" + esc(label) + "</option>").join("");
+
+    return '<section class="card mt4"><div class="card-head"><h2 class="card-title">Подписки на узлы</h2>' +
+      '<span class="badge">' + items.length + '</span><span class="spacer"></span>' +
+      '<m3e-button variant="tonal" size="small" data-act="sub-new"' + (busy ? " disabled" : "") + ">Добавить</m3e-button></div>" +
+      "<div>" + rows + "</div>" +
+      '<div class="hint mt3">Список лежит в <span class="mono">' + esc(subs.store) +
+      "</span>. Сборщик получает его копию при каждом обновлении: править файл руками не нужно.</div>" +
+      '<form class="stack mt4" id="sub-form">' +
+        '<div class="row">' +
+          '<label class="field"><span class="label">Имя</span>' +
+            '<input class="input" id="sub-id" name="id" autocomplete="off" spellcheck="false" value="' + esc(draft.id) + '"' +
+            (draft.mode === "edit" ? " readonly" : "") + ' placeholder="main"></label>' +
+          '<label class="field"><span class="label">Адрес подписки</span>' +
+            '<input class="input" id="sub-url" name="url" autocomplete="off" spellcheck="false" value="' + esc(draft.url) + '" placeholder="https://…"></label>' +
+          '<label class="field"><span class="label">User-Agent</span>' +
+            '<input class="input" id="sub-ua" name="ua" autocomplete="off" spellcheck="false" value="' + esc(draft.ua) + '" placeholder="clash-verge/2.0"></label>' +
+        "</div>" +
+        '<div class="row"><m3e-button variant="filled" size="small" type="submit"' + (busy ? " disabled" : "") + ">" +
+          (draft.mode === "edit" ? "Сохранить" : "Добавить") + "</m3e-button>" +
+          (draft.mode === "edit"
+            ? '<m3e-button variant="text" size="small" type="button" data-act="sub-new">Отмена</m3e-button>'
+            : "") +
+          '<span class="hint">Имя можно не задавать: оно берётся из адреса подписки.</span></div>' +
+      "</form>" +
+      '<div class="stack mt4"><label class="field"><span class="label">Дубли</span>' +
+        '<select class="input" id="sub-dedupe"' + (busy ? " disabled" : "") + ">" + modeOptions + "</select></label>" +
+        '<div class="hint">Одна подписка часто отдаёт много записей на один и тот же сервер: 298 записей — это 32 адреса. ' +
+        "<b>none</b> оставит все 298, и каждый лишний узел будет проверяться при сборке.</div></div>" +
+      "</section>";
+  }
+
   function viewExit() {
     const e = state.exit;
     const lead = e && !e.error
       ? "Селектор " + esc(e.group) + " · трафик через него идёт только у провайдеров, привязанных к этому транспорту"
       : "Состояние выхода";
     return pageHead("Выход", lead, refreshButton()) +
-      '<div class="cols"><div class="c7">' + exitCard() + '</div><div class="c5 stack">' + exitRefreshCard() + "</div></div>";
+      '<div class="cols"><div class="c7">' + exitCard() + '</div><div class="c5 stack">' + exitRefreshCard() + "</div></div>" + subsCard();
   }
 
   const VIEWS = {
@@ -1770,6 +1840,36 @@ dialog::backdrop { background:var(--scrim); }
       await copyText(el.dataset.copy);
       return;
     }
+    if (act === "sub-new") {
+      state.subDraft = { mode: "add", id: "", url: "", ua: "" };
+      render(true);
+      return;
+    }
+
+    if (act === "sub-edit") {
+      const item = ((state.subs && state.subs.items) || []).find((i) => i.id === el.dataset.id);
+      if (!item) return;
+      state.subDraft = { mode: "edit", id: item.id, url: item.url, ua: item.ua || "" };
+      render(true);
+      return;
+    }
+
+    if (act === "sub-del") {
+      state.busy.add("subs");
+      render(true);
+      try {
+        await api("/_control/subscriptions?id=" + encodeURIComponent(el.dataset.id), { method: "DELETE" });
+        toast("Подписка «" + el.dataset.id + "» удалена");
+        await refreshCurrent(true);
+      } catch (err) {
+        toast(err.message, "err");
+      } finally {
+        state.busy.delete("subs");
+        render(true);
+      }
+      return;
+    }
+
     if (act === "exit-probe") {
       const name = el.dataset.name || "";
       state.busy.add("exit");
@@ -1856,7 +1956,25 @@ dialog::backdrop { background:var(--scrim); }
     return value;
   }
 
-  document.addEventListener("change", async (event) => {
+  document.addEventListener("change", async (event) => {    const dedupe = event.target.closest("#sub-dedupe");
+
+    if (dedupe) {
+      const mode = dedupe.value;
+
+      dedupe.disabled = true;
+
+      try {
+        await api("/_control/subscriptions/mode", { method: "PUT", body: { dedupe: mode } });
+        toast("Дубли: " + mode);
+        await refreshCurrent(true);
+      } catch (err) {
+        toast(err.message, "err");
+        render(true);
+      }
+      return;
+    }
+
+
     const el = event.target.closest("[data-act='set-select']");
     if (!el) return;
     await setOption({ provider: el.dataset.provider, axis: el.dataset.axis, value: el.value }, "opts-" + el.dataset.provider);
@@ -1883,6 +2001,30 @@ dialog::backdrop { background:var(--scrim); }
         await api("/_control/keys/add", { body: { provider, key } });
         input.value = "";
         toast("Ключ добавлен");
+        await refreshCurrent(true);
+      } catch (err) {
+        toast(err.message, "err");
+      }
+      return;
+    }
+
+    if (form.id === "sub-form") {
+      event.preventDefault();
+
+      const draft = state.subDraft || { mode: "add" };
+
+      const body = {
+        id: $("#sub-id").value.trim(),
+        url: $("#sub-url").value.trim(),
+        ua: $("#sub-ua").value.trim(),
+      };
+
+      // No re-render before the request: a repaint would rebuild these inputs
+      // from the draft and throw away whatever was typed.
+      try {
+        await api("/_control/subscriptions", { method: draft.mode === "edit" ? "PUT" : "POST", body });
+        toast(draft.mode === "edit" ? "Подписка изменена" : "Подписка добавлена");
+        state.subDraft = null;
         await refreshCurrent(true);
       } catch (err) {
         toast(err.message, "err");

@@ -13,7 +13,7 @@ func TestTheRefreshIntervalIsReadFromTheFile(t *testing.T) {
 		"egress_refresh": {
 			"enable": true,
 			"interval": "6h",
-			"sources": "/etc/sources.yaml",
+			"subscriptions": "/etc/subscriptions.json",
 			"out": "/var/lib/egress",
 			"command": "proxprobe",
 			"check": "tcp"
@@ -33,6 +33,9 @@ func TestTheRefreshIntervalIsReadFromTheFile(t *testing.T) {
 	}
 	if cfg.Refresh.Check != "tcp" {
 		t.Errorf("check is %q, want tcp", cfg.Refresh.Check)
+	}
+	if cfg.Refresh.Subscriptions != "/etc/subscriptions.json" {
+		t.Errorf("subscriptions is %q, want the store the panel edits", cfg.Refresh.Subscriptions)
 	}
 }
 
@@ -65,7 +68,7 @@ func TestARefreshWithoutAnOutputDirectoryIsRefused(t *testing.T) {
 
 func TestARefreshWithoutRotationIsRefused(t *testing.T) {
 	_, err := LoadFrom(writeConfig(t, `{
-		"egress_refresh": {"enable": true, "interval": "6h", "out": "/var/lib/egress"}
+		"egress_refresh": {"enable": true, "interval": "6h", "out": "/var/lib/egress", "subscriptions": "/etc/subs.json"}
 	}`))
 	if err == nil || !strings.Contains(err.Error(), "needs rotation") {
 		t.Fatalf("error is %v, want a refusal: a rebuilt profile has nowhere to be loaded", err)
@@ -76,9 +79,22 @@ func TestAnUnreadableRefreshIntervalIsRefused(t *testing.T) {
 	_, err := LoadFrom(writeConfig(t, `{
 		"rotation": {"controller": "http://127.0.0.1:9091", "group": "egress"},
 		"retry": {"attempts": 2},
-		"egress_refresh": {"enable": true, "interval": "6 hours", "out": "/var/lib/egress"}
+		"egress_refresh": {"enable": true, "interval": "6 hours", "out": "/var/lib/egress", "subscriptions": "/etc/subs.json"}
 	}`))
 	if err == nil || !strings.Contains(err.Error(), "egress_refresh.interval") {
 		t.Fatalf("error is %v, want a refusal that names the interval", err)
+	}
+}
+
+func TestARefreshWithoutTheSubscriptionListIsRefused(t *testing.T) {
+	_, err := LoadFrom(writeConfig(t, `{
+		"rotation": {"controller": "http://127.0.0.1:9091", "group": "egress"},
+		"retry": {"attempts": 2},
+		"egress_refresh": {"enable": true, "interval": "6h", "out": "/var/lib/egress"}
+	}`))
+	// Without a store the panel has nowhere to keep a subscription and the
+	// builder would read a list nobody can edit.
+	if err == nil || !strings.Contains(err.Error(), "egress_refresh.subscriptions") {
+		t.Fatalf("error is %v, want a refusal that names the missing store", err)
 	}
 }

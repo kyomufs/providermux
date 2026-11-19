@@ -287,7 +287,7 @@ and puts the group back on its first member.
     "out": "/home/you/.config/providermux/egress",
     "command": "proxprobe",
     "check": "http",
-    "sources": "/home/you/.config/proxprobe/sources.yaml"
+    "subscriptions": "/home/you/.config/providermux/sources.json"
   }
 }
 ```
@@ -297,9 +297,18 @@ and puts the group back on its first member.
 | `enable` | `false` | whether this deployment rebuilds its own list |
 | `interval` | `24h` | how often; `0s` turns the timer off and leaves the panel button working |
 | `out` | — | the directory the builder writes and the kernel reads |
-| `command` | `proxprobe` | the builder, started as `COMMAND --check=… --mihomo OUT --out OUT [--config SOURCES]` |
+| `command` | `proxprobe` | the builder, started as `COMMAND --check=… --mihomo OUT --out OUT --config STAGED --dedupe MODE` |
 | `check` | `http` | the check the builder runs on every node |
-| `sources` | — | the builder's own source file |
+| `subscriptions` | — | the store the panel edits: the subscription list and the duplicate rule |
+
+The gateway owns the list, not the tool. `subscriptions` is a JSON file the panel
+writes (`0600` — a subscription address is a credential) and the gateway renders
+into a temporary `sources.yaml` on every run, so the file the panel edits and the
+file the builder reads can never drift apart. `--dedupe` comes from the same
+store, and it is what answers a small node count: one subscription often carries
+the same server many times. Measured on a real list of 298 records: `strict`
+collapses them to 32 distinct servers (29 answered a probe), `host` to one node
+per address, and `none` keeps all 298 and probes every one of them.
 
 `out` **must be the directory the kernel was started with** (`-d`): a reload
 refuses any other path, measured as `path is not subpath of home directory or
@@ -312,7 +321,8 @@ build is reported in the panel without touching the live profile.
 ### The exit panel
 
 `#/exit` in the panel shows the group's current and home member, every node with
-a ping and a choice, the last rebuild with its error, and the interval field.
+a ping and a choice, the last rebuild with its error, the interval field, and the
+subscription list with its duplicate rule.
 
 | Route | Method | What it does |
 |---|---|---|
@@ -321,6 +331,12 @@ a ping and a choice, the last rebuild with its error, and the interval field.
 | `/_control/exit/select` | POST | `{"name": "node"}` — moves the group |
 | `/_control/exit/refresh` | POST | starts the rebuild, answers `202` at once |
 | `/_control/exit/schedule` | GET, PUT | the interval: `{"interval": "6h"}`, or `"0s"` for off |
+| `/_control/subscriptions` | GET, POST, PUT, DELETE | the store: `POST {"id","url","ua"}` adds, `PUT` changes, `DELETE ?id=` removes |
+| `/_control/subscriptions/mode` | PUT | `{"dedupe": "strict" \| "host" \| "none"}` |
+
+A deployment without `egress_refresh.subscriptions` answers `501` on both
+subscription routes: the panel says the list is not kept instead of pretending it
+is empty.
 
 The probe budget is ten seconds for the whole request: a list of hundreds of
 nodes is measured until the budget ends and the rest is reported as not

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"providermux/internal/subscriptions"
 )
 
 // reloadRecorder is a controller that records what a refresh does to it.
@@ -69,7 +71,7 @@ func TestTheRefreshRebuildsAndReloadsTheProfile(t *testing.T) {
 	// prints the line that says how many nodes survived.
 	builder := fakeBuilder(t, `mkdir -p "$3" && printf 'proxies:\n' > "$3/config.yaml" && echo "$3/config.yaml: 42 nodes + DIRECT"`)
 
-	f, err := NewRefresher(RefreshConfig{Command: builder, Out: out, Rotator: rot})
+	f, err := NewRefresher(RefreshConfig{Command: builder, Out: out, Rotator: rot, Sources: store(t)})
 	if err != nil {
 		t.Fatalf("building the refresher: %v", err)
 	}
@@ -107,7 +109,7 @@ func TestAFailedBuildIsReportedAndDoesNotReload(t *testing.T) {
 	}
 	builder := fakeBuilder(t, `echo "proxprobe: all sources failed" >&2; exit 1`)
 
-	f, err := NewRefresher(RefreshConfig{Command: builder, Out: t.TempDir(), Rotator: rot})
+	f, err := NewRefresher(RefreshConfig{Command: builder, Out: t.TempDir(), Rotator: rot, Sources: store(t)})
 	if err != nil {
 		t.Fatalf("building the refresher: %v", err)
 	}
@@ -132,7 +134,7 @@ func TestTheIntervalIsLive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the rotator: %v", err)
 	}
-	f, err := NewRefresher(RefreshConfig{Command: "proxprobe", Out: t.TempDir(), Rotator: rot})
+	f, err := NewRefresher(RefreshConfig{Command: "proxprobe", Out: t.TempDir(), Rotator: rot, Sources: store(t)})
 	if err != nil {
 		t.Fatalf("building the refresher: %v", err)
 	}
@@ -142,5 +144,62 @@ func TestTheIntervalIsLive(t *testing.T) {
 	f.SetInterval(6 * time.Hour)
 	if every := f.Interval(); every != 6*time.Hour {
 		t.Errorf("interval is %s after it was set", every)
+	}
+}
+
+// store is a subscription list with one entry, as the panel would leave it.
+func store(t *testing.T) *subscriptions.Store {
+	t.Helper()
+	s, err := subscriptions.Open(filepath.Join(t.TempDir(), "subs.json"))
+	if err != nil {
+		t.Fatalf("opening the subscription store: %v", err)
+	}
+	if _, err := s.Add(subscriptions.Item{ID: "main", URL: "https://sub.example.test/one", UA: "clash-verge/2.0"}); err != nil {
+		t.Fatalf("adding a subscription: %v", err)
+	}
+	return s
+}
+
+func TestTheToolIsHandedTheListThePanelEdits(t *testing.T) {
+	recorder := &reloadRecorder{now: "DIRECT"}
+	srv := recorder.server(t)
+	rot, err := NewRotator(RotatorConfig{Controller: srv.URL, Group: "egress", ProbeCount: 2})
+	if err != nil {
+		t.Fatalf("building the rotator: %v", err)
+	}
+	// The builder records its arguments and the subscription file it was given,
+	// then produces a profile so the rest of the refresh can finish.
+	dir := t.TempDir()
+	argsFile := filepath.Join(dir, "args.txt")
+	copyFile := filepath.Join(dir, "sources.yaml")
+	builder := fakeBuilder(t, `printf '%s\n' "$@" > `+argsFile+`; cp "$7" `+copyFile+`; mkdir -p "$3" && printf 'proxies:\n' > "$3/config.yaml" && echo "$3/config.yaml: 7 nodes"`)
+
+	sources := store(t)
+	if err := sources.SetDedupe(subscriptions.ModeNone); err != nil {
+		t.Fatalf("SetDedupe: %v", err)
+	}
+	f, err := NewRefresher(RefreshConfig{Command: builder, Out: t.TempDir(), Rotator: rot, Sources: sources})
+	if err != nil {
+		t.Fatalf("building the refresher: %v", err)
+	}
+	if _, err := f.Run(context.Background()); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+
+	args, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatalf("reading the builder's arguments: %v", err)
+	}
+	// The mode is the operator's answer to "why so few nodes", so it has to reach
+	// the tool rather than sit in the store.
+	if !strings.Contains(string(args), "--dedupe\n"+subscriptions.ModeNone) {
+		t.Errorf("the builder was not told the dedupe mode:\n%s", args)
+	}
+	rendered, err := os.ReadFile(copyFile)
+	if err != nil {
+		t.Fatalf("the builder was not handed a subscription file: %v", err)
+	}
+	if !strings.Contains(string(rendered), `url: "https://sub.example.test/one"`) {
+		t.Errorf("the builder was handed:\n%s", rendered)
 	}
 }

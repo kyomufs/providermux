@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -11,14 +12,17 @@ import (
 	"time"
 
 	"providermux/internal/state"
+	"providermux/internal/subscriptions"
 )
 
 // RefreshConfig are the settings of the subscription refresh.
 type RefreshConfig struct {
 	// Command is the tool that rebuilds the profile, usually proxprobe.
 	Command string
-	// Sources is the file the tool reads its subscriptions from.
-	Sources string
+	// Sources is the list of subscriptions, rendered for the tool on every run.
+	// The gateway owns it: the panel edits it, and a file the tool also writes
+	// would be a second owner of the same answer.
+	Sources *subscriptions.Store
 	// Out is the directory the tool writes the profile to.
 	Out string
 	// Check is the liveness check the tool runs on every node.
@@ -83,6 +87,9 @@ func NewRefresher(cfg RefreshConfig) (*Refresher, error) {
 	if cfg.Rotator == nil {
 		return nil, fmt.Errorf("egress: refresh needs a rotator to reload the profile")
 	}
+	if cfg.Sources == nil {
+		return nil, fmt.Errorf("egress: refresh needs the subscription list")
+	}
 	if cfg.Check == "" {
 		cfg.Check = "http"
 	}
@@ -131,9 +138,28 @@ func (f *Refresher) Run(ctx context.Context) (Report, error) {
 
 // run performs one refresh.
 func (f *Refresher) run(ctx context.Context) (Report, error) {
-	args := []string{"--check=" + f.cfg.Check, "--mihomo", f.cfg.Out, "--out", f.cfg.Out}
-	if f.cfg.Sources != "" {
-		args = append(args, "--config", f.cfg.Sources)
+	sources, err := f.cfg.Sources.Render()
+	if err != nil {
+		return Report{}, err
+	}
+	// The rendering lives in a temporary file: the tool reads a path, and the
+	// list it reads must be the one the panel showed a moment ago.
+	dir, err := os.MkdirTemp("", "pmux-sources-")
+	if err != nil {
+		return Report{}, fmt.Errorf("egress: staging the subscription list: %w", err)
+	}
+	defer os.RemoveAll(dir)
+	path := filepath.Join(dir, "sources.yaml")
+	if err := os.WriteFile(path, sources, 0o600); err != nil {
+		return Report{}, fmt.Errorf("egress: staging the subscription list: %w", err)
+	}
+
+	args := []string{
+		"--check=" + f.cfg.Check,
+		"--mihomo", f.cfg.Out,
+		"--out", f.cfg.Out,
+		"--config", path,
+		"--dedupe", f.cfg.Sources.Dedupe(),
 	}
 	cmd := exec.CommandContext(ctx, f.cfg.Command, args...)
 	out, err := cmd.CombinedOutput()
