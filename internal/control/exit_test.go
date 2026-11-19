@@ -1,9 +1,11 @@
 package control
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -194,6 +196,60 @@ func TestEveryNodeIsProbedWhenNoNameIsGiven(t *testing.T) {
 	}
 }
 
+func TestAListOfNamesProbesOnlyThatList(t *testing.T) {
+	// The panel has a button per subscription: the group is a slice of the
+	// group members, so a probe of one group must not spend its budget on the
+	// nodes of another subscription.
+	h := exitUnderTest(t)
+
+	rec := call(t, h, http.MethodPost, "exit/probe", `{"names":["node-a","node-b"]}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status is %d, want 200: %s", rec.Code, rec.Body)
+	}
+	var answer struct {
+		Nodes []struct {
+			Name  string `json:"name"`
+			Delay int    `json:"delay"`
+			Error string `json:"error"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil {
+		t.Fatalf("decoding the answer: %v: %s", err, rec.Body)
+	}
+	if len(answer.Nodes) != 2 {
+		t.Fatalf("probed %d nodes, want the 2 that were named: %+v", len(answer.Nodes), answer.Nodes)
+	}
+	if answer.Nodes[0].Name != "node-a" || answer.Nodes[0].Delay != 209 {
+		t.Errorf("first node is %+v, want node-a at 209 ms", answer.Nodes[0])
+	}
+	if answer.Nodes[1].Name != "node-b" || answer.Nodes[1].Error == "" {
+		t.Errorf("second node is %+v, want node-b with an error", answer.Nodes[1])
+	}
+}
+
+func TestASingleNameWinsOverAList(t *testing.T) {
+	// The per-row ping sends both fields when the panel reuses one payload
+	// builder; one name means one node, and a list in the same body must not
+	// silently widen it.
+	h := exitUnderTest(t)
+
+	rec := call(t, h, http.MethodPost, "exit/probe", `{"name":"node-a","names":["node-a","node-b","node-c"]}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status is %d, want 200: %s", rec.Code, rec.Body)
+	}
+	var answer struct {
+		Nodes []struct {
+			Name string `json:"name"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil {
+		t.Fatalf("decoding the answer: %v: %s", err, rec.Body)
+	}
+	if len(answer.Nodes) != 1 || answer.Nodes[0].Name != "node-a" {
+		t.Fatalf("probed %+v, want only node-a", answer.Nodes)
+	}
+}
+
 func TestSelectingANodeMovesTheGroup(t *testing.T) {
 	h := exitUnderTest(t)
 
@@ -283,5 +339,78 @@ func TestARefreshOnADeploymentWithoutOneIsRefused(t *testing.T) {
 	}
 	if !strings.Contains(state.Refresh.Error, "does not rebuild its own list") {
 		t.Errorf("refresh error is %q, want the refusal of a deployment without a refresher", state.Refresh.Error)
+	}
+}
+
+// The operator sees the exit grouped by subscription, so the panel answer has
+// to carry the provenance of each node. The controller cannot say it and the
+// profile does not contain it: it exists only in the manifest a rebuild writes.
+func TestThePanelGroupsNodesByTheSubscriptionThatProducedThem(t *testing.T) {
+	rot, err := egress.NewRotator(egress.RotatorConfig{
+		Controller: fakeController(t).URL,
+		Group:      "egress",
+		ProbeCount: 3,
+	})
+	if err != nil {
+		t.Fatalf("building the rotator: %v", err)
+	}
+
+	builder := filepath.Join(t.TempDir(), "builder.sh")
+	script := `#!/bin/sh
+mkdir -p "$3"
+printf 'proxies:\n' > "$3/config.yaml"
+cat > "$3/nodes.json" <<'JSON'
+{"nodes":[{"name":"node-a","sources":["first"]},{"name":"node-b","sources":["first","second"]}]}
+JSON
+echo "$3/config.yaml: 2 nodes + DIRECT"
+`
+	if err := os.WriteFile(builder, []byte(script), 0o755); err != nil {
+		t.Fatalf("writing the builder: %v", err)
+	}
+
+	storePath := filepath.Join(t.TempDir(), "subs.json")
+	if err := os.WriteFile(storePath, []byte(`{"dedupe":"none","items":[{"id":"first","url":"https://example.test/first"}]}`), 0o600); err != nil {
+		t.Fatalf("writing the store: %v", err)
+	}
+	store, err := subscriptions.Open(storePath)
+	if err != nil {
+		t.Fatalf("opening the store: %v", err)
+	}
+
+	f, err := egress.NewRefresher(egress.RefreshConfig{
+		Command: builder,
+		Sources: store,
+		Out:     t.TempDir(),
+		Check:   "none",
+		Rotator: rot,
+	})
+	if err != nil {
+		t.Fatalf("building the refresher: %v", err)
+	}
+	if _, err := f.Run(context.Background()); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+
+	h := &Handler{Exit: &egress.Exit{Rotator: rot, Refresher: f}}
+	rec := call(t, h, http.MethodGet, "exit", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	var state ExitState
+	if err := json.Unmarshal(rec.Body.Bytes(), &state); err != nil {
+		t.Fatalf("decoding: %v", err)
+	}
+	byName := map[string][]string{}
+	for _, node := range state.Nodes {
+		byName[node.Name] = node.Sources
+	}
+	if got := strings.Join(byName["node-a"], ","); got != "first" {
+		t.Errorf("node-a is grouped under %q, want first", got)
+	}
+	if got := strings.Join(byName["node-b"], ","); got != "first,second" {
+		t.Errorf("node-b is grouped under %q, want both subscriptions", got)
+	}
+	if got := byName["DIRECT"]; len(got) != 0 {
+		t.Errorf("DIRECT carries sources %v, want none: it comes from no subscription", got)
 	}
 }

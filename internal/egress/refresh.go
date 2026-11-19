@@ -2,6 +2,7 @@ package egress
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -37,6 +38,9 @@ type RefreshConfig struct {
 // the tool's, not ours: it is the file a core reads when it is pointed at a
 // directory, and renaming it here would break that contract.
 const profileFile = "config.yaml"
+
+// manifestFile is the name the tool writes its node manifest under.
+const manifestFile = "nodes.json"
 
 // Report is the outcome of one refresh.
 type Report struct {
@@ -74,6 +78,12 @@ type Refresher struct {
 	// interval is live: the panel changes it without a restart.
 	interval time.Duration
 	wake     chan struct{}
+
+	// sources maps a node name in the profile to the subscriptions it came
+	// from, as the tool reported it on the last successful build. Empty when
+	// the tool wrote no manifest: the panel then shows nodes without a group
+	// rather than in a group it guessed.
+	sources map[string][]string
 }
 
 // NewRefresher creates the refresher.
@@ -93,7 +103,11 @@ func NewRefresher(cfg RefreshConfig) (*Refresher, error) {
 	if cfg.Check == "" {
 		cfg.Check = "http"
 	}
-	return &Refresher{cfg: cfg, gate: make(chan struct{}, 1), wake: make(chan struct{}, 1)}, nil
+	f := &Refresher{cfg: cfg, gate: make(chan struct{}, 1), wake: make(chan struct{}, 1)}
+	// The manifest on disk describes the profile the controller loaded, so
+	// the panel can group the nodes before the first rebuild of this process.
+	f.readManifest(false)
+	return f, nil
 }
 
 // Run rebuilds the profile, reloads the controller and returns the exit home.
@@ -177,7 +191,71 @@ func (f *Refresher) run(ctx context.Context) (Report, error) {
 	if err := f.cfg.Rotator.Settle(ctx); err != nil {
 		return Report{Nodes: nodesLine(string(out))}, err
 	}
+	f.readManifest(true)
 	return Report{Nodes: nodesLine(string(out))}, nil
+}
+
+// readManifest запоминает, из какой подписки пришёл каждый узел профиля.
+//
+// Манифест — единственный источник этого знания: в профиле ядра подписки нет,
+// а имя узла может быть переименовано при уникализации. Старый манифест к
+// новому профилю не подходит, поэтому отсутствие файла очищает карту, а не
+// оставляет вчерашнюю: узлы без подписки честнее, чем узлы в чужой группе.
+// noisy says whether a missing or broken manifest is worth a warning. A
+// process that starts without one is normal — the deployment may never have
+// rebuilt on this host — while a rebuild that leaves none is a fault.
+func (f *Refresher) readManifest(noisy bool) {
+	body, err := os.ReadFile(filepath.Join(f.cfg.Out, manifestFile))
+	if err != nil {
+		f.mu.Lock()
+		f.sources = nil
+		f.mu.Unlock()
+		if f.cfg.Log != nil {
+			if noisy {
+				f.cfg.Log.Warn("egress refresh: no node manifest next to the profile: %v", err)
+			}
+		}
+		return
+	}
+
+	var doc manifestDoc
+	if err := json.Unmarshal(body, &doc); err != nil {
+		f.mu.Lock()
+		f.sources = nil
+		f.mu.Unlock()
+		if f.cfg.Log != nil {
+			if noisy {
+				f.cfg.Log.Warn("egress refresh: node manifest does not parse: %v", err)
+			}
+		}
+		return
+	}
+
+	sources := make(map[string][]string, len(doc.Nodes))
+	for _, node := range doc.Nodes {
+		if node.Name == "" {
+			continue
+		}
+		sources[node.Name] = node.Sources
+	}
+	f.mu.Lock()
+	f.sources = sources
+	f.mu.Unlock()
+}
+
+// NodeSources возвращает карту «имя узла в профиле → подписки, из которых он
+// пришёл». Копия, чтобы панель не могла править состояние сборки.
+func (f *Refresher) NodeSources() map[string][]string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.sources) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(f.sources))
+	for name, list := range f.sources {
+		out[name] = append([]string(nil), list...)
+	}
+	return out
 }
 
 // Start runs the refresh on its interval until the context ends.
@@ -265,4 +343,14 @@ func tail(s string, n int) string {
 		return strings.Join(strings.Fields(s), " ")
 	}
 	return strings.Join(strings.Fields(s[len(s)-n:]), " ")
+}
+
+// manifestDoc is the part of the tool's manifest the panel needs. The rest of
+// the file (protocol, address) is for humans reading it; the gateway only maps
+// a name in the profile to the subscriptions it came from.
+type manifestDoc struct {
+	Nodes []struct {
+		Name    string   `json:"name"`
+		Sources []string `json:"sources"`
+	} `json:"nodes"`
 }

@@ -37,6 +37,10 @@ type ExitNode struct {
 	Name string `json:"name"`
 	// Now — whether this node is the current choice.
 	Now bool `json:"now"`
+	// Sources — the subscriptions that produced this node. A node that came
+	// from no manifest has none, and the panel shows it as such rather than
+	// inventing a group.
+	Sources []string `json:"sources,omitempty"`
 }
 
 // ExitControl is the movable exit: its nodes, the subscription refresh and the
@@ -55,6 +59,9 @@ type ExitControl interface {
 	Select(ctx context.Context, name string) error
 	// Group is the selector the controller moves.
 	Group() string
+	// NodeSources maps a node to the subscriptions that produced it. The list
+	// is empty until a rebuild has written its manifest.
+	NodeSources() map[string][]string
 	// Refresh rebuilds the node list now.
 	Refresh(ctx context.Context) (egress.Report, error)
 	// RefreshStatus is the last rebuild, without starting one.
@@ -100,8 +107,11 @@ func (h *Handler) handleExitStatus(w http.ResponseWriter, r *http.Request) {
 		state.Home = all[0]
 	}
 	state.Nodes = make([]ExitNode, 0, len(all))
+	// The provenance is a property of the list the controller loaded, not of
+	// the controller: it is known only after a rebuild that wrote a manifest.
+	sources := h.Exit.NodeSources()
 	for _, name := range all {
-		state.Nodes = append(state.Nodes, ExitNode{Name: name, Now: name == now})
+		state.Nodes = append(state.Nodes, ExitNode{Name: name, Now: name == now, Sources: sources[name]})
 	}
 	writeJSON(w, http.StatusOK, state)
 }
@@ -113,7 +123,8 @@ func (h *Handler) handleExitProbe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name string `json:"name"`
+		Name  string   `json:"name"`
+		Names []string `json:"names"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
@@ -122,8 +133,15 @@ func (h *Handler) handleExitProbe(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), exitBudget)
 	defer cancel()
 
-	names := []string{req.Name}
-	if req.Name == "" {
+	// Three ways to say what to measure, in the order the panel uses them: one
+	// name, an explicit list (the nodes of one subscription), or everything.
+	// A list is the caller narrowing the budget, not a filter on top of it.
+	names := req.Names
+	switch {
+	case req.Name != "":
+		names = []string{req.Name}
+	case len(names) > 0:
+	default:
 		all, _, err := h.Exit.Members(ctx)
 		if err != nil {
 			writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error()})

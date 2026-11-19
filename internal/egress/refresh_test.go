@@ -203,3 +203,100 @@ func TestTheToolIsHandedTheListThePanelEdits(t *testing.T) {
 		t.Errorf("the builder was handed:\n%s", rendered)
 	}
 }
+
+// A subscription hands out records that differ only in the name, so the panel
+// groups the nodes by the source that produced them. The profile cannot say
+// that, and the builder's report does not print it, so the manifest next to the
+// profile is the only place the answer exists.
+func TestTheNodesKeepTheSourceThatProducedThem(t *testing.T) {
+	recorder := &reloadRecorder{now: "DIRECT"}
+	srv := recorder.server(t)
+	rot, err := NewRotator(RotatorConfig{Controller: srv.URL, Group: "egress", ProbeCount: 2})
+	if err != nil {
+		t.Fatalf("building the rotator: %v", err)
+	}
+	out := t.TempDir()
+	manifest := `{"generated":"2026-11-20T00:00:00Z","nodes":[
+		{"name":"node-a","sources":["first"]},
+		{"name":"node-b","sources":["first","second"]}]}`
+	builder := fakeBuilder(t, `mkdir -p "$3" && printf 'proxies:\n' > "$3/config.yaml" && cat > "$3/nodes.json" <<'JSON'
+`+manifest+`
+JSON
+echo "$3/config.yaml: 2 nodes + DIRECT"`)
+
+	f, err := NewRefresher(RefreshConfig{Command: builder, Out: out, Rotator: rot, Sources: store(t)})
+	if err != nil {
+		t.Fatalf("building the refresher: %v", err)
+	}
+	if _, err := f.Run(context.Background()); err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+
+	sources := f.NodeSources()
+	if got := strings.Join(sources["node-a"], ","); got != "first" {
+		t.Errorf("node-a came from %q, want first", got)
+	}
+	if got := strings.Join(sources["node-b"], ","); got != "first,second" {
+		t.Errorf("node-b came from %q, want both sources", got)
+	}
+}
+
+// A manifest left over from yesterday's profile would label today's nodes with
+// the wrong subscription: the names are rebuilt on every run. A missing file
+// therefore clears the map instead of keeping the previous answer.
+func TestAManifestThatDoesNotMatchClearsTheProvenance(t *testing.T) {
+	recorder := &reloadRecorder{now: "DIRECT"}
+	srv := recorder.server(t)
+	rot, err := NewRotator(RotatorConfig{Controller: srv.URL, Group: "egress", ProbeCount: 2})
+	if err != nil {
+		t.Fatalf("building the rotator: %v", err)
+	}
+	out := t.TempDir()
+	withManifest := fakeBuilder(t, `mkdir -p "$3" && printf 'proxies:\n' > "$3/config.yaml" && printf '{"nodes":[{"name":"node-a","sources":["first"]}]}' > "$3/nodes.json" && echo ok`)
+	without := fakeBuilder(t, `mkdir -p "$3" && printf 'proxies:\n' > "$3/config.yaml" && rm -f "$3/nodes.json" && echo ok`)
+
+	f, err := NewRefresher(RefreshConfig{Command: withManifest, Out: out, Rotator: rot, Sources: store(t)})
+	if err != nil {
+		t.Fatalf("building the refresher: %v", err)
+	}
+	if _, err := f.Run(context.Background()); err != nil {
+		t.Fatalf("first refresh: %v", err)
+	}
+	if len(f.NodeSources()) == 0 {
+		t.Fatal("the first run kept no provenance: the test cannot see the clearing")
+	}
+
+	f.cfg.Command = without
+	if _, err := f.Run(context.Background()); err != nil {
+		t.Fatalf("second refresh: %v", err)
+	}
+	if got := f.NodeSources(); len(got) != 0 {
+		t.Errorf("provenance survived a build that wrote no manifest: %v", got)
+	}
+}
+
+// A daemon that restarts must show the panel the groups the controller is
+// already serving: the manifest describes the loaded profile, and waiting for
+// the next rebuild would leave the operator looking at an ungrouped list.
+func TestTheManifestIsReadWithoutARebuild(t *testing.T) {
+	recorder := &reloadRecorder{now: "DIRECT"}
+	srv := recorder.server(t)
+	rot, err := NewRotator(RotatorConfig{Controller: srv.URL, Group: "egress", ProbeCount: 2})
+	if err != nil {
+		t.Fatalf("building the rotator: %v", err)
+	}
+	out := t.TempDir()
+	manifest := `{"nodes":[{"name":"node-a","sources":["first"]}]}`
+	if err := os.WriteFile(filepath.Join(out, manifestFile), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("writing the manifest: %v", err)
+	}
+	// A command that cannot run: any rebuild would fail the test, and the
+	// provenance must appear without one.
+	f, err := NewRefresher(RefreshConfig{Command: "/bin/false", Out: out, Rotator: rot, Sources: store(t)})
+	if err != nil {
+		t.Fatalf("building the refresher: %v", err)
+	}
+	if got := strings.Join(f.NodeSources()["node-a"], ","); got != "first" {
+		t.Errorf("node-a is grouped under %q, want first, without any rebuild", got)
+	}
+}

@@ -58,3 +58,14 @@ func (e *Exit) SetInterval(every time.Duration) {
 	}
 	e.Refresher.SetInterval(every)
 }
+
+// NodeSources maps a node in the profile to the subscriptions it came from.
+//
+// Empty when the deployment does not rebuild its own list: the panel then
+// shows the nodes without a group, which is the truth.
+func (e *Exit) NodeSources() map[string][]string {
+	if e == nil || e.Refresher == nil {
+		return nil
+	}
+	return e.Refresher.NodeSources()
+}
