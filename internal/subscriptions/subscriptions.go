@@ -70,7 +70,7 @@ func Open(path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("subscriptions: path must not be empty")
 	}
-	s := &Store{path: path, file: File{Dedupe: ModeStrict}}
+	s := &Store{path: path, file: File{Dedupe: ModeNone}}
 	body, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -308,7 +308,7 @@ func (s *Store) save() error {
 
 func (f *File) validate() error {
 	if f.Dedupe == "" {
-		f.Dedupe = ModeStrict
+		f.Dedupe = ModeNone
 	}
 	if !validMode(f.Dedupe) {
 		return fmt.Errorf("dedupe must be one of %s, %s, %s (got %q)", ModeStrict, ModeHost, ModeNone, f.Dedupe)

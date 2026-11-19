@@ -42,8 +42,8 @@ func TestAnEmptyListIsShownAsAList(t *testing.T) {
 	if state.Items == nil {
 		t.Error("items is null, want an empty array")
 	}
-	if state.Dedupe != subscriptions.ModeStrict {
-		t.Errorf("dedupe is %q, want %q", state.Dedupe, subscriptions.ModeStrict)
+	if state.Dedupe != subscriptions.ModeNone {
+		t.Errorf("dedupe is %q, want %q", state.Dedupe, subscriptions.ModeNone)
 	}
 	if state.Store == "" {
 		t.Error("the answer does not say where the list lives")

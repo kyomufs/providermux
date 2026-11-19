@@ -24,9 +24,10 @@ func TestAMissingFileStartsAnEmptyList(t *testing.T) {
 		t.Fatalf("items = %d, want 0", len(list.Items))
 	}
 	// The rule decides what the tool collapses, and a store that has never been
-	// written must still answer: strict is the tool's own default.
-	if list.Dedupe != ModeStrict {
-		t.Errorf("dedupe = %q, want %q", list.Dedupe, ModeStrict)
+	// written must still answer. The default is none: the operator asked for
+	// every record of a subscription, and collapsing is now a deliberate choice.
+	if list.Dedupe != ModeNone {
+		t.Errorf("dedupe = %q, want %q", list.Dedupe, ModeNone)
 	}
 }
 
