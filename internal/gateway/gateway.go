@@ -128,6 +128,22 @@ type Handler struct {
 	// client waits with it.
 	FirstEventTimeout time.Duration
 	IdleTimeout       time.Duration
+
+	// Retry is how many times one client request may reach the provider, and
+	// how long to wait between attempts.
+	//
+	// Zero attempts means one: a gateway that repeats by default would change
+	// the client's traffic behind its back, and the reason to repeat is narrow
+	// enough that it is asked for explicitly.
+	Retry RetryPolicy
+
+	// Rotate asks for a different exit address and reports the one chosen.
+	//
+	// nil means the exit cannot be changed, and then a quota refusal is passed
+	// to the client exactly as it arrived. The gateway does not construct this
+	// itself: the proxy controller is a separate process, and reaching it is a
+	// property of the deployment, not of the request path.
+	Rotate func(ctx context.Context) (string, error)
 }
 
 // RoundTripperFactory hands out the transport for requests.
@@ -558,174 +574,219 @@ func (h *Handler) buildRequest(r *http.Request, body map[string]any, p provider.
 // forward sends the request to the provider and passes the response to the
 // client.
 //
-// THE ROTATION LOOP lives here. A refusal caused by the key is not the client's
-// answer: another key is taken and the request is repeated, and the client only
-// hears about it when there is nothing left to try. Everything the client could
-// observe happens on the LAST attempt, so the retries stay invisible to it
-// except by the extra latency.
+// A QUOTA REFUSAL IS ANSWERED BY A DIFFERENT EXIT, NOT BY ANOTHER KEY. That is
+// the measured shape of the free lane: it counts by source address, the client
+// cannot change its address, and the client's own policy does not repeat the
+// refusal at all — the reference client classifies FreeUsageLimitError as
+// QuotaExceeded and isRetryable returns false for it
+// (packages/ai/src/schema/errors.ts). A turn that meets a spent address
+// therefore ends, and nothing above this function can prevent it.
+//
+// The gateway is the one party that can both repeat the request and leave by
+// another exit, so it does both, and only where that is the answer: a quota
+// refusal with a rotation available. A key refusal, a malformed request, a
+// content refusal, a spent account — none of those are repeated here, and the
+// client receives them exactly as before.
+//
+// Everything the client could observe happens on the LAST attempt, so a repeat
+// stays invisible to it except by the extra latency: a single response is not
+// written until it is complete, and a stream is not opened until the provider's
+// headers arrive. No repeat can duplicate a byte the client has already seen.
 //
 // ONE OUTCOME PER ATTEMPT is recorded, not one per client request. A refusal
-// that was answered by another key is still a refusal the provider issued, and it
-// is precisely the volume of those that tells the operator which key and which
-// address are burnt. Counting only the client's final answer would hide the
-// failures this mechanism exists to absorb.
+// that was answered from another exit is still a refusal the provider issued,
+// and precisely the volume of those tells the operator which address is burnt.
+// Counting only the client's final answer would hide the failures this
+// mechanism exists to absorb.
 func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Provider, req provider.Request, model provider.Model, keySelector ...string) {
-	// The egress address is read once per request: it is the address THIS
-	// request left from, and the answer can change between requests.
-	address := h.address()
-	// The provider sees the address for one decision only: whether an
-	// identifier it minted still serves this request. A lane that counts by
-	// address and by session cannot answer that without it.
-	req.Address = address
-
-	prepared, err := p.Build(req)
-	if err != nil {
-		h.warn("provider %q: assembling the request: %v", p.ID(), err)
-		writeError(w, http.StatusInternalServerError, "gateway error", err.Error())
-		h.recordAbort(model.ID, address, "")
-		return
-	}
-
 	// The gateway substitutes the credentials: the client has no keys.
 	selector := ""
 	if len(keySelector) > 0 {
 		selector = keySelector[0]
 	}
-	key := h.credentialForWithSelector(p, selector)
 
-	// The budgets of the attempt. Both are re-armed as the attempt progresses:
-	// the first bounds the wait for the response headers, the second the
-	// silence between events.
-	//
-	// The two are read from their OWN fields of the prepared request. They are
-	// not interchangeable: a provider that reasons declares a generous silence
-	// budget between events, and using that number for the wait before the
-	// headers would leave a request hanging on a connection that has gone quiet
-	// for as long as the model is allowed to think.
-	firstEvent := Timeout(prepared.FirstEventTimeout, h.FirstEventTimeout)
-	idle := Timeout(prepared.IdleTimeout, h.IdleTimeout)
+	attempts := h.Retry.attempts()
 
-	// ONE CLIENT REQUEST IS ONE PROVIDER REQUEST. There is no rotation, no
-	// repeat and no move to another model: the client has its own retry policy,
-	// and a second one here would spend a budget the client counted on. What the
-	// provider answers — a body, a status and the headers that explain it — is
-	// what the client receives.
-	h.applyCredential(p, prepared, key)
+	for attempt := 1; ; attempt++ {
+		// The egress address is read per attempt, not per request: a rotation
+		// between two attempts IS a change of this value, and the lanes a
+		// provider keeps are keyed by it.
+		address := h.address()
+		// The provider sees the address for one decision only: whether an
+		// identifier it minted still serves this request. A lane that counts by
+		// address and by session cannot answer that without it.
+		req.Address = address
 
-	wd, ctx := newWatchdog(r.Context())
-	upstream, err := http.NewRequestWithContext(ctx, http.MethodPost, prepared.URL, bytes.NewReader(prepared.Body))
-	if err != nil {
-		wd.stop()
-		writeError(w, http.StatusInternalServerError, "gateway error", err.Error())
-		h.recordAbort(model.ID, address, h.fingerprint(key))
-		return
-	}
-	upstream.Header = prepared.Headers
+		prepared, err := p.Build(req)
+		if err != nil {
+			h.warn("provider %q: assembling the request: %v", p.ID(), err)
+			writeError(w, http.StatusInternalServerError, "gateway error", err.Error())
+			h.recordAbort(model.ID, address, "")
+			return
+		}
 
-	// The stage being bounded depends on the shape of the answer. A stream
-	// sends its headers as soon as the provider starts answering, so a
-	// silence before them is already evidence that something is wrong. A
-	// single response sends nothing until it is complete, so the only thing
-	// that can be bounded there is the answer itself.
-	//
-	// What counts is the shape ON THE WIRE, not the one the client asked
-	// for: a provider may require the stream form regardless, and then the
-	// headers do arrive at once.
-	if req.Stream || prepared.StreamsUpstream {
-		wd.arm(firstEvent, errFirstEvent)
-	} else {
-		wd.arm(idle, errNoAnswer)
-	}
+		key := h.credentialForWithSelector(p, selector)
+		h.applyCredential(p, prepared, key)
 
-	resp, err := h.do(upstream, p, req.Model.ID)
-	if err != nil {
-		wd.stop()
-		cause := wd.fired()
+		// The budgets of the attempt. Both are re-armed as the attempt
+		// progresses: the first bounds the wait for the response headers, the
+		// second the silence between events.
+		//
+		// The two are read from their OWN fields of the prepared request. They
+		// are not interchangeable: a provider that reasons declares a generous
+		// silence budget between events, and using that number for the wait
+		// before the headers would leave a request hanging on a connection that
+		// has gone quiet for as long as the model is allowed to think.
+		firstEvent := Timeout(prepared.FirstEventTimeout, h.FirstEventTimeout)
+		idle := Timeout(prepared.IdleTimeout, h.IdleTimeout)
 
-		if cause != nil {
-			// The provider took the connection and then went quiet. Nothing
-			// failed: the request was written into a path that no longer
-			// exists, and no answer is coming. The path is suspect, so the
-			// egress address is asked for again rather than waited out.
-			h.warn("provider %q: silent: %v", p.ID(), cause)
-			h.refreshAddress()
-			writeError(w, http.StatusGatewayTimeout, "timeout",
-				"the provider did not answer: "+cause.Error())
+		wd, ctx := newWatchdog(r.Context())
+		upstream, err := http.NewRequestWithContext(ctx, http.MethodPost, prepared.URL, bytes.NewReader(prepared.Body))
+		if err != nil {
+			wd.stop()
+			writeError(w, http.StatusInternalServerError, "gateway error", err.Error())
+			h.recordAbort(model.ID, address, h.fingerprint(key))
+			return
+		}
+		upstream.Header = prepared.Headers
+
+		// The stage being bounded depends on the shape of the answer. A stream
+		// sends its headers as soon as the provider starts answering, so a
+		// silence before them is already evidence that something is wrong. A
+		// single response sends nothing until it is complete, so the only thing
+		// that can be bounded there is the answer itself.
+		//
+		// What counts is the shape ON THE WIRE, not the one the client asked
+		// for: a provider may require the stream form regardless, and then the
+		// headers do arrive at once.
+		if req.Stream || prepared.StreamsUpstream {
+			wd.arm(firstEvent, errFirstEvent)
+		} else {
+			wd.arm(idle, errNoAnswer)
+		}
+
+		resp, err := h.do(upstream, p, req.Model.ID)
+		if err != nil {
+			wd.stop()
+			cause := wd.fired()
+
+			if cause != nil {
+				// The provider took the connection and then went quiet.
+				// Nothing failed: the request was written into a path that no
+				// longer exists, and no answer is coming. The path is suspect,
+				// so the egress address is asked for again rather than waited
+				// out — and a new attempt may well leave by another one.
+				h.warn("provider %q: silent: %v", p.ID(), cause)
+				h.refreshAddress()
+				if attempt < attempts && h.backoff(r.Context(), attempt) {
+					continue
+				}
+				writeError(w, http.StatusGatewayTimeout, "timeout",
+					"the provider did not answer: "+cause.Error())
+				h.recordAbort(model.ID, address, h.fingerprint(key))
+				return
+			}
+
+			// The provider is unreachable. This is NOT a provider refusal, and
+			// presenting it as one is not allowed: the client must see a
+			// transport failure. The same applies to the counters — a broken
+			// path is not the provider refusing.
+			h.warn("provider %q: connection: %v", p.ID(), err)
+			if attempt < attempts && h.backoff(r.Context(), attempt) {
+				continue
+			}
+			writeError(w, http.StatusBadGateway, "transport", "the provider is unreachable: "+err.Error())
 			h.recordAbort(model.ID, address, h.fingerprint(key))
 			return
 		}
 
-		// The provider is unreachable. This is NOT a provider refusal, and
-		// presenting it as one is not allowed: the client must see a
-		// transport failure. The same applies to the counters — a broken
-		// path is not the provider refusing.
-		h.warn("provider %q: connection: %v", p.ID(), err)
-		writeError(w, http.StatusBadGateway, "transport", "the provider is unreachable: "+err.Error())
-		h.recordAbort(model.ID, address, h.fingerprint(key))
-		return
-	}
+		// The status line is here: the wait for the headers is over in both
+		// shapes, and what remains bounded is the silence between the pieces of
+		// the answer.
+		wd.arm(idle, errSilence)
 
-	// The status line is here: the wait for the headers is over in both
-	// shapes, and what remains bounded is the silence between the pieces of
-	// the answer.
-	wd.arm(idle, errSilence)
-
-	if resp.StatusCode < 400 {
-		if req.Stream {
-			h.passThroughStream(w, resp, prepared.ToolNames, wd, idle)
-		} else {
-			h.answerOnce(w, resp, prepared.ToolNames, wd, idle)
+		if resp.StatusCode < 400 {
+			if req.Stream {
+				h.passThroughStream(w, resp, prepared.ToolNames, wd, idle)
+			} else {
+				h.answerOnce(w, resp, prepared.ToolNames, wd, idle)
+			}
+			wd.stop()
+			resp.Body.Close()
+			if cause := wd.fired(); cause != nil {
+				// The provider stopped speaking in the middle of the stream.
+				// The client sees a truncated answer and asks again; counting
+				// this as a success would hide it from the monitor exactly where
+				// it costs most.
+				h.warn("provider %q: stream cut short: %v", p.ID(), cause)
+				h.recordAbort(model.ID, address, h.fingerprint(key))
+				return
+			}
+			h.recordSuccess(model.ID, address, h.fingerprint(key))
+			return
 		}
+
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 		wd.stop()
 		resp.Body.Close()
-		if cause := wd.fired(); cause != nil {
-			// The provider stopped speaking in the middle of the stream. The
-			// client sees a truncated answer and asks again; counting this as
-			// a success would hide it from the monitor exactly where it costs
-			// most.
-			h.warn("provider %q: stream cut short: %v", p.ID(), cause)
+		if readErr != nil {
+			// The provider refused, but the refusal itself did not arrive
+			// intact. The client gets a transport failure, and the outcome is
+			// recorded as an abort: no refusal reached anyone.
+			h.warn("provider %q: reading the refusal: %v", p.ID(), readErr)
+			if attempt < attempts && h.backoff(r.Context(), attempt) {
+				continue
+			}
+			writeError(w, http.StatusBadGateway, "transport", "reading the response: "+readErr.Error())
 			h.recordAbort(model.ID, address, h.fingerprint(key))
 			return
 		}
-		h.recordSuccess(model.ID, address, h.fingerprint(key))
+
+		failure := p.Classify(resp, body)
+
+		// A verdict on the key is only meaningful when a key was sent.
+		//
+		// In anonymous mode the gateway substitutes an anonymity marker rather
+		// than a credential, and a provider answers 401/403 to a bare request as
+		// well. Reporting that as a rejected key is a lie in the log — and it
+		// would spend the whole pool on a refusal that has nothing to do with
+		// any credential.
+		if key == "" {
+			failure.KeyRejected = false
+		}
+
+		// The one refusal a repeat can answer: the allowance is spent on this
+		// exit, and another exit has its own. The rotation is asked for before
+		// the address is re-read, because the next attempt must leave from the
+		// new node and not from the one whose counter is spent.
+		//
+		// The wait is here as well, and it is not decoration: the free lane also
+		// counts a burst, measured on one exit that refused a dozen requests in
+		// two minutes and answered the same address again a minute later. A new
+		// exit alone does not answer that, and neither does a wait alone — the
+		// exit whose day is spent stays spent.
+		if attempt < attempts && h.rotateAfterQuota(r.Context(), address, failure) && h.backoff(r.Context(), attempt) {
+			continue
+		}
+
+		// A refusal is about an address as much as it is about a key: the free
+		// tier is limited per address, and the operator moves to another uplink
+		// precisely because this one is spent. So the refusal is the one moment
+		// where a stale answer costs something — the requests that follow would
+		// be credited to the address they no longer leave from — and the address
+		// is asked for again here instead of waiting out the TTL.
+		h.refreshAddress()
+
+		// An overloaded provider or a busy edge is a refusal that a second
+		// attempt from the same exit may survive. It is not the free lane's
+		// quota, which does not move on its own and is handled above.
+		if attempt < attempts && retryableRefusal(failure) && h.backoff(r.Context(), attempt) {
+			continue
+		}
+
+		h.writeRefusal(w, resp, body, failure, p, model, address, key)
 		return
 	}
-
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
-	wd.stop()
-	resp.Body.Close()
-	if readErr != nil {
-		// The provider refused, but the refusal itself did not arrive
-		// intact. The client gets a transport failure, and the outcome is
-		// recorded as an abort: no refusal reached anyone.
-		h.warn("provider %q: reading the refusal: %v", p.ID(), readErr)
-		writeError(w, http.StatusBadGateway, "transport", "reading the response: "+readErr.Error())
-		h.recordAbort(model.ID, address, h.fingerprint(key))
-		return
-	}
-
-	failure := p.Classify(resp, body)
-
-	// A refusal is about an address as much as it is about a key: the free
-	// tier is limited per address, and the operator moves to another uplink
-	// precisely because this one is spent. So the refusal is the one moment
-	// where a stale answer costs something — the requests that follow would
-	// be credited to the address they no longer leave from — and the address
-	// is asked for again here instead of waiting out the TTL.
-	h.refreshAddress()
-
-	// A verdict on the key is only meaningful when a key was sent.
-	//
-	// In anonymous mode the gateway substitutes an anonymity marker rather
-	// than a credential, and a provider answers 401/403 to a bare request as
-	// well. Reporting that as a rejected key is a lie in the log — and it
-	// would spend the whole pool on a refusal that has nothing to do with
-	// any credential.
-	if key == "" {
-		failure.KeyRejected = false
-	}
-
-	h.writeRefusal(w, resp, body, failure, p, model, address, key)
 }
 
 // excerpt renders at most n bytes of a body as a single log-safe line.

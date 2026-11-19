@@ -183,6 +183,15 @@ func (d *direct) Stop() error {
 	return nil
 }
 
+// CloseIdleConnections drops the pooled connections and keeps the transport in
+// service.
+//
+// WHY IT IS NOT Stop. A rotation changes the exit, and every pooled connection
+// keeps using the exit it was opened on: the next request would leave from the
+// address the rotation was meant to leave behind. Dropping them is that one
+// operation, without shutting anything down.
+func (d *direct) CloseIdleConnections() { d.rt.CloseIdleConnections() }
+
 // Info implements Transport.
 func (d *direct) Info() Info {
 	return Info{
@@ -213,5 +222,10 @@ func NewRegistryWithDefaults() *Registry {
 		ID:      Direct,
 		Summary: "direct host routing with a warm connection pool",
 	}, NewDirect)
+	r.Register(Info{
+		ID:                   Proxy,
+		Summary:              "tunnelled through a local HTTP proxy, so the exit address can be chosen",
+		NeedsExternalProcess: true,
+	}, NewProxy)
 	return r
 }

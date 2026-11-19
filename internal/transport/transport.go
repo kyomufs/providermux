@@ -28,8 +28,10 @@ import (
 type ID string
 
 const (
-	// Direct is direct host routing. The only transport that exists today.
+	// Direct is direct host routing.
 	Direct ID = "direct"
+	// Proxy is tunnelling through a local HTTP proxy.
+	Proxy ID = "proxy"
 )
 
 // Transport is what implements a particular way of reaching the network.

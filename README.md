@@ -202,12 +202,53 @@ credential to "anonymous"
 | `credential` | `anonymous` \| `account` | `anonymous` | whether a key is presented to the provider |
 | `key_rotation` | `on` \| `off` | `on` | spend another key on a refusal that names the key |
 | `family` | `auto` \| `v4` \| `v6` | `auto` | the address family the traffic leaves from |
-| `transport` | `direct` | `direct` | how traffic reaches the provider |
+| `transport` | `direct` \| `proxy` | `direct` | how traffic reaches the provider |
 | `upstream` | address | — | default address for providers that do not name their own |
 
 The timeouts (`first_event_timeout`, `idle_timeout`, `reasoning_idle_timeout`,
 default `30s`, `120s`, `300s`) decide how long silence is tolerated before a
 stream is abandoned. `provider.*` sets the same axes per provider.
+
+### Repeating a request
+
+By default one client request is one provider request. `retry` raises that
+budget, and a repeat is only possible where the client cannot answer the failure
+itself — a connection that died before the provider answered, or an exhausted
+free-lane allowance.
+
+```json
+{
+  "retry": { "attempts": 3, "delay": "500ms" },
+  "rotation": {
+    "controller": "http://127.0.0.1:9091",
+    "group": "egress",
+    "probe_url": "https://1.1.1.1/cdn-cgi/trace",
+    "probe_count": 6
+  },
+  "transport": "proxy",
+  "transport_settings": { "url": "http://127.0.0.1:7891" }
+}
+```
+
+`attempts` is the TOTAL number of upstream requests (`1` disables retrying),
+`delay` grows linearly: the second attempt waits one delay, the third two.
+
+The wait is not decoration and it is not only for overloaded edges: the free lane
+counts a **burst** as well. One address refused a dozen requests in two minutes
+and answered the same address again a minute later, so a new exit alone does not
+answer every refusal. Both levers run on a quota refusal — the wait, then the
+move — and the wait belongs to the client: it ends the moment the client does.
+
+The free lane counts its allowance **per source address** as well, so a repeat
+from the same address cannot succeed while that address is spent. `rotation` names the proxy controller whose
+selector group is the exit; on a quota refusal the gateway asks it for a live
+node (`probe_count` candidates, each probed through the controller), switches
+the group, re-reads its own address, and repeats. Without `rotation` a quota
+refusal reaches the client verbatim — the gateway does not repeat a counter that
+did not move.
+
+A key refusal, a malformed request and a content refusal are never repeated: no
+other address changes those answers.
 
 ### Providers
 

@@ -266,9 +266,21 @@ type Failure struct {
 	// A judgement of its own, and the only one that a different exit can answer:
 	// another key does not help, waiting does not help, another model does not
 	// help, and repeating the same request from the same address is exactly what
-	// the refusal asks one not to do. No caller acts on it today: the only
-	// transport is direct, and it cannot change the exit address.
+	// the refusal asks one not to do.
 	AddressRejected bool
+	// QuotaRejected marks that the ALLOWANCE is exhausted, rather than the
+	// request being wrong or the key being refused.
+	//
+	// It is separate from KeyRejected because the two point at different
+	// answers, and the free lane only answer to the first: its counter is spent
+	// per SOURCE ADDRESS (lane.go), so the verdict is "this exit is spent" and
+	// the only cure is to leave by another exit. MEASURED: a 429
+	// FreeUsageLimitError from 72.56.82.193 was answered 200 from 193.234.38.34
+	// minutes later, same session, same request, no credential in either case.
+	//
+	// Nothing here decides whether to repeat the request: the gateway asks this
+	// flag, and only when it has something to change (rotation.go).
+	QuotaRejected bool
 }
 
 // Provider is what a particular free-model service implements.

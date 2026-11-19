@@ -44,6 +44,25 @@ var quotaCodes = map[string]bool{
 	"quotaexceedederror":     true,
 }
 
+// billingQuotaCodes is the subset of quotaCodes that names an ACCOUNT limit
+// rather than a lane limit. Another key may carry its own allowance, so these
+// stay blamed on the key as well.
+//
+// The rest of quotaCodes is the free lane's own accounting. It is spent per
+// source address (lane.go), and MEASURED: the same anonymous request that was
+// refused 429 from one address answered 200 from another twenty minutes later.
+// Blaming the key there would send the next request out with a different key and
+// the same address, which cannot succeed.
+var billingQuotaCodes = map[string]bool{
+	"insufficient_quota":  true,
+	"usage_not_included":  true,
+	"billing_error":       true,
+	"creditlimitexceeded": true,
+	"insufficient_credit": true,
+	"quota_exceeded":      true,
+	"quotaexceedederror":  true,
+}
+
 // authCodes are the codes that mean the credentials were refused.
 var authCodes = map[string]bool{
 	"authentication_error": true,
@@ -120,6 +139,10 @@ func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 
 	codes := extractCodes(body)
 	lower := strings.ToLower(string(body))
+	// Whether the body named the quota kind itself. Only an unnamed quota is
+	// read as an account one as well: a named free-lane quota is the measured
+	// 429, and blaming the key for it is the mistake this flag prevents.
+	quotaCoded := false
 
 	// A key refusal. 401 and 403 belong here: the service answers with them both
 	// for a wrong key and for an exhausted access right.
@@ -137,16 +160,27 @@ func (p *Provider) Classify(resp *http.Response, body []byte) provider.Failure {
 		if authCodes[code] {
 			f.KeyRejected = true
 		}
-		// Quota codes mean the limit sits on the credentials: switching the
-		// key is the only way to continue.
+		// A quota code means the allowance is exhausted. Whether that is the
+		// key's allowance or the lane's is the difference between "another key
+		// helps" and "another exit helps", so the two verdicts are kept apart.
 		if quotaCodes[code] {
-			f.KeyRejected = true
+			quotaCoded = true
+			f.QuotaRejected = true
+			if billingQuotaCodes[code] {
+				f.KeyRejected = true
+			}
 		}
 	}
 	if authText.MatchString(lower) {
 		f.KeyRejected = true
 	}
-	if (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusPaymentRequired) && quotaText.MatchString(lower) {
+	if !quotaCoded && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusPaymentRequired) && quotaText.MatchString(lower) {
+		// Without a code the two quota kinds cannot be told apart from the
+		// body, and the free lane is the one this daemon meets: its refusals
+		// carry a type but no code. The key verdict is kept as well, because a
+		// spent account is the reading that costs nothing if it is wrong — no
+		// key rotation acts on it, only the log.
+		f.QuotaRejected = true
 		f.KeyRejected = true
 	}
 

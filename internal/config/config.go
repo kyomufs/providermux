@@ -24,12 +24,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"providermux/internal/egress"
 )
 
 // AppName — the name of the application's directories under the XDG roots.
@@ -132,6 +135,52 @@ func (v *Value[T]) OrDefault() {
 	}
 }
 
+// RetryPolicy says how many times one client request may reach the provider.
+//
+// It is the gateway's own mechanism, not the client's. The free lane refuses a
+// whole source address, and a client has no way to leave that address — the
+// same request from the same exit is refused again. The gateway is the only
+// party that can both repeat the request and change where it leaves from, so
+// the repeat has to live here or nowhere.
+type RetryPolicy struct {
+	// Attempts is the TOTAL number of upstream requests, not the number of
+	// repeats. 1 disables retrying and keeps the old behaviour: exactly one
+	// provider request per client request.
+	Attempts int
+	// Delay is the pause before the second attempt. Every further attempt waits
+	// this much longer again, so a provider that is briefly overloaded is not
+	// hit by a burst of its own repeats.
+	Delay time.Duration
+}
+
+// Enabled reports whether a second attempt is allowed at all.
+func (p RetryPolicy) Enabled() bool { return p.Attempts > 1 }
+
+// RotationPolicy describes the proxy controller that hands out exit addresses.
+//
+// The gateway does not run the proxy and does not parse its configuration: it
+// asks a running controller for a different exit. The controller is the
+// mihomo/clash REST API — a selector group whose current choice IS the exit,
+// and a delay probe that says whether a node carries traffic. Both halves are
+// needed: choosing a node that is in the list but dead would trade a quota
+// refusal for a timeout.
+type RotationPolicy struct {
+	// Controller is the controller's base URL, e.g. http://127.0.0.1:9091.
+	Controller string
+	// Group is the selector group whose choice is the exit address.
+	Group string
+	// Secret is the controller's shared secret, if it has one.
+	Secret string
+	// ProbeURL is what a candidate node is asked to fetch when its liveness is
+	// checked. It must be reachable without the provider under test.
+	ProbeURL string
+	// ProbeCount is how many candidates are tried before a rotation gives up.
+	ProbeCount int
+}
+
+// Enabled reports whether rotation is configured.
+func (p RotationPolicy) Enabled() bool { return p.Controller != "" && p.Group != "" }
+
 // Config — the fully resolved configuration.
 type Config struct {
 	// --- operating mode ----------------------------------------------------
@@ -187,6 +236,21 @@ type Config struct {
 	IdleTimeout Value[time.Duration]
 	// ReasoningIdleTimeout — the silence budget for reasoning models.
 	ReasoningIdleTimeout Value[time.Duration]
+
+	// --- refusals ----------------------------------------------------------
+
+	// Retry — the gateway's own repeat policy.
+	//
+	// It exists because the client's policy does not cover the refusal that
+	// matters here. The reference client classifies a free-tier quota refusal
+	// as QuotaExceeded and does not repeat it (packages/ai/src/schema/errors.ts,
+	// isRetryable), and the harness disables its own retries for this provider
+	// on the assumption that the gateway answers — so one refusal ends a turn.
+	// Neither party can change the exit address either, which is the only thing
+	// that clears the free lane's counter.
+	Retry RetryPolicy
+	// Rotation — where a different exit address comes from.
+	Rotation RotationPolicy
 
 	// --- misc --------------------------------------------------------------
 
@@ -489,6 +553,25 @@ const (
 
 	// DefaultFamily is auto.
 	DefaultFamily = FamilyAuto
+
+	// DefaultRetryAttempts is one attempt.
+	//
+	// The gateway repeats nothing unless the operator asks: a repeat is traffic
+	// the client did not send, and the client's own accounting (tokens, spend,
+	// timing) does not know about it. The measured reason to raise it is narrow
+	// and real — the free lane's quota refusal, which the client explicitly
+	// does not repeat and cannot clear.
+	DefaultRetryAttempts = 1
+
+	// DefaultRetryDelay is the pause before a second attempt.
+	DefaultRetryDelay = 500 * time.Millisecond
+
+	// DefaultProbeCount is how many nodes a rotation tries before giving up.
+	//
+	// One dead node in the pool is normal; a probe round is what tells the two
+	// apart, and six is enough to step over a run of dead neighbours without
+	// turning a rotation into a survey of the whole pool.
+	DefaultProbeCount = 6
 )
 
 // Default returns a configuration with the built-in values.
@@ -508,6 +591,8 @@ func Default() *Config {
 	c.FirstEventTimeout.Set(DefaultFirstEventTimeout, SourceDefault)
 	c.IdleTimeout.Set(DefaultIdleTimeout, SourceDefault)
 	c.ReasoningIdleTimeout.Set(DefaultReasoningIdleTimeout, SourceDefault)
+	c.Retry = RetryPolicy{Attempts: DefaultRetryAttempts, Delay: DefaultRetryDelay}
+	c.Rotation = RotationPolicy{ProbeURL: egress.DefaultURL, ProbeCount: DefaultProbeCount}
 	return c
 }
 
@@ -596,7 +681,26 @@ type fileShape struct {
 	FirstEventTimeout    *string                   `json:"first_event_timeout"`
 	IdleTimeout          *string                   `json:"idle_timeout"`
 	ReasoningIdleTimeout *string                   `json:"reasoning_idle_timeout"`
+	Retry                *retryShape               `json:"retry"`
+	Rotation             *rotationShape            `json:"rotation"`
 	Providers            map[string]ProviderConfig `json:"providers"`
+}
+
+// retryShape is the file form of RetryPolicy: a duration string is what an
+// operator writes, and a bad one is refused here rather than at the first
+// refusal the policy would have handled.
+type retryShape struct {
+	Attempts *int    `json:"attempts"`
+	Delay    *string `json:"delay"`
+}
+
+// rotationShape is the file form of RotationPolicy.
+type rotationShape struct {
+	Controller *string `json:"controller"`
+	Group      *string `json:"group"`
+	Secret     *string `json:"secret"`
+	ProbeURL   *string `json:"probe_url"`
+	ProbeCount *int    `json:"probe_count"`
 }
 
 // applyFile layers the file over the built-in values.
@@ -655,6 +759,38 @@ func (c *Config) applyFile(path string) error {
 	}
 	if shape.Providers != nil {
 		c.Providers = shape.Providers
+	}
+
+	if shape.Retry != nil {
+		if shape.Retry.Attempts != nil {
+			c.Retry.Attempts = *shape.Retry.Attempts
+		}
+		if shape.Retry.Delay != nil {
+			v, err := time.ParseDuration(*shape.Retry.Delay)
+			if err != nil {
+				return fmt.Errorf("config: invalid retry.delay %q: %w", *shape.Retry.Delay, err)
+			}
+			c.Retry.Delay = v
+		}
+	}
+
+	if shape.Rotation != nil {
+		r := shape.Rotation
+		if r.Controller != nil {
+			c.Rotation.Controller = *r.Controller
+		}
+		if r.Group != nil {
+			c.Rotation.Group = *r.Group
+		}
+		if r.Secret != nil {
+			c.Rotation.Secret = *r.Secret
+		}
+		if r.ProbeURL != nil {
+			c.Rotation.ProbeURL = *r.ProbeURL
+		}
+		if r.ProbeCount != nil {
+			c.Rotation.ProbeCount = *r.ProbeCount
+		}
 	}
 
 	for _, d := range []struct {
@@ -949,6 +1085,36 @@ func (c *Config) Validate() error {
 	}
 	if c.ReasoningIdleTimeout.Val <= 0 {
 		return fmt.Errorf("config: reasoning_idle_timeout must be positive")
+	}
+	if c.Retry.Attempts < 1 {
+		return fmt.Errorf("config: retry.attempts must be at least 1 (1 disables retrying)")
+	}
+	if c.Retry.Delay <= 0 {
+		return fmt.Errorf("config: retry.delay must be positive")
+	}
+	// A half-configured rotation is the same trap as an unknown key: the file
+	// says the gateway can change its exit and the gateway cannot, and nothing
+	// says so until the refusal that needed it. Refused at load instead.
+	if (c.Rotation.Controller == "") != (c.Rotation.Group == "") {
+		return fmt.Errorf("config: rotation requires both controller and group, got controller %q and group %q",
+			c.Rotation.Controller, c.Rotation.Group)
+	}
+	if c.Rotation.Enabled() {
+		u, err := url.Parse(c.Rotation.Controller)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return fmt.Errorf("config: invalid rotation.controller %q: want an http(s) base URL", c.Rotation.Controller)
+		}
+		if c.Rotation.ProbeCount < 1 {
+			return fmt.Errorf("config: rotation.probe_count must be positive")
+		}
+		if strings.TrimSpace(c.Rotation.ProbeURL) == "" {
+			return fmt.Errorf("config: rotation.probe_url must not be empty")
+		}
+		// Rotation on its own changes nothing: the exit is chosen per attempt,
+		// and with one attempt there is no second attempt to choose it for.
+		if !c.Retry.Enabled() {
+			return fmt.Errorf("config: rotation is inert without retry.attempts > 1 (got %d)", c.Retry.Attempts)
+		}
 	}
 	return nil
 }

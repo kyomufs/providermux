@@ -35,7 +35,10 @@ type daemon struct {
 	// egress observes the address this host's traffic leaves from. It may be
 	// nil, which means the daemon does not know its address and the counters are
 	// kept without one.
-	egress  *egress.Resolver
+	egress *egress.Resolver
+	// rotate asks the proxy controller for another exit address. nil means the
+	// deployment cannot change its exit.
+	rotate  func(ctx context.Context) (string, error)
 	handler http.Handler
 }
 
@@ -120,6 +123,37 @@ func build(cfg *config.Config) (*daemon, error) {
 		Log:       d.log,
 	})
 
+	// The exit rotation, when the deployment names a proxy controller.
+	//
+	// Absence is a normal deployment, not a defect: a direct transport cannot
+	// change its exit, and there a quota refusal is the client's to see. When
+	// the controller is named, the rotator is built here — the request path
+	// must not dial the controller's address out of its own configuration on
+	// every refusal.
+	if cfg.Rotation.Enabled() {
+		rot, err := egress.NewRotator(egress.RotatorConfig{
+			Controller: cfg.Rotation.Controller,
+			Group:      cfg.Rotation.Group,
+			Secret:     cfg.Rotation.Secret,
+			ProbeURL:   cfg.Rotation.ProbeURL,
+			ProbeCount: cfg.Rotation.ProbeCount,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("rotation: %w", err)
+		}
+		d.rotate = func(ctx context.Context) (string, error) {
+			name, err := rot.Rotate(ctx)
+			if err != nil {
+				return "", err
+			}
+			// The pools hold tunnels opened through the address just left, and a
+			// reused one would defeat the rotation silently: the next request
+			// would leave from the node the rotation was meant to abandon.
+			d.closeIdle()
+			return name, nil
+		}
+	}
+
 	d.handler = d.buildHandler()
 	return d, nil
 }
@@ -174,6 +208,16 @@ func (d *daemon) buildHandler() http.Handler {
 		// per-model at all.
 		FirstEventTimeout: d.cfg.FirstEventTimeout.Val,
 		IdleTimeout:       d.cfg.IdleTimeout.Val,
+
+		// The repeat policy reaches the request path here. It is inert until
+		// the operator raises the attempt count: one client request is one
+		// provider request by default.
+		//
+		// The rotation is passed as a function rather than a client: the
+		// gateway decides WHEN a different exit is the answer, and the rotator
+		// knows HOW to obtain one. Neither needs the other's configuration.
+		Retry:  gateway.RetryPolicy{Attempts: d.cfg.Retry.Attempts, Delay: d.cfg.Retry.Delay},
+		Rotate: d.rotate,
 	}
 	gw.AllRoutes(root)
 
@@ -451,4 +495,21 @@ func (d *daemon) egressTransport(family string) (http.RoundTripper, error) {
 		return transport.Pinned(family), nil
 	}
 	return d.transport.RoundTripper()
+}
+
+// closeIdle drops pooled connections everywhere they are held.
+//
+// Both the request path and the address observation have their own pool, and
+// both are pinned to the exit they were opened through. One is closed here by
+// the same call the other is: the transports.
+func (d *daemon) closeIdle() {
+	closers := []any{d.transport}
+	for _, t := range d.transports {
+		closers = append(closers, t)
+	}
+	for _, c := range closers {
+		if closer, ok := c.(interface{ CloseIdleConnections() }); ok && closer != nil {
+			closer.CloseIdleConnections()
+		}
+	}
 }
