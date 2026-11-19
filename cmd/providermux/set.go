@@ -21,10 +21,12 @@ import (
 // value out; a subcommand is for adopting it. Doing the second through the first
 // is how a deployment ends up depending on a shell alias.
 //
-// ON NIXOS THE FILE IS NOT THE OPERATOR'S. The module renders it in full and
-// rewrites it on every activation, so a value set here is lost at the next
-// switch — by design, and the reason flags exist at all. The command says so
-// rather than letting the loss be discovered later.
+// WRITING IS NOT ALWAYS KEEPING. The value survives a restart; it survives a
+// rebuild only when nothing else owns the file. A NixOS module that renders
+// config.json from its options — nix/module.nix in this repository still does —
+// re-creates it on every activation, so a value set here is lost at the next
+// switch. There the flag is the only level a declaration cannot overwrite, and
+// the command says so rather than letting the loss be discovered later.
 
 // settable — an axis a subcommand can write.
 type settable struct {

@@ -183,8 +183,8 @@ Settings are assembled from three levels, the higher overriding the lower:
   flags  →  environment variables  →  config.json
 
 Every setting also has an environment variable, printed by `+"`axes`"+`.
-The one-axis commands write config.json and survive a restart; on NixOS that file
-belongs to the module and is rewritten on every activation, so a change made that
-way lasts until the next switch — pass a flag instead.
+The one-axis commands write config.json and survive a restart. If a NixOS module
+renders that file from its options, the next activation re-creates it and the
+change is lost — there a flag is the only level the declaration cannot overwrite.
 `)
 }
