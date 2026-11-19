@@ -122,6 +122,7 @@ func build(cfg *config.Config) (*daemon, error) {
 	// counters are then kept without an address.
 	d.egress = egress.New(egress.Config{
 		Families:  egress.FamiliesFor(cfg.Family.Val),
+		URL:       cfg.EgressURL.Val,
 		Transport: d.egressTransport,
 		Log:       d.log,
 	})

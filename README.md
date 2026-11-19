@@ -204,6 +204,7 @@ credential to "anonymous"
 | `family` | `auto` \| `v4` \| `v6` | `auto` | the address family the traffic leaves from |
 | `transport` | `direct` \| `proxy` | `direct` | how traffic reaches the provider |
 | `upstream` | address | — | default address for providers that do not name their own |
+| `egress_url` | URL | the CDN trace document | where the gateway asks which address it leaves from |
 
 The timeouts (`first_event_timeout`, `idle_timeout`, `reasoning_idle_timeout`,
 default `30s`, `120s`, `300s`) decide how long silence is tolerated before a
@@ -246,6 +247,13 @@ node (`probe_count` candidates, each probed through the controller), switches
 the group, re-reads its own address, and repeats. Without `rotation` a quota
 refusal reaches the client verbatim — the gateway does not repeat a counter that
 did not move.
+
+The address is read from the trace document at `egress_url`, through the same
+path the requests take, so a rotation is visible as a change of that value. The
+default endpoint is `https://cp.cloudflare.com/cdn-cgi/trace` and not the
+service's own literal: measured on this uplink, `https://1.1.1.1/cdn-cgi/trace`
+stopped answering while the document behind the name kept answering, and an
+address that cannot be observed is a rotation that cannot decide.
 
 A rotation answers ONE refusal; it is not a new home. Once an answer arrives on
 the rotated exit, the gateway puts the group back on its first member — the

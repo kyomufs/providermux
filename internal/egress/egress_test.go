@@ -311,8 +311,11 @@ func TestEachFamilyHasItsOwnEchoAddress(t *testing.T) {
 	if !strings.HasPrefix(v6, "https://[") {
 		t.Fatalf("v6 address = %q, want a bracketed IPv6 literal", v6)
 	}
-	if !strings.Contains(v4, "1.1.1.1") {
-		t.Fatalf("v4 address = %q, want the service's IPv4 address", v4)
+	// The v4 answer is a name and the v6 answer is a literal: the name is
+	// what keeps the observation alive when a route to one literal dies, and the
+	// literal is what makes the v6 answer describe the v6 route.
+	if !strings.HasPrefix(v4, "https://") || strings.HasPrefix(v4, "https://[") {
+		t.Fatalf("v4 address = %q, want an https name", v4)
 	}
 }
 

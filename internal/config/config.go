@@ -259,6 +259,15 @@ type Config struct {
 	// section.
 	Upstream Value[string]
 
+	// EgressURL — where the gateway asks which address it leaves from.
+	//
+	// A setting and not a constant because the endpoint is the one part of the
+	// address machinery that lives outside this host: measured, the Cloudflare
+	// literal stopped answering on this uplink while the same document behind
+	// the service's own name kept answering, and an observation that cannot be
+	// made is a rotation that cannot decide.
+	EgressURL Value[string]
+
 	// Paths — the places on disk. Not a setting: determined by XDG.
 	Paths Paths
 
@@ -585,6 +594,7 @@ func Default() *Config {
 	c.Token.Set("", SourceDefault)
 	c.Transport.Set(DefaultTransport, SourceDefault)
 	c.Upstream.Set(DefaultUpstream, SourceDefault)
+	c.EgressURL.Set(egress.DefaultURL, SourceDefault)
 	c.Credential.Set(DefaultCredential, SourceDefault)
 	c.KeyRotation.Set(DefaultKeyRotation, SourceDefault)
 	c.Family.Set(DefaultFamily, SourceDefault)
@@ -675,6 +685,7 @@ type fileShape struct {
 	Transport            *string                   `json:"transport"`
 	TransportSettings    map[string]any            `json:"transport_settings"`
 	Upstream             *string                   `json:"upstream"`
+	EgressURL            *string                   `json:"egress_url"`
 	Credential           *string                   `json:"credential"`
 	KeyRotation          *string                   `json:"key_rotation"`
 	Family               *string                   `json:"family"`
@@ -744,6 +755,9 @@ func (c *Config) applyFile(path string) error {
 	}
 	if shape.Upstream != nil {
 		c.Upstream.Set(*shape.Upstream, SourceFile)
+	}
+	if shape.EgressURL != nil {
+		c.EgressURL.Set(*shape.EgressURL, SourceFile)
 	}
 	if shape.Credential != nil {
 		c.Credential.Set(*shape.Credential, SourceFile)
@@ -824,6 +838,7 @@ const (
 	EnvToken     = "PROVIDERMUX_TOKEN"
 	EnvTransport = "PROVIDERMUX_TRANSPORT"
 	EnvUpstream  = "PROVIDERMUX_UPSTREAM"
+	EnvEgressURL = "PROVIDERMUX_EGRESS_URL"
 	// EnvCredential and EnvRotation are the two halves of one mechanism,
 	// EnvFamily is the addressing axis.
 	EnvCredential = "PROVIDERMUX_CREDENTIAL"
@@ -876,6 +891,7 @@ func (c *Config) applyEnv() error {
 		{EnvToken, &c.Token},
 		{EnvTransport, &c.Transport},
 		{EnvUpstream, &c.Upstream},
+		{EnvEgressURL, &c.EgressURL},
 		{EnvCredential, &c.Credential},
 		{EnvRotation, &c.KeyRotation},
 		{EnvFamily, &c.Family},
@@ -1091,6 +1107,13 @@ func (c *Config) Validate() error {
 	}
 	if c.Retry.Delay <= 0 {
 		return fmt.Errorf("config: retry.delay must be positive")
+	}
+	// The observation endpoint is the one part of the address machinery that
+	// lives outside this host, and an endpoint that is not an address fails at
+	// the moment the address is needed — a warning in the log and a rotation
+	// that cannot decide. Refused at load, where the operator still sees it.
+	if u, err := url.Parse(c.EgressURL.Val); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("config: invalid egress_url %q: want an http(s) URL", c.EgressURL.Val)
 	}
 	// A half-configured rotation is the same trap as an unknown key: the file
 	// says the gateway can change its exit and the gateway cannot, and nothing

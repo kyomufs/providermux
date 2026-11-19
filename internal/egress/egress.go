@@ -45,12 +45,18 @@ const (
 
 // DefaultURL is the echo address.
 //
-// An address in Cloudflare's own range rather than a third-party "what is my IP"
-// service: it is reachable over both families, it answers in a fixed key=value
-// form that does not need parsing heuristics, and it is part of a large CDN's
-// public diagnostics rather than a hobby endpoint that may disappear. The `ip=`
-// line is the address, as seen by the edge.
-const DefaultURL = "https://1.1.1.1/cdn-cgi/trace"
+// A document on a large CDN rather than a third-party "what is my IP" service:
+// it answers in a fixed key=value form that needs no parsing heuristics, and it
+// is part of the provider's own public diagnostics rather than a hobby endpoint
+// that may disappear. The `ip=` line is the address, as seen by the edge.
+//
+// The host name is used instead of the service's own literal, and that is a
+// measured choice: on this uplink https://1.1.1.1/cdn-cgi/trace stopped answering
+// (connection failed, zero bytes) while https://cp.cloudflare.com/cdn-cgi/trace
+// answered 200 with the same document. An address the gateway cannot observe is
+// a rotation that cannot decide, so the endpoint that survives a broken route to
+// one literal is the better default; egress_url overrides it when it does not.
+const DefaultURL = "https://cp.cloudflare.com/cdn-cgi/trace"
 
 // DefaultURLV6 is the same document over the service's IPv6 address.
 //
