@@ -86,7 +86,7 @@ func (h *Handler) backoff(ctx context.Context, failed int) bool {
 // spent is the address the refusal came from. The rotation repeats while the
 // observed address has not moved: a spent address is what the repeat must avoid,
 // and the node name says nothing about it.
-func (h *Handler) rotateAfterQuota(ctx context.Context, spent string, failure provider.Failure) bool {
+func (h *Handler) rotateAfterQuota(ctx context.Context, id provider.ID, spent string, failure provider.Failure) bool {
 	if h.Rotate == nil || !failure.QuotaRejected {
 		return false
 	}
@@ -103,13 +103,13 @@ func (h *Handler) rotateAfterQuota(ctx context.Context, spent string, failure pr
 		// are both keyed by it, and a stale value would describe the attempt
 		// wrongly — and would make this loop blind to a node that shares the
 		// address it must leave.
-		if refresher, ok := h.Addresses.(AddressRefresher); ok {
+		if refresher, ok := h.addressesFor(id).(AddressRefresher); ok {
 			rctx, cancel := context.WithTimeout(ctx, rotationRefreshTimeout)
 			refresher.Refresh(rctx)
 			cancel()
 		}
 
-		next := h.address()
+		next := h.addressFor(id)
 		switch {
 		case next != "" && next == spent:
 			h.warn("egress: node %q exits from the spent address %s; asking for another", name, next)

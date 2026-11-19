@@ -223,8 +223,9 @@ free-lane allowance.
   "rotation": {
     "controller": "http://127.0.0.1:9091",
     "group": "egress",
-    "probe_url": "https://1.1.1.1/cdn-cgi/trace",
-    "probe_count": 6
+    "probe_url": "https://cp.cloudflare.com/cdn-cgi/trace",
+    "probe_count": 6,
+    "transport": "proxy"
   },
   "transport": "proxy",
   "transport_settings": { "url": "http://127.0.0.1:7891" }
@@ -247,6 +248,14 @@ node (`probe_count` candidates, each probed through the controller), switches
 the group, re-reads its own address, and repeats. Without `rotation` a quota
 refusal reaches the client verbatim — the gateway does not repeat a counter that
 did not move.
+
+`rotation.transport` names which transport the selector stands behind, and it
+defaults to the deployment's own. It matters when transports are split between
+providers — one provider on the host's routing, another through the proxy: a
+refusal from a provider that does not travel the group's path cannot be answered
+by moving it, so that refusal is passed on verbatim and no rotation is spent on
+it. Each provider also observes the address of its OWN path, since the address
+describes the path and not the host.
 
 The address is read from the trace document at `egress_url`, through the same
 path the requests take, so a rotation is visible as a change of that value. The

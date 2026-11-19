@@ -428,3 +428,86 @@ func TestTheExitStaysWhereItWasWithoutARotation(t *testing.T) {
 	case <-time.After(50 * time.Millisecond):
 	}
 }
+
+// TestAProviderOutsideTheRotatedTransportKeepsTheRefusal — a deployment may send
+// one provider through the tunnel and another through the host's own routing. The
+// selector stands behind one of them, so a refusal from the other one cannot be
+// answered by moving it: the refusal goes to the client as issued, and no
+// rotation is spent on a request that would leave from the same address again.
+func TestAProviderOutsideTheRotatedTransportKeepsTheRefusal(t *testing.T) {
+	var hits, rotations atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = io.WriteString(w, quotaBody)
+	}))
+	defer upstream.Close()
+
+	h, p, _ := newTestHandler(t, upstream)
+	p.classif = quotaProvider(t, upstream).classif
+	h.Retry = RetryPolicy{Attempts: 3, Delay: time.Millisecond}
+	h.Addresses = fixedAddress("203.0.113.7")
+	h.Rotate = func(context.Context) (string, error) {
+		rotations.Add(1)
+		return "some-other-node", nil
+	}
+	h.RotateFor = func(provider.ID) bool { return false }
+
+	rec := postChat(t, h, chatRequest)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", rec.Code)
+	}
+	if got := hits.Load(); got != 1 {
+		t.Fatalf("upstream hits = %d, want 1: the refusal was repeated for a provider the rotation does not move", got)
+	}
+	if got := rotations.Load(); got != 0 {
+		t.Fatalf("rotations = %d, want 0", got)
+	}
+	if rec.Body.String() != quotaBody {
+		t.Fatalf("the refusal was repackaged: %q", rec.Body.String())
+	}
+}
+
+// TestTheAddressFollowsTheProviderPath — the address that decides whether a
+// rotation worked is the address the provider's own traffic leaves from. A
+// resolver built on the deployment's transport describes a different path, and
+// comparing the two would either miss a real move or invent one.
+func TestTheAddressFollowsTheProviderPath(t *testing.T) {
+	var hits, rotations atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if hits.Add(1) == 1 {
+			w.Header().Set("content-type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = io.WriteString(w, quotaBody)
+			return
+		}
+		streamHandler(w)
+	}))
+	defer upstream.Close()
+
+	h, p, _ := newTestHandler(t, upstream)
+	p.classif = quotaProvider(t, upstream).classif
+	h.Retry = RetryPolicy{Attempts: 2, Delay: time.Millisecond}
+
+	// The deployment's own path never moves; the provider's path does.
+	h.Addresses = fixedAddress("203.0.113.7")
+	providerPath := &switchingAddress{addr: "203.0.113.7"}
+	h.AddressesFor = func(provider.ID) AddressResolver { return providerPath }
+	h.Rotate = func(context.Context) (string, error) {
+		rotations.Add(1)
+		providerPath.set("198.51.100.9")
+		return "some-other-node", nil
+	}
+
+	rec := postChat(t, h, chatRequest)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if got := hits.Load(); got != 2 {
+		t.Fatalf("upstream hits = %d, want 2: the moved provider path was not seen", got)
+	}
+	if got := rotations.Load(); got != 1 {
+		t.Fatalf("rotations = %d, want 1", got)
+	}
+}

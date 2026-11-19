@@ -36,6 +36,9 @@ type daemon struct {
 	// nil, which means the daemon does not know its address and the counters are
 	// kept without one.
 	egress *egress.Resolver
+	// resolvers observes the address of each provider's own path. A provider
+	// without an entry leaves by the transport above and is described by it.
+	resolvers map[provider.ID]*egress.Resolver
 	// rotate asks the proxy controller for another exit address. nil means the
 	// deployment cannot change its exit.
 	rotate func(ctx context.Context) (string, error)
@@ -120,12 +123,30 @@ func build(cfg *config.Config) (*daemon, error) {
 	// family: the observation has to travel the same path as the requests, or it
 	// describes a different path. A failure to observe is not fatal — the
 	// counters are then kept without an address.
-	d.egress = egress.New(egress.Config{
-		Families:  egress.FamiliesFor(cfg.Family.Val),
-		URL:       cfg.EgressURL.Val,
-		Transport: d.egressTransport,
-		Log:       d.log,
-	})
+	d.egress = d.resolverFor(d.transport, cfg)
+
+	// One resolver per provider path.
+	//
+	// The address is a property of the path, not of the host. A deployment may
+	// send one provider out through the tunnel and another through the host's
+	// own routing, and a single resolver would label the second with the first's
+	// address: the counters would be wrong and a rotation would compare the
+	// wrong number. Providers that share a transport share the observation.
+	d.resolvers = make(map[provider.ID]*egress.Resolver, len(d.providers.All()))
+	seen := make(map[transport.Transport]*egress.Resolver)
+	for _, p := range d.providers.All() {
+		t := d.transport
+		if ptr, ok := d.transports[p.ID()]; ok && ptr != nil {
+			t = ptr
+		}
+		if r, ok := seen[t]; ok {
+			d.resolvers[p.ID()] = r
+			continue
+		}
+		r := d.resolverFor(t, cfg)
+		seen[t] = r
+		d.resolvers[p.ID()] = r
+	}
 
 	// The exit rotation, when the deployment names a proxy controller.
 	//
@@ -194,9 +215,18 @@ func (d *daemon) buildHandler() http.Handler {
 			}
 			return d.transport
 		},
-		State:           d.state,
-		Log:             d.log,
-		Addresses:       d.egress,
+		State:     d.state,
+		Log:       d.log,
+		Addresses: d.egress,
+		AddressesFor: func(id provider.ID) gateway.AddressResolver {
+			if r, ok := d.resolvers[id]; ok && r != nil {
+				return r
+			}
+			return nil
+		},
+		RotateFor: func(id provider.ID) bool {
+			return d.cfg.TransportFor(string(id)) == d.cfg.RotationTransport()
+		},
 		KeyRotation:     d.keys.rotationMap(),
 		DefaultProvider: d.keys.firstProvider(),
 		// The credential axis reaches the request path here. Without it the
@@ -288,6 +318,21 @@ func (d *daemon) serve(ctx context.Context) error {
 		d.log.Warn("egress: %v", err)
 	}
 	defer d.egress.Stop()
+
+	// The observations of the other paths start with the same reasoning, and a
+	// shared resolver is started once: two providers on one transport measure
+	// one address, and starting it twice would open two polls on one path.
+	started := map[*egress.Resolver]bool{d.egress: true}
+	for _, r := range d.resolvers {
+		if r == nil || started[r] {
+			continue
+		}
+		started[r] = true
+		if err := r.Start(ctx); err != nil && d.log != nil {
+			d.log.Warn("egress: %v", err)
+		}
+		defer r.Stop()
+	}
 
 	// The catalog refresh starts before the listener too, and for the same
 	// reason: reads come out of memory, so a catalog that is still empty would
@@ -498,17 +543,27 @@ func stopPollers(reg *provider.Registry) {
 	}
 }
 
-// egressTransport hands the resolver the path the requests take.
+// resolverFor builds an address observation for one transport.
 //
-// Under direct routing the address is observed through a transport of the family
-// being measured, because the family is what the observation is about. Under any
-// other transport the family axis is inert: the path is the transport's own, and
-// asking for a family would describe a route that is not used.
-func (d *daemon) egressTransport(family string) (http.RoundTripper, error) {
-	if d.transport == nil || d.transport.ID() == transport.Direct {
-		return transport.Pinned(family), nil
+// The observation has to travel the same path as the requests it describes, or
+// it measures a different path: under direct routing the address is observed
+// through a transport of the family being measured, because the family is what
+// the observation is about, while under any other transport the family axis is
+// inert — the path is the transport's own, and asking for a family would
+// describe a route that is not used.
+func (d *daemon) resolverFor(t transport.Transport, cfg *config.Config) *egress.Resolver {
+	path := func(family string) (http.RoundTripper, error) {
+		if t == nil || t.ID() == transport.Direct {
+			return transport.Pinned(family), nil
+		}
+		return t.RoundTripper()
 	}
-	return d.transport.RoundTripper()
+	return egress.New(egress.Config{
+		Families:  egress.FamiliesFor(cfg.Family.Val),
+		URL:       cfg.EgressURL.Val,
+		Transport: path,
+		Log:       d.log,
+	})
 }
 
 // closeIdle drops pooled connections everywhere they are held.

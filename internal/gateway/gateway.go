@@ -80,6 +80,16 @@ type Handler struct {
 	// row, so the matrix stays honest instead of showing an invented one.
 	Addresses AddressResolver
 
+	// AddressesFor reports the egress address for one provider, when the
+	// providers do not all leave by the same path.
+	//
+	// WHY. A transport is chosen per provider: one may go out through the
+	// host's own routing while another is tunnelled through a proxy whose exit
+	// can be chosen. The address that describes either path is not the same
+	// value, and a lane keyed by the wrong address mislabels every refusal it
+	// records. nil means Addresses speaks for all of them.
+	AddressesFor func(id provider.ID) AddressResolver
+
 	// DefaultProvider is the provider used when the client did not name one.
 	// Empty means the first in the registry.
 	DefaultProvider provider.ID
@@ -144,6 +154,16 @@ type Handler struct {
 	// itself: the proxy controller is a separate process, and reaching it is a
 	// property of the deployment, not of the request path.
 	Rotate func(ctx context.Context) (string, error)
+
+	// RotateFor reports whether the exit this provider leaves by is the one
+	// Rotate moves.
+	//
+	// WHY. Rotating a selector group that stands behind a transport the provider
+	// does not use moves an exit nobody travelled: the repeat would leave from
+	// the same address as the refusal and spend a rotation for nothing. When this
+	// says no, the refusal is passed to the client exactly as it arrived. nil
+	// means every provider leaves by the movable exit.
+	RotateFor func(id provider.ID) bool
 
 	// Settle returns the exit to its default, and is called after an answer
 	// that arrived on a rotated exit.
@@ -625,7 +645,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 		// The egress address is read per attempt, not per request: a rotation
 		// between two attempts IS a change of this value, and the lanes a
 		// provider keeps are keyed by it.
-		address := h.address()
+		address := h.addressFor(p.ID())
 		// The provider sees the address for one decision only: whether an
 		// identifier it minted still serves this request. A lane that counts by
 		// address and by session cannot answer that without it.
@@ -691,7 +711,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 				// so the egress address is asked for again rather than waited
 				// out — and a new attempt may well leave by another one.
 				h.warn("provider %q: silent: %v", p.ID(), cause)
-				h.refreshAddress()
+				h.refreshAddressFor(p.ID())
 				if attempt < attempts && h.backoff(r.Context(), attempt) {
 					continue
 				}
@@ -782,7 +802,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 		// two minutes and answered the same address again a minute later. A new
 		// exit alone does not answer that, and neither does a wait alone — the
 		// exit whose day is spent stays spent.
-		if attempt < attempts && h.rotateAfterQuota(r.Context(), address, failure) && h.backoff(r.Context(), attempt) {
+		if attempt < attempts && h.rotationAllowed(p.ID()) && h.rotateAfterQuota(r.Context(), p.ID(), address, failure) && h.backoff(r.Context(), attempt) {
 			rotated = true
 			continue
 		}
@@ -793,7 +813,7 @@ func (h *Handler) forward(w http.ResponseWriter, r *http.Request, p provider.Pro
 		// where a stale answer costs something — the requests that follow would
 		// be credited to the address they no longer leave from — and the address
 		// is asked for again here instead of waiting out the TTL.
-		h.refreshAddress()
+		h.refreshAddressFor(p.ID())
 
 		// An overloaded provider or a busy edge is a refusal that a second
 		// attempt from the same exit may survive. It is not the free lane's
@@ -1128,11 +1148,35 @@ type AddressRefresher interface {
 }
 
 // address returns the egress address, or an empty string when unknowable.
-func (h *Handler) address() string {
-	if h.Addresses == nil {
+// addressFor reports the egress address the provider's traffic leaves from.
+//
+// Per provider, because a deployment may send one provider out through the host
+// and another through a tunnel: the two addresses are different answers to the
+// same question, and the lanes a provider keeps are keyed by the right one.
+func (h *Handler) addressFor(id provider.ID) string {
+	r := h.addressesFor(id)
+	if r == nil {
 		return ""
 	}
-	return h.Addresses.Address()
+	return r.Address()
+}
+
+// addressesFor is the resolver that speaks for the provider's path.
+func (h *Handler) addressesFor(id provider.ID) AddressResolver {
+	if h.AddressesFor != nil {
+		if r := h.AddressesFor(id); r != nil {
+			return r
+		}
+	}
+	return h.Addresses
+}
+
+// rotationAllowed reports whether Rotate moves the exit this provider uses.
+func (h *Handler) rotationAllowed(id provider.ID) bool {
+	if h.RotateFor == nil {
+		return true
+	}
+	return h.RotateFor(id)
 }
 
 // refreshAddress asks for a fresh address WITHOUT waiting for it.
@@ -1141,12 +1185,18 @@ func (h *Handler) address() string {
 // round trip to an echo endpoint, and the answer is not needed here either: the
 // next request is the one that reads it, and that is the request a stale answer
 // would have mislabelled.
-func (h *Handler) refreshAddress() {
-	r, ok := h.Addresses.(AddressRefresher)
+func (h *Handler) refreshAddressFor(id provider.ID) {
+	r := h.Addresses
+	if h.AddressesFor != nil {
+		if forProvider := h.AddressesFor(id); forProvider != nil {
+			r = forProvider
+		}
+	}
+	refresher, ok := r.(AddressRefresher)
 	if !ok {
 		return
 	}
-	go r.Refresh(context.Background())
+	go refresher.Refresh(context.Background())
 }
 
 // recordSuccess records a successful request.

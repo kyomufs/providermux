@@ -169,6 +169,15 @@ type RotationPolicy struct {
 	Controller string
 	// Group is the selector group whose choice is the exit address.
 	Group string
+	// Transport is the transport whose exit the controller moves.
+	//
+	// A deployment may split transports between providers — one provider on the
+	// host's own routing, another through the proxy — and only one of them has a
+	// selector behind it. Rotating the group for a provider that does not travel
+	// the group's path would move an exit nobody uses and spend a rotation on a
+	// request that cannot be answered by it. Empty means the deployment's own
+	// transport, which is the common case.
+	Transport string
 	// Secret is the controller's shared secret, if it has one.
 	Secret string
 	// ProbeURL is what a candidate node is asked to fetch when its liveness is
@@ -180,6 +189,17 @@ type RotationPolicy struct {
 
 // Enabled reports whether rotation is configured.
 func (p RotationPolicy) Enabled() bool { return p.Controller != "" && p.Group != "" }
+
+// RotationTransport is the transport whose exit the controller moves.
+//
+// An empty policy value means the deployment's own transport: a single-transport
+// deployment names the controller and nothing else, and that is the common case.
+func (c *Config) RotationTransport() string {
+	if c.Rotation.Transport != "" {
+		return c.Rotation.Transport
+	}
+	return c.Transport.Val
+}
 
 // Config — the fully resolved configuration.
 type Config struct {
@@ -709,6 +729,7 @@ type retryShape struct {
 type rotationShape struct {
 	Controller *string `json:"controller"`
 	Group      *string `json:"group"`
+	Transport  *string `json:"transport"`
 	Secret     *string `json:"secret"`
 	ProbeURL   *string `json:"probe_url"`
 	ProbeCount *int    `json:"probe_count"`
@@ -795,6 +816,9 @@ func (c *Config) applyFile(path string) error {
 		}
 		if r.Group != nil {
 			c.Rotation.Group = *r.Group
+		}
+		if r.Transport != nil {
+			c.Rotation.Transport = *r.Transport
 		}
 		if r.Secret != nil {
 			c.Rotation.Secret = *r.Secret
