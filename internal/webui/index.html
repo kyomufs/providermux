@@ -7,7 +7,8 @@
 <meta name="theme-color" content="#FBFAF6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0F1513" media="(prefers-color-scheme: dark)">
 <title>providermux</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%232F6F63'/%3E%3Cpath d='M5 8.5 12 4.5l7 4v7L12 19.5l-7-4z' fill='none' stroke='white' stroke-width='1.7' stroke-linejoin='round'/%3E%3Cpath d='M12 12 5 8.5M12 12l7-3.5M12 12v7.5' stroke='white' stroke-width='1.3'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%232F6F63'/%3E%3Cg fill='none' stroke='%23EAF5F1' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8.5 12.5h14l-3.2-3.2'/%3E%3Cpath d='M23.5 19.5h-14l3.2 3.2'/%3E%3C/g%3E%3C/svg%3E">
+
 <style>
 /* ==========================================================================
    Tokens. One warm neutral ramp carries the surface hierarchy; a deep teal
@@ -270,7 +271,50 @@ code { font-family:var(--mono); font-size:.94em; }
 
 main { flex:1; min-width:0; max-width:1180px; padding:var(--s5) var(--s6) var(--s7); margin:0 auto; width:100%; }
 main.enter { animation:pmux-enter 260ms var(--ease); }
+/* The tree is patched in place on every poll, so the entrance animation plays
+   only when the route changes — replaying it per refresh is what made the
+   panel twitch. */
 @keyframes pmux-enter { from { opacity:0; transform:translateY(6px); } }
+@keyframes pmux-settled {
+  0%   { box-shadow:0 0 0 0 color-mix(in srgb, var(--primary) 55%, transparent); }
+  100% { box-shadow:0 0 0 14px transparent; }
+}
+.settled { animation:pmux-settled 560ms var(--ease); border-radius:var(--r-lg); }
+
+/* ------------ exit: one line per node, grouped by subscription ------------ */
+.node-groups { display:flex; flex-direction:column; gap:var(--s3); margin-top:var(--s4); }
+.node-group { border-top:1px solid var(--outline-variant); padding-top:var(--s3); }
+.node-group:first-child { border-top:0; padding-top:0; }
+.node-group-head { display:flex; align-items:center; gap:var(--s2); margin-bottom:6px; }
+.node-group-name {
+  font-size:12px; line-height:16px; font-weight:600; letter-spacing:.02em;
+  color:var(--on-surface-variant); text-transform:none;
+}
+.node-group-head .hint { font-size:11px; }
+.node-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(232px, 1fr)); gap:1px 10px; }
+.node {
+  display:flex; align-items:center; gap:7px; min-width:0;
+  padding:3px 6px; border-radius:var(--r-sm); cursor:pointer;
+  font-size:12px; line-height:17px; color:var(--on-surface);
+  transition:background 120ms var(--ease), color 120ms var(--ease);
+}
+.node:hover { background:var(--surface-container); }
+.node.now { background:var(--primary-container); color:var(--on-surface); font-weight:600; }
+.node-dot { flex:none; width:6px; height:6px; border-radius:50%; background:var(--outline-variant); }
+.node-dot.ok { background:var(--ok); }
+.node-dot.err { background:var(--error); }
+.node-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.node.new { box-shadow:inset 2px 0 0 var(--primary); }
+.node-ms { flex:none; font-family:var(--mono); font-size:11px; color:var(--on-surface-variant); font-variant-numeric:tabular-nums; }
+.node-ping {
+  flex:none; display:grid; place-items:center; width:22px; height:22px;
+  border:0; border-radius:50%; background:transparent; color:var(--on-surface-variant);
+  cursor:pointer; opacity:0; transition:opacity 120ms var(--ease), background 120ms var(--ease);
+}
+.node:hover .node-ping, .node:focus-within .node-ping { opacity:1; }
+.node-ping:hover { background:var(--surface-high); color:var(--primary); }
+.node-ping .mi { font-size:14px; }
+
 .bottom-nav { display:none; }
 
 /* ============ page furniture ============ */
@@ -672,7 +716,7 @@ dialog::backdrop { background:var(--scrim); }
     <a class="rail-item" href="#/models" data-route="models"><m3e-icon name="view_list" optical-size="24" aria-hidden="true"></m3e-icon>Каталог моделей</a>
     <div class="rail-group">Управление</div>
     <a class="rail-item" href="#/providers" data-route="providers"><m3e-icon name="dns" optical-size="24" aria-hidden="true"></m3e-icon>Провайдеры</a>
-    <a class="rail-item" href="#/exit" data-route="exit"><m3e-icon name="swap_horiz" optical-size="24" aria-hidden="true"></m3e-icon>Выход</a>
+    <a class="rail-item" href="#/exit" data-route="exit"><m3e-icon name="public" optical-size="24" aria-hidden="true"></m3e-icon>Выход</a>
     <a class="rail-item" href="#/quota" data-route="quota"><m3e-icon name="data_usage" optical-size="24" aria-hidden="true"></m3e-icon>Квоты</a>
     <a class="rail-item" href="#/settings" data-route="settings"><m3e-icon name="tune" optical-size="24" aria-hidden="true"></m3e-icon>Параметры</a>
     <div class="rail-foot" id="rail-meta"></div>
@@ -699,7 +743,7 @@ dialog::backdrop { background:var(--scrim); }
 <nav class="bottom-nav" aria-label="Разделы">
   <a class="bottom-item" href="#/overview" data-route="overview"><m3e-icon name="dashboard" optical-size="24" aria-hidden="true"></m3e-icon>Обзор</a>
   <a class="bottom-item" href="#/providers" data-route="providers"><m3e-icon name="dns" optical-size="24" aria-hidden="true"></m3e-icon>Провайдеры</a>
-  <a class="bottom-item" href="#/exit" data-route="exit"><m3e-icon name="swap_horiz" optical-size="24" aria-hidden="true"></m3e-icon>Выход</a>
+  <a class="bottom-item" href="#/exit" data-route="exit"><m3e-icon name="public" optical-size="24" aria-hidden="true"></m3e-icon>Выход</a>
   <a class="bottom-item" href="#/models" data-route="models"><m3e-icon name="view_list" optical-size="24" aria-hidden="true"></m3e-icon>Модели</a>
   <a class="bottom-item" href="#/quota" data-route="quota"><m3e-icon name="data_usage" optical-size="24" aria-hidden="true"></m3e-icon>Квоты</a>
   <a class="bottom-item" href="#/settings" data-route="settings"><m3e-icon name="tune" optical-size="24" aria-hidden="true"></m3e-icon>Параметры</a>
@@ -740,7 +784,13 @@ dialog::backdrop { background:var(--scrim); }
 (() => {
   "use strict";
 
-  const POLL_MS = 10000;
+  // The refresh period is the operator's: a panel that repaints every ten
+  // seconds whether or not anything changed is noise, and a slow lane wants a
+  // coarser clock than a busy one. 0 turns the poll off (the Обновить button
+  // keeps working).
+  const POLL_MS = 5000;
+  const LS_POLL = "pmux_poll_ms";
+  const POLL_CHOICES = [[0, "выключено"], [2000, "2 с"], [5000, "5 с"], [10000, "10 с"], [30000, "30 с"], [60000, "1 мин"]];
   const ROUTES = ["overview", "providers", "exit", "models", "quota", "settings"];
   const THEMES = ["auto", "light", "dark"];
   const THEME_ICON = { auto: "i-auto", light: "i-sun", dark: "i-moon" };
@@ -783,6 +833,8 @@ dialog::backdrop { background:var(--scrim); }
     oauth: null,
     busy: new Set(),
     lastSig: "",
+    renderedRoute: "",
+    pollMs: POLL_MS,
     modelQuery: "",
     providerFilter: "all",
     failing: false,
@@ -1493,6 +1545,14 @@ dialog::backdrop { background:var(--scrim); }
           '<div class="stack" style="gap:var(--s4)">' + rows + "</div></section></div>" +
         '<div class="c5 stack">' +
           '<section class="card"><div class="card-head"><h2 class="card-title">Таймауты</h2></div><div>' + timeouts + "</div></section>" +
+          '<section class="card" id="panel-card"><div class="card-head"><h2 class="card-title">Панель</h2></div>' +
+            '<div class="stack" style="gap:var(--s3)"><div class="axis-text"><div class="card-title">Обновление</div>' +
+              '<div class="hint">Как часто панель перечитывает состояние. Выключено — только по кнопке «Обновить».</div></div>' +
+              '<div class="row">' +
+              POLL_CHOICES.map(([ms, label]) =>
+                '<m3e-button variant="outlined" size="small" toggle' + (ms === state.pollMs ? " selected" : "") +
+                ' data-act="set-poll" data-value="' + ms + '">' + esc(label) + "</m3e-button>").join("") +
+              "</div></div></section>" +
           '<section class="card"><div class="card-head"><h2 class="card-title">Доступ</h2></div>' +
             '<div class="kv"><div class="kv-k">Токен</div><div class="kv-v">' + (state.token ? "задан" : "не задан") + "</div></div>" +
             '<div class="kv"><div class="kv-k">Тема</div><div class="kv-v">' + esc(state.theme === "auto" ? "как в системе" : state.theme === "light" ? "светлая" : "тёмная") + "</div></div>" +
@@ -1519,13 +1579,60 @@ dialog::backdrop { background:var(--scrim); }
     return '<span class="pill ok">' + esc(String(probe.delay)) + " мс</span>";
   }
 
-  function exitNodeRow(node) {
-    return '<div class="kv"><div class="kv-k"><div>' + esc(node.name) +
-      (node.now ? ' <span class="pill accent">выбран</span>' : "") + "</div></div>" +
-      '<div class="kv-v row">' + probePill(node.name) +
-      '<m3e-button variant="outlined" size="small" data-act="exit-probe" data-name="' + esc(node.name) + '">Пинг</m3e-button>' +
-      '<m3e-button variant="tonal" size="small" data-act="exit-select" data-name="' + esc(node.name) + '"' +
-      (node.now || state.busy.has("exit") ? " disabled" : "") + ">Выбрать</m3e-button></div></div>";
+  // A subscription hands out hundreds of records that differ only in the name,
+  // so a flat list is unreadable: the nodes are grouped by the subscription the
+  // last build reported, one line each. A deployment whose tool writes no
+  // manifest has no provenance — those nodes land in one unnamed group rather
+  // than being sorted into groups that were never measured.
+  const NO_SOURCE = "без подписки";
+
+  function nodeGroupKey(node) {
+    return node.sources && node.sources.length ? node.sources.join(" · ") : NO_SOURCE;
+  }
+
+  function nodeGroups(nodes) {
+    const groups = new Map();
+    for (const node of nodes) {
+      const key = nodeGroupKey(node);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(node);
+    }
+    return Array.from(groups.entries()).sort((a, b) =>
+      (a[0] === NO_SOURCE) - (b[0] === NO_SOURCE) || b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  }
+
+  function nodeCount(n) {
+    // Russian counts: 1 узел, 2 узла, 5 узлов, but 11 узлов — the teens are a
+    // third form, not the last digit's.
+    const last = n % 10;
+    const teen = n % 100;
+    if (teen >= 11 && teen <= 14) return n + " узлов";
+    if (last === 1) return n + " узел";
+    if (last >= 2 && last <= 4) return n + " узла";
+    return n + " узлов";
+  }
+
+  function nodeChip(node) {
+    const probe = state.probes && state.probes[node.name];
+    const ms = probe ? (probe.error ? "—" : String(probe.delay) + " мс") : "";
+    const dot = !probe ? "" : probe.error ? " err" : " ok";
+    return '<div class="node' + (node.now ? " now" : "") + '" data-act="exit-select" data-name="' + esc(node.name) + '"' +
+      ' title="' + esc(node.name) + (node.now ? " — выбран сейчас" : " — выбрать") + '">' +
+      '<span class="node-dot' + dot + '"></span>' +
+      '<span class="node-name">' + esc(node.name) + "</span>" +
+      '<span class="node-ms">' + esc(ms) + "</span>" +
+      '<button class="node-ping" data-act="exit-probe" data-name="' + esc(node.name) + '" title="Пинг" type="button">' +
+      '<m3e-icon name="sync"></m3e-icon></button></div>';
+  }
+
+  function nodeGroupBlock(source, nodes) {
+    return '<section class="node-group"><div class="node-group-head">' +
+      '<span class="node-group-name">' + esc(source) + "</span>" +
+      '<span class="hint">' + nodeCount(nodes.length) + "</span>" +
+      '<span class="spacer"></span>' +
+      '<button class="node-ping" data-act="exit-probe-group" data-source="' + esc(source) + '" title="Проверить подписку" type="button">' +
+      '<m3e-icon name="bolt"></m3e-icon></button></div>' +
+      '<div class="node-grid">' + nodes.map(nodeChip).join("") + "</div></section>";
   }
 
   function exitCard() {
@@ -1536,15 +1643,16 @@ dialog::backdrop { background:var(--scrim); }
         '<span class="spacer"></span><span class="pill err">нет связи с ядром</span></div>' +
         '<div class="hint">' + esc(e.error) + "</div></section>";
     }
-    const nodes = (e.nodes || []).map(exitNodeRow).join("") || '<div class="hint">Группа пуста.</div>';
-    return '<section class="card"><div class="card-head"><h2 class="card-title">Группа ' + esc(e.group) + "</h2>" +
+    const nodes = nodeGroups(e.nodes || []).map(([source, list]) => nodeGroupBlock(source, list)).join("") ||
+      '<div class="hint">Группа пуста.</div>';
+    return '<section class="card" id="exit-card"><div class="card-head"><h2 class="card-title">Группа ' + esc(e.group) + "</h2>" +
       '<span class="spacer"></span><span class="hint">' + (e.nodes || []).length + " узлов</span>" +
       '<m3e-button variant="outlined" size="small" data-act="exit-probe"' + (state.busy.has("exit") ? " disabled" : "") + ">Проверить все</m3e-button></div>" +
       '<div class="kv"><div class="kv-k"><div>Сейчас</div><div class="hint">Куда уходит трафик прямо сейчас</div></div>' +
         '<div class="kv-v">' + esc(e.now) + "</div></div>" +
       '<div class="kv"><div class="kv-k"><div>Дом</div><div class="hint">Куда возвращается выход после ответа</div></div>' +
         '<div class="kv-v">' + esc(e.home) + "</div></div>" +
-      '<div class="stack mt4" style="gap:var(--s2)">' + nodes + "</div></section>";
+      '<div class="node-groups">' + nodes + "</div></section>";
   }
 
   function exitRefreshCard() {
@@ -1662,35 +1770,88 @@ dialog::backdrop { background:var(--scrim); }
   };
 
   // ---------------------------------------------------------------- render
+  //
+  // The view is rebuilt as markup on every pass and patched into the live tree
+  // instead of replacing it. Replacing it (innerHTML) threw away every node and
+  // replayed the entrance animation ten times a minute, which is the twitch the
+  // operator kept seeing; patching reuses nodes, so an input keeps its caret,
+  // a focused button keeps focus, and CSS transitions run from a real previous
+  // state. Nodes are matched by position, which is stable because one template
+  // produces the whole subtree.
+
+  const FORM_CONTROLS = new Set(["INPUT", "SELECT", "TEXTAREA"]);
+
+  function patchAttributes(from, to) {
+    for (const attr of Array.from(to.attributes)) {
+      if (from.getAttribute(attr.name) !== attr.value) from.setAttribute(attr.name, attr.value);
+    }
+    for (const attr of Array.from(from.attributes)) {
+      if (!to.hasAttribute(attr.name)) from.removeAttribute(attr.name);
+    }
+  }
+
+  function patchNode(from, to) {
+    if (from.nodeType !== to.nodeType || from.nodeName !== to.nodeName) {
+      from.replaceWith(to);
+      return;
+    }
+    if (from.nodeType === Node.TEXT_NODE) {
+      if (from.nodeValue !== to.nodeValue) from.nodeValue = to.nodeValue;
+      return;
+    }
+    if (from.nodeType !== Node.ELEMENT_NODE) return;
+    // A focused field owns its value: the state copies what was saved, and a
+    // poll that landed mid-typing must not overwrite the half-typed text.
+    const editing = from === document.activeElement && FORM_CONTROLS.has(from.nodeName);
+    if (editing) {
+      to.removeAttribute("value");
+      from.removeAttribute("value");
+    }
+    patchAttributes(from, to);
+    patchChildren(from, to);
+  }
+
+  function patchChildren(from, to) {
+    const was = Array.from(from.childNodes);
+    const next = Array.from(to.childNodes);
+    const total = Math.max(was.length, next.length);
+    for (let i = 0; i < total; i++) {
+      if (i >= was.length) { from.appendChild(next[i]); continue; }
+      if (i >= next.length) { was[i].remove(); continue; }
+      patchNode(was[i], next[i]);
+    }
+  }
 
   function render(force = false) {
     const sig = renderSignature();
     if (!force && sig === state.lastSig) return;
     state.lastSig = sig;
 
-    const active = document.activeElement;
-    const keepId = active && active.id && $("#main").contains(active) ? active.id : "";
-    const caret = keepId && typeof active.selectionStart === "number" ? active.selectionStart : null;
-
-    const view = VIEWS[state.route] || viewOverview;
     const main = $("#main");
-    main.innerHTML = view();
-    main.classList.remove("enter");
-    void main.offsetWidth;
-    main.classList.add("enter");
+    const template = document.createElement("div");
+    template.innerHTML = (VIEWS[state.route] || viewOverview)();
 
-    if (keepId) {
-      const el = document.getElementById(keepId);
-      if (el) {
-        el.focus({ preventScroll: true });
-        if (caret !== null && typeof el.setSelectionRange === "function") {
-          try { el.setSelectionRange(caret, caret); } catch { /* not a text input */ }
-        }
-      }
+    // A route change is the only thing worth an entrance: the content really is
+    // new there, and the transition is what tells the operator it changed.
+    if (state.renderedRoute !== state.route) {
+      state.renderedRoute = state.route;
+      main.classList.remove("enter");
+      void main.offsetWidth;
+      main.classList.add("enter");
     }
+
+    patchChildren(main, template);
     updateChrome();
   }
 
+  // A write that succeeded marks the element it changed, so the change is
+  // visible in place instead of only in a toast that scrolls out of the eye.
+  function settled(el) {
+    if (!el) return;
+    el.classList.remove("settled");
+    void el.offsetWidth;
+    el.classList.add("settled");
+  }
   // ---------------------------------------------------------------- toast
 
   let toastTimer = 0;
@@ -1742,11 +1903,14 @@ dialog::backdrop { background:var(--scrim); }
 
   // ---------------------------------------------------------------- actions
 
-  async function setOption(payload, busyKey) {
+  async function setOption(payload, busyKey, at) {
     state.busy.add(busyKey);
     try {
       await api("/_control/options", { body: payload });
       await refreshCurrent(true);
+      // The row that was written marks itself, so the answer is visible where
+      // the click happened and not only in a snack that disappears.
+      settled(at);
     } catch (err) {
       toast(err.message, "err");
       render(true);
@@ -1810,17 +1974,27 @@ dialog::backdrop { background:var(--scrim); }
       return;
     }
     if (act === "set-global") {
-      await setOption({ axis: el.dataset.axis, value: coerce(el.dataset.value) }, "global");
+      await setOption({ axis: el.dataset.axis, value: coerce(el.dataset.value) }, "global", el.closest(".axis"));
       return;
     }
     if (act === "set-axis") {
-      await setOption({ provider: el.dataset.provider, axis: el.dataset.axis, value: coerce(el.dataset.value) }, "opts-" + el.dataset.provider);
+      await setOption({ provider: el.dataset.provider, axis: el.dataset.axis, value: coerce(el.dataset.value) },
+        "opts-" + el.dataset.provider, el.closest(".axis"));
+      return;
+    }
+    if (act === "set-poll") {
+      const ms = Number(el.dataset.value);
+      setPoll(ms);
+      render(true);
+      settled($("#panel-card"));
+      toast(ms ? "Панель обновляется каждые " + ms / 1000 + " с" : "Автообновление панели выключено");
       return;
     }
     if (act === "toggle-rotation") {
       const next = el.getAttribute("aria-checked") !== "true";
       el.setAttribute("aria-checked", String(next));
-      await setOption({ provider: el.dataset.provider, axis: "key_rotation", value: next ? "on" : "off" }, "opts-" + el.dataset.provider);
+      await setOption({ provider: el.dataset.provider, axis: "key_rotation", value: next ? "on" : "off" },
+        "opts-" + el.dataset.provider, el.closest(".axis"));
       return;
     }
     if (act === "remove-key") {
@@ -1884,6 +2058,34 @@ dialog::backdrop { background:var(--scrim); }
         const dead = ((answer && answer.nodes) || []).filter((n) => n.error).length;
         toast(name ? (dead ? name + ": не отвечает" : name + ": " + probes[name].delay + " мс")
           : "Проверено узлов: " + ((answer && answer.nodes) || []).length + (dead ? ", молчат: " + dead : ""));
+        settled($("#exit-card"));
+      } catch (err) {
+        toast(err.message, "err");
+      } finally {
+        state.busy.delete("exit");
+        render(true);
+      }
+      return;
+    }
+    if (act === "exit-probe-group") {
+      // A group is the nodes of one subscription: the budget is spent on the
+      // rows the operator is looking at instead of the whole group.
+      const source = el.dataset.source;
+      const names = ((state.exit && state.exit.nodes) || [])
+        .filter((node) => nodeGroupKey(node) === source).map((node) => node.name);
+      if (!names.length) return;
+      state.busy.add("exit");
+      render(true);
+      try {
+        const answer = await api("/_control/exit/probe", { body: { names } });
+        const probes = Object.assign({}, state.probes || {});
+        for (const node of (answer && answer.nodes) || []) {
+          probes[node.name] = { delay: node.delay, error: node.error || "" };
+        }
+        state.probes = probes;
+        const dead = ((answer && answer.nodes) || []).filter((n) => n.error).length;
+        toast(source + ": проверено " + names.length + (dead ? ", молчат " + dead : ", все отвечают"));
+        settled($("#exit-card"));
       } catch (err) {
         toast(err.message, "err");
       } finally {
@@ -1900,6 +2102,7 @@ dialog::backdrop { background:var(--scrim); }
         await api("/_control/exit/select", { body: { name } });
         toast("Выход переключён на " + name);
         await refreshCurrent(true);
+        settled($("#exit-card"));
       } catch (err) {
         toast(err.message, "err");
         render(true);
@@ -2130,12 +2333,20 @@ dialog::backdrop { background:var(--scrim); }
 
   function startPolling() {
     window.clearInterval(pollTimer);
+    // 0 is a choice, not a missing value: the operator turned the poll off and
+    // the Обновить button stays the way to ask.
+    if (!state.pollMs) return;
     pollTimer = window.setInterval(() => {
       if (document.hidden) return;
-      if (state.route !== "overview" && state.route !== "providers") return;
       if (state.busy.has("refresh")) return;
       refreshCurrent(false);
-    }, POLL_MS);
+    }, state.pollMs);
+  }
+
+  function setPoll(ms) {
+    state.pollMs = ms;
+    try { localStorage.setItem(LS_POLL, String(ms)); } catch { /* private mode */ }
+    startPolling();
   }
 
   function boot() {
@@ -2144,6 +2355,15 @@ dialog::backdrop { background:var(--scrim); }
     try { stored = localStorage.getItem(LS_THEME) || "auto"; } catch { /* private mode */ }
     state.theme = THEMES.includes(stored) ? stored : "auto";
     document.documentElement.dataset.theme = state.theme;
+
+    let poll = POLL_MS;
+    try {
+      // A missing key reads as null, and Number(null) is 0 — that would look
+      // like the operator had turned the poll off. Absent means the default.
+      const stored = localStorage.getItem(LS_POLL);
+      if (stored !== null && stored !== "") poll = Number(stored);
+    } catch { /* private mode */ }
+    state.pollMs = POLL_CHOICES.some(([ms]) => ms === poll) ? poll : POLL_MS;
 
     state.route = routeFromHash();
     if (!location.hash) location.replace("#/overview");
@@ -2154,7 +2374,7 @@ dialog::backdrop { background:var(--scrim); }
 
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) return;
-      if (state.route === "overview" || state.route === "providers") refreshCurrent(false);
+      refreshCurrent(false);
     });
 
     $("#refresh-btn").addEventListener("keydown", (event) => {
