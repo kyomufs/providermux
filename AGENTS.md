@@ -83,10 +83,12 @@ git -c user.name="kyomufs" -c user.email="kyomufsdev@gmail.com" commit -F - <<'E
 <тело: причина, а не пересказ диффа>
 EOF
 
-TOKEN=$(grep -o 'ghp_[A-Za-z0-9]*' /home/kyomufs/.dsh/profiles/web/cordis.patch.yml | head -1)
-git push "https://kyomufs:$TOKEN@github.com/kyomufs/providermux.git" HEAD:main \
-  2>&1 | sed 's/ghp_[A-Za-z0-9]*/***/g'
+git push origin main
 ```
+
+Пуш идёт по SSH-ключу (`origin` = `git@github.com:kyomufs/providermux.git`).
+Рецепт с `ghp_…` из `cordis.patch.yml` больше не работает: GitHub отвечает
+`Invalid username or token`, то есть токен отозван, — измерено 2026-11-20.
 
 `CGO_ENABLED=0` обязателен: в окружении нет C-компилятора, и без него сборка
 падает на пакете `runtime/cgo`. Это же и целевой режим выпуска — статический
@@ -100,12 +102,9 @@ git push "https://kyomufs:$TOKEN@github.com/kyomufs/providermux.git" HEAD:main \
 grep -rn "ghp_\|sk-[A-Za-z0-9]" --include="*.go" --include="*.md" . | head
 ```
 
-Пусто — хорошо. Токен для пуша берётся из `cordis.patch.yml` и **никогда** не
-попадает в файлы. В выводе команд он всегда маскируется:
-
-```sh
-... | sed 's/ghp_[A-Za-z0-9]*/***/g'
-```
+Пусто — хорошо. Пуш идёт по SSH-ключу, поэтому токен в командах не участвует и
+попадать в файлы ему неоткуда. Если в выводе появилась строка вида `ghp_…` или
+`sk-…` — это уже утечка, и её надо убрать, а не замаскировать.
 
 ### Что не коммитить
 
