@@ -1,85 +1,66 @@
 # providermux
 
 A gateway that puts several free AI providers behind one OpenAI-compatible
-endpoint.
-
-Each service is spoken to the way its own client speaks to it. Adding a service
-is a section in the configuration, not a patch to the code. The gateway is a
-single static binary with a built-in terminal monitor, and it tells you what it
-is doing: which credential is in play, whether keys are being rotated, which
-address the traffic left from.
+endpoint. One address for every client, one place where credentials, key
+rotation and egress are decided, and a web panel for the settings you actually
+change.
 
 ```
 client ──▶ providermux ──▶ provider
            (request shape, keys, transport)
 ```
 
+Each provider is spoken to the way its own client speaks to it. Adding one is a
+section in `config.json`, not a patch to the code. The gateway is a single static
+binary with a built-in terminal monitor, and it can tell you what it is doing:
+which credential is in play, whether keys are rotating, which address the traffic
+left from.
+
 ## Contents
 
-- [Install on NixOS](#install-on-nixos)
-- [Install on any other distribution](#install-on-any-other-distribution)
+- [Install](#install)
+- [Quick start](#quick-start)
 - [Configure](#configure)
-- [Debugging without a rebuild](#debugging-without-a-rebuild)
-- [Monitoring](#monitoring)
-- [Client configuration](#client-configuration)
-- [Reference](#reference)
+- [Run as a service](#run-as-a-service)
+- [Commands](#commands)
+- [Files and ports](#files-and-ports)
+- [Debugging](#debugging)
+- [Providers](#providers)
+- [License](#license)
 
-## Install on NixOS
+## Install
 
-The module owns the binary, the configuration and the service. It needs nothing
-beyond nixpkgs: no flakes of its own, no secret-management integration, no host
-abstraction. Settings live in the declaration, so they end up in your
-configuration's git history — and, for the same reason, the daemon's
-`config.json` is rewritten from the options on every activation.
+### NixOS
 
-The module is `nix/module.nix` in this repository. A complete setup is two files.
-
-### `flake.nix`
+The repository is a flake: it exports the package, a development shell and a
+NixOS module. The module provides the binary and a systemd user unit, and
+nothing else — the configuration file stays yours, so a `switch` never touches
+your settings.
 
 ```nix
+# flake.nix
 {
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.providermux.url = "github:kyomufs/providermux";
 
-  outputs = { self, nixpkgs, ... }: {
+  outputs = { self, nixpkgs, providermux, ... }: {
     nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
         ./configuration.nix
-        # The module is fetched as a flake input of its own repository, so a
-        # `nix flake update` moves it together with nixpkgs.
-        ./providermux.nix
+        providermux.nixosModules.default
       ];
     };
   };
 }
 ```
 
-If you would rather not vendor the file, import it straight from the flake and
-add that flake as an input:
-
 ```nix
-{
-  inputs.providermux.url = "github:kyomufs/providermux";
-  # ...
-  modules = [
-    "${inputs.providermux}/nix/module.nix"
-    # ...
-  ];
-}
-```
-
-### `configuration.nix` — the minimal setup
-
-```nix
+# configuration.nix
 { ... }:
 
 {
-  services.providermux = {
-    enable = true;
-    # Everything below is a default, shown so that you know what is in force.
-    # It is a complete configuration as it stands.
-    providers.opencode.type = "opencode";
-  };
+  services.providermux.enable = true;
 }
 ```
 
@@ -87,216 +68,107 @@ add that flake as an input:
 sudo nixos-rebuild switch --flake .#myhost
 ```
 
-That gives you a gateway on `127.0.0.1:8787`, reachable only from this machine,
-presenting no credential to the provider and therefore spending the free tier's
-allowance against your address:
-
-```sh
-curl http://127.0.0.1:8787/v1/models
-```
-
-### What the module sets up
-
-| Piece | What it does |
-|---|---|
-| `environment.systemPackages` | puts the binary on PATH. No wrapper and no extra packages — the monitor is inside the binary |
-| `system.activationScripts.providermux-config` | writes `~/.config/providermux/config.json` from your options on every activation |
-| `systemd.user.services.providermux` | a **user** unit, `Restart=on-failure`, XDG roots pointed at your home |
-
-Two details are worth knowing before they surprise you.
-
-`config.json` is an ordinary file, not a symlink into `/nix/store`. The CLI and
-the daemon **write** to it — `providermux cred account` rewrites it — and a
-symlink into the read-only store would break on the first write. Editing it by
-hand is still pointless on a machine that uses this module: the next `switch`
-overwrites the edit. To change a setting, change the declaration; to try one
-without a rebuild, see [Debugging](#debugging-without-a-rebuild).
-
-The unit is a **user** unit, so it runs with your session:
-
-```sh
-systemctl --user status providermux
-systemctl --user restart providermux
-journalctl --user -u providermux -f
-```
-
-It starts when you log in. To have it up before that, enable lingering for the
-service user:
+`nix flake update providermux` moves the binary and the module together. The
+binary lands in `environment.systemPackages` and a user unit is installed; it
+starts with your session. To have it start at boot without logging in, enable
+lingering for the user:
 
 ```nix
 users.users.myuser.linger = true;
 ```
 
-### Reaching it from other machines
-
-`local` mode is loopback-only and checks no token. To serve other clients,
-switch to `server` — which makes the token **mandatory**, because a tokenless
-listener on a reachable address spends your quota on behalf of anyone who finds
-the port:
-
-```nix
-services.providermux = {
-  mode = "server";
-  listen = "0.0.0.0:8787";
-  tokenFile = "/run/secrets/providermux-token";
-  providers.opencode.type = "opencode";
-};
-```
-
-The file named by `tokenFile` must exist when the service starts and contain:
-
-```
-PROVIDERMUX_TOKEN=<your token>
-```
-
-It is read through systemd's `EnvironmentFile` and outranks the `token` option,
-so the secret never lands in `/nix/store`. A missing file makes systemd refuse the
-start rather than run the gateway without a token.
-
-Do not put a real token in the `token` option: that value is rendered into the
-world-readable store. It is fine for a throwaway token on a test machine.
-
-If you already manage secrets with sops-nix, point `tokenFile` at the decrypted
-path and declare the secret in the usual way:
-
-```nix
-sops.secrets.providermux-token = {
-  sopsFile = ./secrets.yaml;
-  owner = "myuser";
-  mode = "0400";
-};
-
-services.providermux.tokenFile =
-  config.sops.secrets.providermux-token.path;
-```
-
-The module does not depend on sops-nix in any way; this is only where the two
-meet.
-
-### Using a key or a pool of keys
-
-OpenCode Zen does not need one. Its free lane identifies the caller by the egress
-address, and the reference CLI sends `Authorization: Bearer public` when it has
-no key: `providers.opencode` with the default `credential = "anonymous"` is the
-parity configuration. A key belongs to the account lane; it does not enlarge the
-free allowance, and an exhausted address is not rescued by one.
-
-`credential` decides **whether** a key is presented, and the provider section
-supplies it:
-
-```nix
-services.providermux = {
-  enable = true;
-  credential = "account";           # a key is presented on every request
-
-  providers.opencode = {
-    type = "opencode";
-    # A variable NAME is safer than the key itself: apiKey is rendered into
-    # /nix/store, which is world-readable.
-    apiKeyEnv = "OPENCODE_API_KEY";
-    # or several, for rotation:
-    # settings.keys = [ "sk-one" "sk-two" ];
-  };
-};
-```
-
-`account` without a key is refused — at startup, not at the first request, and
-the message names the fix. The variable in `apiKeyEnv` counts only when it is
-actually set in the service's environment.
-
-`keyRotation` decides what happens on a refusal that names the key: `on` takes
-another key from the pool, `off` passes the refusal to the client. Under
-`credential = "anonymous"` it is ignored — no key is presented there, so there is
-nothing to replace. See [How `credential` decides](#how-credential-decides) for
-the full table.
-
-### Checking the deployment
+If you do not want the module, install the flake directly:
 
 ```sh
-systemctl --user status providermux     # the unit
-providermux config                      # what is in force, and from where
-providermux status                      # providers, addresses, counters
-curl http://127.0.0.1:8787/_control/status # the same, for the monitor
+nix profile install github:kyomufs/providermux
 ```
 
-`providermux config` is the quickest sanity check after a switch: it prints
-every axis with its source, so a value that reached the daemon and one that did
-not are told apart immediately.
+### Any other distribution
 
-## Install on any other distribution
-
-No Nix, no module, no declaration: `install.sh` in this repository builds the
-binary, puts it on PATH, and optionally writes a systemd **user** unit.
+The binary is static: no C library versions, no runtime dependencies.
 
 ```sh
 git clone https://github.com/kyomufs/providermux
 cd providermux
-./install.sh                 # build and install into ~/.local/bin
-./install.sh --unit          # also write the systemd user unit
+./install.sh              # build and install into ~/.local/bin
+./install.sh --unit       # also write the systemd user unit
 ```
-
-Other forms:
 
 ```sh
-PREFIX=/opt/far ./install.sh            # a different prefix, still no sudo
-./install.sh --no-build                 # install an existing ./providermux
+PREFIX=/opt/providermux ./install.sh   # a different prefix, still no sudo
+./install.sh --no-build                # install an existing ./providermux
 ```
 
-What it deliberately does not do:
+`install.sh` deliberately does not touch `/usr`, does not write into a Nix
+profile, refuses to install over a binary that Nix owns, and never edits an
+existing `config.json`.
 
-- it does not touch `/usr` and does not install a system-wide unit;
-- it does not write into a Nix profile, and **refuses** to install over a binary
-  Nix already owns (it checks the *resolved* path, so a profile symlink is
-  caught too) — on a NixOS machine, use the module;
-- it does not edit an existing `config.json`: settings belong to you, and the CLI
-  is how you change them.
-
-If you built with `--no-build`, the binary must sit next to the script:
-
-```sh
-CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o providermux ./cmd/providermux
-./install.sh --no-build
-```
-
-Enable the service after `--unit`, which writes the file but enables nothing (a
-decision about this machine's boot belongs to its owner):
-
-```sh
-systemctl --user daemon-reload
-systemctl --user enable --now providermux
-```
-
-### By hand
-
-`install.sh` is a convenience, not magic. The whole install is:
+Without a Nix install and without the script, the whole thing is two commands:
 
 ```sh
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o ~/.local/bin/providermux ./cmd/providermux
-mkdir -p ~/.config/systemd/user
-providermux systemd --install          # writes the unit, prints the next two commands
+providermux systemd --install      # writes the unit, prints the next two commands
 ```
 
-`CGO_ENABLED=0` is not optional: the result is a static binary with no runtime
-dependencies, which is why the unit needs neither `LD_LIBRARY_PATH` nor a
-wrapper.
+`CGO_ENABLED=0` is what makes the result static, and it is why the unit needs
+neither `LD_LIBRARY_PATH` nor a wrapper.
+
+### From a checkout
+
+```sh
+nix build .            # ./result/bin/providermux
+nix develop .          # go, gopls, golangci-lint, CGO off
+```
+
+## Quick start
+
+A gateway with no provider refuses to start — it would have nothing to serve.
+So the first run is a configuration file:
+
+```sh
+mkdir -p ~/.config/providermux
+cat > ~/.config/providermux/config.json <<'JSON'
+{
+  "providers": { "opencode": { "type": "opencode" } }
+}
+JSON
+
+providermux up
+```
+
+```sh
+curl http://127.0.0.1:8787/v1/models
+```
+
+That is a loopback gateway on `127.0.0.1:8787`, presenting no credential to the
+provider and spending the free tier's allowance against your address.
+
+The web panel is the shortest path to everything else:
+
+```
+http://127.0.0.1:8787/
+```
+
+Point any OpenAI client at it:
+
+```sh
+export OPENAI_BASE_URL=http://127.0.0.1:8787/v1
+export OPENAI_API_KEY=anything     # local mode checks no token
+```
 
 ## Configure
 
-Three levels, each overriding the one below:
+Three layers, each overriding the one below:
 
 ```
 flags  →  environment variables  →  config.json
 ```
 
-Every setting has all three. `axes` prints the complete table, and it is
-generated from the same source the validation uses, so it cannot go stale:
+Every setting has all three. `providermux axes` prints the complete table —
+value type, default, and the environment variable — generated from the same
+source the validation uses, so it cannot go stale.
 
-```sh
-providermux axes            # human-readable, with the environment variable name
-providermux axes --json     # machine-readable
-```
-
-### Two ways to change something
+### Changing a value
 
 ```sh
 # Adopt a value: writes config.json, survives a restart.
@@ -310,229 +182,173 @@ providermux up --rotate off --family v4
 
 The one-axis commands write the value even when the result could not run, and
 that is deliberate: a configuration is allowed to be incomplete while it is being
-assembled, and a command that refused would seal the file shut against the very
-step that can repair it. `credential account` on a keyless configuration is the
-case to know about — it is accepted, it is written, and the **daemon refuses to
-start** until a key appears:
+assembled. `credential account` on a keyless configuration is the case to know
+about — it is accepted, it is written, and the daemon refuses to start until a
+key appears:
 
-```sh
-$ providermux cred account && providermux up
-credential: account
-written to ~/.config/providermux/config.json
+```
 error: config: provider "opencode": credential "account" requires a key, and none
 is configured: set api_key, api_key_env, or settings.keys — or switch the
 credential to "anonymous"
-```
-
-Add the key — through the control surface, which is the only way in while the
-daemon runs — or put it in the section and start again:
-
-```sh
-# While a daemon is up (local mode needs no token):
-curl -X POST http://127.0.0.1:8787/_control/keys/add \
-  -H 'content-type: application/json' \
-  -d '{"provider":"opencode","key":"sk-..."}'
-
-# Or in the file, which survives a restart:
-#   "providers": { "opencode": { "type": "opencode", "api_key": "sk-..." } }
-```
-
-Without a value, an axis command reports what is in force **and where it came
-from** — the question worth asking while debugging a merge:
-
-```sh
-$ providermux credential
-credential: anonymous (config.json)
-allowed: anonymous | account
 ```
 
 ### The axes that matter
 
-| Axis | Values | What it decides |
-|---|---|---|
-| `mode` | `local` \| `server` | loopback with no token check, or a reachable listener where the token is mandatory |
-| `credential` | `anonymous` \| `account` | whether a key is presented at all (counted against your address) or one is taken from the pool (counted against your account) |
-| `key_rotation` | `on` \| `off` | whether consecutive requests leave through different keys of the pool |
-| `family` | `auto` \| `v4` \| `v6` | the address family the traffic leaves from |
-| `transport` | `direct` | how requests leave the machine: from its own address |
+| Axis | Values | Default | What it decides |
+|---|---|---|---|
+| `mode` | `local` \| `server` | `local` | loopback without a token, or a reachable listener that requires one |
+| `listen` | address | `127.0.0.1:8787` | where the gateway listens |
+| `token` | string | — | the token for `server` (env only, in practice) |
+| `credential` | `anonymous` \| `account` | `anonymous` | whether a key is presented to the provider |
+| `key_rotation` | `on` \| `off` | `on` | spend another key on a refusal that names the key |
+| `family` | `auto` \| `v4` \| `v6` | `auto` | the address family the traffic leaves from |
+| `transport` | `direct` | `direct` | how traffic reaches the provider |
+| `upstream` | address | — | default address for providers that do not name their own |
 
-### How `credential` decides
-
-`credential` chooses the **source** of the credential; the pool only supplies the
-value. The mode is a statement about what goes on the wire, not about what
-happens to be lying in the configuration file:
-
-| | `credential: "anonymous"` | `credential: "account"` |
-|---|---|---|
-| a key is present in the section | **not sent** — the service's own anonymity marker goes out instead | sent |
-| there is no key | fine; the marker goes out | **the daemon refuses to start** |
-| `key_rotation: on` | ignored — there is no key to replace | consecutive requests take different keys from the pool |
-| `key_rotation: off` | ignored | every request leaves with the same key |
-
-Two of those deserve a word.
-
-A key on file under `anonymous` is **not consent to spend it**. The common case is
-an operator who keeps a key configured while testing anonymously, and a pool that
-leaked into the request would make the mode a label rather than a behaviour —
-with the traffic attributed to an account that was meant to stay untouched.
-
-`account` without a key is refused **at startup**, not at the first request. The
-daemon's job is to serve, and a deployment that cannot serve should say so before
-it accepts a single client. The refusal names all three places a key can come
-from:
-
-```
-error: config: provider "opencode": credential "account" requires a key, and none
-is configured: set api_key, api_key_env, or settings.keys — or switch the
-credential to "anonymous"
-```
-
-`api_key_env` counts only when the variable is actually **set**: a name without a
-value is not a key, and trusting the name alone would let the daemon start and
-then reach the service without a credential — the likeliest shape of the bug in a
-unit file, where the variable arrives from an `EnvironmentFile` that may not have
-been written yet.
-
-`family` exists because of how free tiers are counted: **per source address**.
-Pinned to one family, the daemon spends one address's allowance and the per-IP
-matrix shows exactly which. On `auto`, the same daemon reaches the service
-through different addresses and the counters stop being comparable.
+The timeouts (`first_event_timeout`, `idle_timeout`, `reasoning_idle_timeout`,
+default `30s`, `120s`, `300s`) decide how long silence is tolerated before a
+stream is abandoned. `provider.*` sets the same axes per provider.
 
 ### Providers
 
 ```json
 {
-  "credential": "anonymous",
-  "key_rotation": "on",
   "providers": {
     "opencode": { "type": "opencode" },
-    "stub": { "type": "stub" }
+    "antigravity": {
+      "type": "antigravity",
+      "credential": "account",
+      "api_key_env": "PROVIDERMUX_ANTIGRAVITY_KEY",
+      "settings": { "project": "you-project" }
+    }
   }
 }
 ```
 
-The key in `providers` is the identifier the service is visible under, and it
-becomes part of every model name: `<provider>/<model>`. That is why model names
-from different services cannot collide.
+| Field | What it is |
+|---|---|
+| `type` | `opencode`, `antigravity`, or `stub` for a local end-to-end check |
+| `credential` | overrides the global credential for this provider |
+| `key_rotation` | overrides the global rotation for this provider |
+| `api_key` | the key, inline. Fine for a scratch setup, readable by anyone who can read the file |
+| `api_key_env` | the name of the environment variable that holds the key — the better place for a secret |
+| `settings.keys` | additional keys, which is where the panel writes what you add there |
+| `settings` | provider-specific values; each provider documents its own |
 
-`api_key_env` is preferable to `api_key`: a variable name in the configuration is
-safer than the key itself, because the declarative file ends up world-readable in
-`/nix/store`.
+Which service accepts what is documented next to the code:
+[`docs/providers/opencode_zen.md`](docs/providers/opencode_zen.md) and
+[`docs/providers/antigravity.md`](docs/providers/antigravity.md).
 
-A real service's model catalog is **not** part of the configuration. It lives
-with the service and is learned by asking: a copy in the configuration would go
-stale the day the service changed. Only `stub` declares its catalog, because
-there is no service to ask.
+### Keys
 
-What a service demands on the wire belongs with the service, not with this
-README: [`docs/providers/`](docs/providers/) holds one file per provider.
-[`opencode_zen.md`](docs/providers/opencode_zen.md) records the request shape the
-`opencode` lane admits, the refusals it returns, and its free model list.
+A key can arrive three ways, and all three survive a restart:
 
-`antigravity` is the other shape of a lane: its key is one Google refresh token,
-so one section is one account and a pool of them is multi-account failover rather
-than quota spreading — [`antigravity.md`](docs/providers/antigravity.md).
+| Route | Survives a restart | Where the secret lives |
+|---|---|---|
+| the panel (`http://127.0.0.1:8787/`) or `POST /_control/keys/add` | yes — written into `settings.keys` | `config.json` |
+| `"api_key": "sk-..."` in the section | yes | `config.json` |
+| `"api_key_env": "NAME"` plus the variable in the unit's environment | yes | the environment file, never in `config.json` |
 
-## Debugging without a rebuild
+A key added from the panel is written into the provider's `settings.keys`; a key
+that came from the environment is never copied into the file.
 
-On NixOS the module rewrites `config.json` on every activation, so anything you
-edit in the file is gone at the next `switch`. That is by design, and it is also
-exactly why debugging through the declaration is painful: a one-value experiment
-costs a full rebuild.
+`key_rotation` decides what happens on a refusal that names the key: `on` takes
+another key from the pool, `off` passes the refusal to the client. Under
+`credential = "anonymous"` it is ignored — no key is presented there, so there is
+nothing to replace.
 
-There are three ways out, in increasing order of isolation.
+### Server mode
 
-### 1. Flags on the unit (no rebuild, but a restart)
+`local` is loopback-only and checks no token. Switching to `server` makes the
+token mandatory, because a tokenless listener on a reachable address spends your
+quota on behalf of whoever finds the port:
 
-`ExecStart` is fixed by the module, but a systemd drop-in overrides it without
-touching the declaration — and drop-ins live in your home, outside the repo:
+```json
+{
+  "mode": "server",
+  "listen": "0.0.0.0:8787",
+  "token": "a long random string",
+  "providers": { "opencode": { "type": "opencode" } }
+}
+```
+
+Clients then send `Authorization: Bearer <token>`, on `/v1/*` and `/_control/*`
+alike. Prefer a token in the environment over the file:
+
+```
+PROVIDERMUX_TOKEN=<token>
+```
+
+## Run as a service
+
+On NixOS the module does this for you. Everywhere else:
 
 ```sh
-systemctl --user edit providermux
+providermux systemd --install       # writes ~/.config/systemd/user/providermux.service
+systemctl --user daemon-reload
+systemctl --user enable --now providermux
 ```
+
+Secrets go into a `EnvironmentFile`, read by systemd at start time rather than
+written into the unit:
 
 ```ini
 [Service]
-# Try a value for real, against the live system.
-ExecStart=
-ExecStart=/run/current-system/sw/bin/providermux up --listen 127.0.0.1:8787 --family v4 --rotate off
+EnvironmentFile=%h/.config/providermux/env
 ```
 
-```sh
-systemctl --user daemon-reload
-systemctl --user restart providermux
+```
+PROVIDERMUX_TOKEN=<token>
+PROVIDERMUX_ANTIGRAVITY_KEY=<key>
 ```
 
-To go back: `rm ~/.config/systemd/user/providermux.service.d/*.conf`, then
-`daemon-reload` and `restart`. Nothing in the declaration changed, so the next
-`switch` re-lands the module's `ExecStart` anyway.
+The gateway is a user unit because it is a per-user gateway: loopback, state in
+the home, no privileges.
 
-Env variables work the same way and are often tidier:
+## Commands
 
-```sh
-systemctl --user edit providermux
-# [Service]
-# Environment=PROVIDERMUX_FAMILY=v4
-```
+| Command | What it does |
+|---|---|
+| `up [flags]` | start the daemon |
+| `monitor` | the built-in terminal monitor |
+| `status [--json]` | mode, address, providers, counters |
+| `stop` | stop the daemon |
+| `models [--json]` | the model catalog the gateway serves |
+| `stats [--json]` | counters by day |
+| `keys [--json]` | the key pool |
+| `logs [-n N]` | the log |
+| `data [clear]` | what lies on disk, and clearing it |
+| `config [--json]` | the effective configuration, with the source of every value |
+| `axes [--json]` | every setting, its values and its defaults |
+| `systemd [--install]` | print the user unit, or write it |
+| `version` | the version |
+| `mode` \| `cred` \| `rotate` \| `family` | one axis: read it, or write it |
 
-### 2. A second daemon on a spare port (nothing is touched at all)
+`providermux axes` is the reference for startup flags too: every axis lists the
+flag and the environment variable next to it. `--config`, `--state`,
+`--print-config` and `--detach` are the ones that concern the run rather than a
+setting.
 
-The cleanest option: the system daemon keeps serving `:8787`, and your experiment
-runs beside it on its own port, its own config and its own state.
+## Files and ports
 
-```sh
-mkdir -p ~/far-debug
+| Path | What |
+|---|---|
+| `~/.config/providermux/config.json` | the configuration |
+| `~/.local/state/providermux/state.json` | counters and per-address history |
+| `~/.local/state/providermux/app.log` | the log |
 
-# 1. Write a config for the experiment. It has to name at least one provider:
-#    a gateway with an empty providers section refuses to start, which is the
-#    right answer — it would have nothing to serve.
-#
-#    The credential is anonymous, so no key is needed. Asking for "account"
-#    here would be refused at startup unless a key is configured — see the
-#    table above.
-cat > ~/far-debug/config.json <<'JSON'
-{
-  "credential": "anonymous",
-  "key_rotation": "off",
-  "family": "v4",
-  "providers": { "opencode": { "type": "opencode" } }
-}
-JSON
+All three follow `XDG_CONFIG_HOME` and `XDG_STATE_HOME`.
 
-# 2. See what would run, without starting anything.
-providermux up \
-  --config ~/far-debug/config.json \
-  --state ~/far-debug/state.json \
-  --listen 127.0.0.1:8799 \
-  --print-config
+The gateway serves `/v1/*` for clients and `/_control/*` for the panel and the
+CLI, on `127.0.0.1:8787` by default — loopback only.
 
-# 3. Start it. The daemon lives in the foreground, so put it in its own
-#    terminal, or background it in this one.
-providermux up --config ~/far-debug/config.json --state ~/far-debug/state.json \
-  --listen 127.0.0.1:8799 &
+`providermux data` prints the files with their sizes; `providermux data clear`
+empties the log or the counters. It never touches the configuration: deleting
+the file that describes the deployment is not maintenance.
 
-# 4. Talk to it.
-curl http://127.0.0.1:8799/v1/models
+## Debugging
 
-# 5. Stop it when done — the system daemon never noticed.
-providermux stop --config ~/far-debug/config.json --state ~/far-debug/state.json
-```
-
-Two details make this safe, and both are easy to get wrong:
-
-`--config` **and** `--state` together. With `--config` alone the second daemon
-reads your experiment's settings but still **writes the system daemon's
-`state.json`**, and the two then disagree about what happened — the per-address
-matrix fills with traffic that never went through the system daemon.
-
-`--detach` is not a shell detach. It starts the daemon, and the command keeps
-holding the terminal for as long as the daemon runs, which is fine from a script
-or a second terminal but looks like a hang in an interactive shell. Backgrounding
-with `&` is what actually gives your prompt back.
-
-`--print-config` is the fastest loop of all. It shows the fully merged result —
-every axis and where its value came from — and exits without starting anything or
-writing a file:
+### See the merged result without starting anything
 
 ```sh
 $ providermux up --rotate off --family v4 --print-config
@@ -544,167 +360,91 @@ file:      /home/you/.config/providermux/config.json
 state:     /home/you/.local/state/providermux/state.json
 ```
 
-### 3. A source build instead of the packaged binary
+`providermux config` shows the same for the values in force, with their source.
 
-While changing the code, use your own build — nothing about the install matters
-for that:
+### A second daemon on a spare port
+
+The system daemon keeps serving `:8787`; the experiment runs beside it with its
+own configuration, its own state and its own port:
 
 ```sh
-CGO_ENABLED=0 go build -trimpath -o /tmp/far ./cmd/providermux
-/tmp/far up --config ~/far-debug/config.json --listen 127.0.0.1:8799 --print-config
+mkdir -p ~/pmux-debug
+cat > ~/pmux-debug/config.json <<'JSON'
+{ "credential": "anonymous", "providers": { "opencode": { "type": "opencode" } } }
+JSON
+
+providermux up --config ~/pmux-debug/config.json --state ~/pmux-debug/state.json \
+  --listen 127.0.0.1:8799 &
+curl http://127.0.0.1:8799/v1/models
+providermux stop --config ~/pmux-debug/config.json --state ~/pmux-debug/state.json
 ```
 
-`CGO_ENABLED=0` is required in this environment (no C compiler) and is the target
-mode anyway.
+`--config` and `--state` go together. With `--config` alone the second daemon
+reads the experiment's settings but writes the system daemon's `state.json`, and
+the two then disagree about what happened.
 
-On NixOS there is a second way, and it is the one to use when the build has to be
-the build the *service* runs: point the module at your package.
+`--detach` is not a shell detach: it starts the daemon and keeps holding the
+terminal for as long as the daemon runs. Backgrounding with `&` is what gives the
+prompt back.
+
+### Override the unit for one run
+
+```sh
+systemctl --user edit providermux
+```
+
+```ini
+[Service]
+ExecStart=
+ExecStart=/run/current-system/sw/bin/providermux up --family v4 --rotate off
+```
+
+Then `systemctl --user daemon-reload && systemctl --user restart providermux`.
+Removing the drop-in and restarting undoes it; nothing in the declaration changed.
+
+### A local build against the real service
+
+```sh
+CGO_ENABLED=0 go build -trimpath -o /tmp/providermux ./cmd/providermux
+```
+
+Use it on a spare port first (above). To swap the service's binary on NixOS,
+point the module at your own package — the unit, the configuration and the state
+stay exactly as they are:
 
 ```nix
-services.providermux.package =
-  pkgs.callPackage /path/to/providermux/nix/package.nix { };
-# or any derivation of your own, as long as it has bin/providermux
+services.providermux.package = pkgs.callPackage /path/to/providermux/nix/package.nix { };
 ```
 
-The unit, the configuration and the state stay exactly as they are and only the
-binary changes, so a single `switch` tests your build in place — which is what
-the second-daemon route cannot do, since that one runs beside the service rather
-than as it.
+`nix/package.nix` takes `src` and `version`, so the same recipe builds a working
+tree, a tag or a pinned commit:
 
-### Which one to reach for
+```nix
+pkgs.callPackage ./nix/package.nix {
+  src = pkgs.fetchFromGitHub {
+    owner = "kyomufs";
+    repo = "providermux";
+    rev = "v1.7.2";
+    hash = "...";
+  };
+  version = "1.7.2";
+}
+```
 
-| Situation | Use |
-|---|---|
-| Try one value, on the real service, for a few minutes | a drop-in override |
-| Test a whole different setup, or compare two side by side | a second daemon |
-| Change the code | your own build, on a spare port |
-| Just want to see the merged result | `--print-config` |
-
-Debugging on NixOS is not "fight the module": the declaration owns the *default*,
-and flags own the *run*.
-
-## Monitoring
-
-Everything the daemon records is read back from the command line, and nothing
-below writes to it:
+### Tests
 
 ```sh
-providermux status          # mode, listen, addresses, per-provider counters
-providermux status --json
-providermux models          # the catalog the gateway serves
-providermux stats           # counters by day
-providermux keys            # the key pool
-providermux logs -n 50
+go test ./...
+nix build .            # runs the same suite hermetically, with vendored deps
 ```
 
-The per-address model matrix — one row per egress address with `OK` and
-`ERROR` columns — is `providermux stats --json`, under `by_address`. Free tiers
-are counted per source address, so "which of my addresses has spent its
-allowance on which model" is the question you actually ask, and a single global
-counter cannot answer it.
+## Providers
 
-The same information is on the control surface:
-
-```sh
-curl http://127.0.0.1:8787/_control/status
-curl http://127.0.0.1:8787/_control/keys
-```
-
-In `mode = "server"` these need the token:
-
-```sh
-curl -H "Authorization: Bearer $PROVIDERMUX_TOKEN" http://host:8787/_control/status
-```
-
-## Client configuration
-
-The gateway speaks the OpenAI API, so any client that lets you set a base URL
-works. Point it at `/v1` and give it any non-empty key — the gateway does not
-check one in `local` mode, but most clients insist on a value.
-
-```sh
-# OpenAI-compatible clients
-OPENAI_BASE_URL=http://127.0.0.1:8787/v1
-OPENAI_API_KEY=unused
-```
-
-Model names are composite, and the provider is part of the name:
-
-```sh
-curl http://127.0.0.1:8787/v1/models
-curl http://127.0.0.1:8787/v1/chat/completions \
-  -H 'content-type: application/json' \
-  -d '{"model":"opencode/deepseek-v4.1-flash-free","messages":[{"role":"user","content":"hello"}]}'
-```
-
-`/v1/models` reports what the provider declared: the context window, the output
-ceiling, the input modalities, whether the model reasons and with which effort
-levels. A capacity nobody declared is **omitted rather than zeroed**, so a client
-can tell "unknown" from "nothing" and does not have to invent a limit.
-
-For DeepSeek Harness there is a companion plugin,
-[providermux-dshplugin](https://github.com/kyomufs/providermux-dshplugin),
-which registers every provider the gateway serves as its own route and takes the
-model capabilities from this catalog.
-
-## Reference
-
-### Commands
-
-| Command | Purpose |
-|---|---|
-| `up [flags]` | start the daemon |
-| `status [--json]` | daemon state |
-| `stop` | stop it |
-| `models [--json]` | the catalog |
-| `stats [--json]` | counters by day |
-| `keys [--json]` | the key pool |
-| `logs [-n N]` | the log |
-| `data [clear]` | what is on disk, and clearing it |
-| `config [--json]` | the effective configuration |
-| `axes [--json]` | every setting, its values, its default |
-| `systemd [--install]` | print the user unit, or write it |
-| `version` | the version |
-| `mode` \| `cred`/`credential` \| `rotate`/`key_rotation` \| `family` | one axis, read or written |
-
-### Startup flags
-
-| Flag | Purpose |
-|---|---|
-| `--mode` | `local` \| `server` |
-| `--listen` | the address to listen on |
-| `--token` | the token for server mode |
-| `--transport` | `direct` |
-| `--upstream` | address for providers that do not name their own (empty: none) |
-| `--family` | `auto` \| `v4` \| `v6` |
-| `--credential` | `anonymous` \| `account` |
-| `--rotate` | `on` \| `off` |
-| `--first-event-timeout` | wait for response headers |
-| `--idle-timeout` | allowed silence between events |
-| `--reasoning-idle-timeout` | silence allowed while reasoning |
-| `--config` | the configuration file to read |
-| `--state` | the state file to write |
-| `--print-config` | show the merged configuration and exit |
-| `--detach` | start in the background |
-| `--json` | machine-readable output |
-
-### Files
-
-| Path | What |
-|---|---|
-| `~/.config/providermux/config.json` | the configuration (or `$XDG_CONFIG_HOME`) |
-| `~/.local/state/providermux/state.json` | counters and per-address history |
-| `~/.local/state/providermux/app.log` | the log |
-
-`providermux data` prints them all with their sizes, and
-`providermux data clear` empties the log or the counters. It never touches the
-configuration: deleting the file that describes the daemon's design is not
-maintenance but the loss of a deployment.
-
-### Ports
-
-`127.0.0.1:8787` by default, loopback only. The gateway serves `/v1/*` for
-clients and `/_control/*` for the monitor.
+| Type | Credential | Notes |
+|---|---|---|
+| `opencode` | anonymous or account | the free lane identifies the caller by egress address; a key belongs to the account lane |
+| `antigravity` | account | one Google account per section; a pool of them is multi-account failover |
+| `stub` | — | answers locally; for end-to-end checks of the gateway itself |
 
 ## License
 
