@@ -33,7 +33,7 @@ func cmdModels(ctx context.Context, args []string) error {
 	// account may call. Asking through the first key (or the pinned one) is the
 	// same rule the gateway and the panel follow, so this command does not show
 	// a list the request path would not serve.
-	keys := newKeyRegistry(cfg, reg)
+	keys := newKeyRegistry(cfg, reg, nil)
 
 	// The catalog is read from memory, and this command has no daemon to keep it
 	// fresh: without a warm-up every provider would report an empty list. Start

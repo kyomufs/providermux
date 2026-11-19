@@ -84,7 +84,7 @@ func build(cfg *config.Config) (*daemon, error) {
 
 	// The key rotation mechanisms.
 	expandKeyPlaceholders(cfg)
-	d.keys = newKeyRegistry(cfg, d.providers)
+	d.keys = newKeyRegistry(cfg, d.providers, d.log)
 
 	tpReg := transport.NewRegistryWithDefaults()
 	tr, err := tpReg.Build(transport.ID(cfg.Transport.Val), transportSettings(cfg))

@@ -198,6 +198,22 @@ func allowed(values []string, want string) bool {
 // operator, not to the daemon. A key the daemon has never heard of is still the
 // operator's to keep.
 func writeConfigKey(path, key, value string) error {
+	return editConfigDoc(path, func(doc map[string]any) error {
+		doc[key] = value
+		return nil
+	})
+}
+
+// editConfigDoc applies one change to the configuration document.
+//
+// One reader and one writer for every editor of the file — the axis subcommand
+// and the key pool both go through here — so that the tolerance for a missing
+// file, the refusal on a syntax error and the atomic replacement cannot drift
+// apart between them.
+//
+// A change that cannot be applied is returned, not swallowed: the caller is the
+// one that knows whether the memory copy has to be rolled back with it.
+func editConfigDoc(path string, edit func(doc map[string]any) error) error {
 	doc := map[string]any{}
 
 	raw, err := os.ReadFile(path)
@@ -217,7 +233,9 @@ func writeConfigKey(path, key, value string) error {
 		return fmt.Errorf("config: reading %s: %w", path, err)
 	}
 
-	doc[key] = value
+	if err := edit(doc); err != nil {
+		return err
+	}
 
 	out, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
