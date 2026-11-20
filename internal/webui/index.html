@@ -1488,7 +1488,7 @@ dialog::backdrop { background:var(--scrim); }
     }).join("");
   }
 
-  function oauthDisclosure() {
+  function oauthDisclosure(configured) {
     const o = state.oauth;
     const link = o && o.url
       ? '<a class="link" href="' + esc(o.url) + '" target="_blank" rel="noreferrer noopener">Страница согласия ↗</a>'
@@ -1498,7 +1498,7 @@ dialog::backdrop { background:var(--scrim); }
       "<summary>" + chevron() + '<span class="disc-title">Подключение аккаунта</span>' +
         '<span class="disc-head-meta"><span class="hint">OAuth</span></span></summary>' +
       '<div class="disc-body">' +
-        '<p class="hint">Аккаунт уже подключён. Пройдите OAuth заново, чтобы сменить его или обновить доступ.</p>' +
+        (configured ? '<p class="hint">Аккаунт уже подключён. Пройдите OAuth заново, чтобы сменить его или обновить доступ.</p>' : "") +
         '<ol class="steps">' +
           '<li><div><b>Нажмите «Начать»</b><span>Ссылка на согласие откроется в новой вкладке.</span></div></li>' +
           '<li><div><b>Разрешите доступ</b><span>После редиректа скопируйте адрес из строки браузера — в нём есть <code>code</code>.</span></div></li>' +
@@ -1540,7 +1540,7 @@ dialog::backdrop { background:var(--scrim); }
     }
 
     return '<div class="sect"><div class="sect-head"><span class="sect-title">Квоты</span>' +
-      '<span class="spacer"></span>' + refresh + "</div>" + body + oauthDisclosure() +
+      '<span class="spacer"></span>' + refresh + "</div>" + body + oauthDisclosure(!!q && q.configured) +
       "</div>";
   }
 
