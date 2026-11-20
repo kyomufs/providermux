@@ -182,7 +182,7 @@ m3e-icon { color: currentColor; }
 m3e-button, m3e-icon-button { max-width: 100%; flex: none; }
 m3e-button-group { min-width: 0; max-width: 100%; }
 m3e-button .label, m3e-button span { min-width: 0; }
-.chip m3e-icon-button, .table m3e-icon-button {
+.table m3e-icon-button {
   --m3e-icon-button-container-height: 26px;
   --m3e-icon-button-icon-size: 16px;
   --m3e-icon-button-shape-round: var(--r-full);
@@ -511,15 +511,19 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 .pill.err { color:var(--error); border-color:color-mix(in srgb, var(--error) 38%, transparent); background:color-mix(in srgb, var(--error-container) 60%, transparent); }
 .pill.accent { color:var(--primary); border-color:color-mix(in srgb, var(--primary) 36%, transparent); background:color-mix(in srgb, var(--primary-container) 45%, transparent); }
 .pill.warn { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 38%, transparent); background:color-mix(in srgb, var(--warn-container) 55%, transparent); }
-.chip { overflow:hidden;
-  display:inline-flex; align-items:center; gap:6px; max-width:100%;
-  height:28px; padding:0 4px 0 10px; border-radius:var(--r-full);
-  background:var(--surface-low); border:1px solid var(--outline-variant);
-  font-size:11.5px; line-height:16px;
+/* Key rows: one account per row, reference and actions on the same line. */
+.key-list { display:flex; flex-direction:column; margin-top:6px; }
+.key-row {
+  display:flex; align-items:center; gap:var(--s3);
+  min-height:48px; padding:6px 0; border-bottom:1px solid var(--outline-variant);
 }
-.chip button { color:var(--on-surface-variant); display:grid; place-items:center; border-radius:var(--r-full); width:20px; height:20px; }
-.chip button:hover { color:var(--error); background:var(--surface-high); }
-.chip .mi { font-size: 16px; }
+.key-row:last-child { border-bottom:0; }
+.key-row.pinned .key-name { color:var(--primary); }
+.key-main { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:1px; }
+.key-name { font-size:12.5px; line-height:17px; font-weight:550; overflow-wrap:anywhere; }
+.key-fp { font-size:11px; line-height:16px; color:var(--on-surface-variant); }
+.key-actions { flex:none; display:flex; align-items:center; gap:2px; }
+.key-note { margin:2px 0 4px; }
 .badge {
   display:inline-flex; align-items:center; justify-content:center;
   min-width:22px; height:22px; padding:0 7px; border-radius:var(--r-full);
@@ -540,7 +544,6 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 /* ============ controls ============
    Buttons, icon buttons and divided groups are @m3e/web custom elements: they
    own their shape, ripple and spring motion. Only layout glue lives here. */
-.chip m3e-icon-button { margin-left: auto; }
 .dialog-actions m3e-button { flex: none; }
 
 /* ============ forms ============ */
@@ -1476,7 +1479,7 @@ dialog::backdrop { background:var(--scrim); }
     const q = state.quota;
     if (!q) return '<span class="pill">квоты</span>';
     if (q.error) return '<span class="pill err">квоты —</span>';
-    if (!q.configured) return '<span class="pill">нет аккаунта</span>';
+    if (!q.configured) return '<span class="pill">нет ключа</span>';
     const best = quotaBest();
     if (best === null) return '<span class="pill">квоты</span>';
     const cls = best > 0.35 ? "ok" : best > 0.1 ? "warn" : "err";
@@ -1495,10 +1498,26 @@ dialog::backdrop { background:var(--scrim); }
   };
   function windowText(w) { return WINDOW_TEXT[w.display_name] || w.display_name || w.window || ""; }
 
+  // quotaEmails maps a pool fingerprint to the mail the quota card learned.
+  //
+  // Both screens name an account by the same fingerprint — the daemon normalises
+  // the quota id to the pool reference — so the mail can label the key row. The
+  // mapping exists because the pool itself stores only tokens: nothing in a key
+  // says kyomufsservices@gmail.com.
+  function quotaEmails() {
+    const out = {};
+    const q = state.quota;
+    if (!q || !q.accounts) return out;
+    q.accounts.forEach((a) => {
+      if (a.email && a.account_id) out[a.account_id] = a.email;
+    });
+    return out;
+  }
+
   function quotaAccounts(q) {
     const accounts = q.accounts || [];
     if (!accounts.length) {
-      return '<div class="hint">Аккаунт подключён, но квот в ответе нет. Нажмите «Обновить» — внешний API иногда отвечает пусто.</div>';
+      return '<div class="hint">Ключ подключён, но квот в ответе нет. Нажмите «Обновить» — внешний API иногда отвечает пусто.</div>';
     }
     const key = (a) => a.email || a.account_id;
     let idx = accounts.findIndex((a) => key(a) === uiState["quota:acct"]);
@@ -1510,6 +1529,9 @@ dialog::backdrop { background:var(--scrim); }
           ' data-act="quota-acct" data-account="' + esc(key(a)) + '" title="' + esc(key(a)) + '">' +
           '<span class="dot"></span>' + esc(String(key(a)).split("@")[0]) + "</button>").join("") + "</div>"
       : "";
+    // The account record is managed in the keys list above, so this line only
+    // identifies it: two delete buttons under two different names for one record
+    // is what made the account look undeletable in the first place.
     return tabs + '<div class="acct-idline"><span class="acct-mail">' + esc(key(acc)) + "</span>" +
       '<span class="account-id">' + esc(acc.account_id) + "</span></div>" + accountGroups(acc);
   }
@@ -1545,7 +1567,7 @@ dialog::backdrop { background:var(--scrim); }
         '<div class="oauth">' +
           '<div class="oauth-head"><div class="oauth-copy"><b>Вход через Google</b>' +
             '<span class="hint">' + (configured
-              ? "Повторный вход заменит текущий аккаунт."
+              ? "Вход добавит ещё один аккаунт в список ключей."
               : "Подключите аккаунт, чтобы видеть окна квот.") + "</span></div>" +
             '<m3e-button variant="filled" size="small" data-act="oauth-start"' +
               (busy ? " disabled" : "") + ">Начать вход</m3e-button></div>" +
@@ -1584,14 +1606,13 @@ dialog::backdrop { background:var(--scrim); }
       body = '<div class="notice danger"><m3e-icon name="error" aria-hidden="true"></m3e-icon>' +
         "<div><b>Квоты не получены</b><div>" + esc(q.error) + "</div></div></div>";
     } else if (!q.configured) {
-      body = '<div class="hint">Аккаунт не подключён: окна квот появятся после OAuth. До этого провайдер работает анонимно.</div>';
+      body = '<div class="hint">Провайдер не найден в конфигурации — квоты недоступны.</div>';
     } else {
       body = quotaAccounts(q);
     }
 
     return '<div class="sect"><div class="sect-head"><span class="sect-title">Квоты</span>' +
-      '<span class="spacer"></span>' + refresh + "</div>" + body + oauthDisclosure(!!q && q.configured) +
-      "</div>";
+      '<span class="spacer"></span>' + refresh + "</div>" + body + "</div>";
   }
 
   function providerCard(p) {
@@ -1617,16 +1638,34 @@ dialog::backdrop { background:var(--scrim); }
       '<option value="' + esc(t) + '"' + (t === (opt.transport || "auto") ? " selected" : "") + ">" +
       esc(transportText(t)) + "</option>").join("");
 
-    const accountOptions = ["", ...keys].map((k) =>
-      '<option value="' + esc(k) + '"' + ((opt.account || "") === k ? " selected" : "") + ">" +
-      (k ? esc(k) : "авто") + "</option>").join("");
-
-    const chips = keys.length
-      ? keys.map((k) => '<span class="chip"><span class="mono">' + esc(k) + "</span>" +
-          '<m3e-icon-button variant="text" size="extra-small" data-act="remove-key" data-provider="' + esc(p.id) +
-          '" data-key="' + esc(k) + '" title="Удалить ключ" aria-label="Удалить ключ ' + esc(k) + '">' +
-          '<m3e-icon name="close" aria-hidden="true"></m3e-icon></m3e-icon-button></span>').join("")
-      : '<span class="hint">Ключей нет — провайдер работает анонимно.</span>';
+    // One row per account, and the row is where the account is managed: the
+    // reference, the primary marker and removal all live together. The previous
+    // chips showed a bare fingerprint and a cross, so the mail was known only in
+    // the quota card and deleting the account from there was impossible.
+    const emails = quotaEmails();
+    const pinned = pool.pinned || "";
+    const keyRows = keys.length
+      ? keys.map((fp) => {
+          const isPinned = fp === pinned;
+          const mail = emails[fp] || "";
+          const name = mail || "Ключ " + fp;
+          const busy = state.busy.has("opts-" + p.id);
+          return '<div class="key-row' + (isPinned ? " pinned" : "") + '">' +
+            '<span class="key-main"><span class="key-name">' + esc(name) + "</span>" +
+              (mail ? '<span class="key-fp mono">' + esc(fp) + "</span>" : "") + "</span>" +
+            '<span class="key-actions">' +
+              '<m3e-button variant="text" size="small" data-act="key-primary" data-provider="' + esc(p.id) +
+                '" data-key="' + esc(fp) + '" data-pinned="' + (isPinned ? "1" : "0") + '"' +
+                ' title="' + (isPinned ? "Снять выбор: запросы пойдут с первым ключом" : "Запросы пойдут с этим ключом") + '"' +
+                (busy ? " disabled" : "") + ">" +
+                (isPinned ? "Основной" : "Сделать основным") + "</m3e-button>" +
+              '<m3e-icon-button variant="text" size="extra-small" data-act="remove-key" data-provider="' + esc(p.id) +
+                '" data-key="' + esc(fp) + '" data-label="' + esc(name) + '" title="Удалить ключ"' +
+                ' aria-label="Удалить ключ ' + esc(fp) + '">' +
+                '<m3e-icon name="close" aria-hidden="true"></m3e-icon></m3e-icon-button>' +
+            "</span></div>";
+        }).join("")
+      : '<div class="hint">Ключей нет — провайдер работает анонимно.</div>';
 
     const rotation = '<button class="switch" type="button" role="switch" aria-checked="' + (opt.key_rotation === "on") +
       '" aria-label="Ротация ключей"' +
@@ -1636,9 +1675,6 @@ dialog::backdrop { background:var(--scrim); }
     const access = '<div class="sect"><div class="sect-head"><span class="sect-title">Параметры</span></div>' +
       '<div class="param"><div class="param-label"><b>Учётные данные</b><span>аккаунт или анонимный доступ</span></div>' +
         '<div class="param-control"><m3e-button-group variant="connected" aria-label="Учётные данные">' + seg + "</m3e-button-group></div></div>" +
-      (keys.length ? '<div class="param"><div class="param-label"><b>Аккаунт</b><span>основной ключ для запросов</span></div>' +
-        '<div class="param-control"><select class="select" data-act="set-select" data-provider="' + esc(p.id) + '" data-axis="account"' +
-        (!isAccount || state.busy.has("opts-" + p.id) ? " disabled" : "") + ">" + accountOptions + "</select></div></div>" : "") +
       '<div class="param"><div class="param-label"><b>Транспорт</b><span><a class="link" href="#/network">куда идёт трафик</a></span></div>' +
         '<div class="param-control"><select class="select" data-act="set-select" data-provider="' + esc(p.id) + '" data-axis="transport"' +
         (state.busy.has("opts-" + p.id) ? " disabled" : "") + ">" + transportOptions + "</select></div></div>" +
@@ -1646,15 +1682,30 @@ dialog::backdrop { background:var(--scrim); }
         '<div class="param-control">' + rotation + "</div></div>" +
       "</div>";
 
+    const keyForm = '<form class="row mt3" data-keyform data-provider="' + esc(p.id) + '">' +
+      '<input class="input input-grow" name="key" type="password" autocomplete="off" spellcheck="false" ' +
+      'placeholder="Добавить ключ" aria-label="Новый ключ для ' + esc(p.id) + '">' +
+      '<m3e-button variant="tonal" size="small" type="submit">' +
+      '<m3e-icon slot="icon" name="add" aria-hidden="true"></m3e-icon>Добавить</m3e-button>' +
+      '</form>';
+
+    // Antigravity's key IS the connected Google account, so the connect flow
+    // belongs to this section, next to the list it changes. Keeping it in the
+    // quota card split one concept across two places and made the account look
+    // undeletable: the cross sat in another section.
+    const addBlock = p.id === "antigravity"
+      ? oauthDisclosure(keys.length > 0) +
+        '<details class="disc disc-flat" data-open-key="prov:antigravity:manual"><summary>' + chevron() +
+        '<span class="disc-title">Вставить токен вручную</span></summary><div class="disc-body">' + keyForm + "</div></details>"
+      : keyForm;
+
     const keysSect = '<div class="sect"><div class="sect-head"><span class="sect-title">Ключи</span>' +
-      '<span class="spacer"></span><span class="hint">' + (keys.length ? "хранятся в демоне" : "не заданы") + "</span></div>" +
-      '<div class="row">' + chips + "</div>" +
-      '<form class="row mt3" data-keyform data-provider="' + esc(p.id) + '">' +
-        '<input class="input input-grow" name="key" type="password" autocomplete="off" spellcheck="false" ' +
-        'placeholder="Добавить ключ" aria-label="Новый ключ для ' + esc(p.id) + '">' +
-        '<m3e-button variant="tonal" size="small" type="submit">' +
-        '<m3e-icon slot="icon" name="add" aria-hidden="true"></m3e-icon>Добавить</m3e-button>' +
-      "</form></div>";
+      '<span class="spacer"></span><span class="hint">' +
+        (keys.length ? fmt(keys.length) + " " + plural(keys.length, "ключ", "ключа", "ключей") : "не заданы") +
+      "</span></div>" +
+      '<div class="hint key-note">Ключ — учётная запись у провайдера. Запросы уходят с основным ключом; ' +
+        "если он отказал, ротация берёт следующий. Удаление ключа отключает доступ.</div>" +
+      '<div class="key-list">' + keyRows + "</div>" + addBlock + "</div>";
 
     const quota = p.id === "antigravity" ? quotaSect() : "";
 
@@ -2279,13 +2330,23 @@ dialog::backdrop { background:var(--scrim); }
         "opts-" + el.dataset.provider, el.closest(".axis"));
       return;
     }
+    if (act === "key-primary") {
+      // The pin is the account pin axis: the request path already resolves a
+      // fingerprint there, so marking a row primary is a configuration write,
+      // not a second notion of "current key".
+      const pinned = el.dataset.pinned === "1";
+      await setOption({ provider: el.dataset.provider, axis: "account", value: pinned ? "" : el.dataset.key },
+        "opts-" + el.dataset.provider, el.closest(".sect"));
+      return;
+    }
     if (act === "remove-key") {
       const key = el.dataset.key;
-      const ok = await ask("Удалить ключ " + key + " из пула " + el.dataset.provider + "?", "Удалить");
+      const label = el.dataset.label || key;
+      const ok = await ask("Удалить ключ " + label + " из пула " + el.dataset.provider + "?", "Удалить");
       if (!ok) return;
       try {
         await api("/_control/keys/remove", { body: { provider: el.dataset.provider, key } });
-        toast("Ключ удалён");
+        toast("Удалено: " + label);
         await refreshCurrent(true);
       } catch (err) {
         toast(err.message, "err");
