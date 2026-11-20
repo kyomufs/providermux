@@ -2549,9 +2549,9 @@ dialog::backdrop { background:var(--scrim); }
       if (!key) { input.focus(); return; }
       const provider = form.dataset.provider;
       try {
-        await api("/_control/keys/add", { body: { provider, key } });
+        const res = await api("/_control/keys/add", { body: { provider, key } });
         input.value = "";
-        toast("Ключ добавлен");
+        toast(res && res.added === false ? "Этот ключ уже в списке" : "Ключ добавлен");
         await refreshCurrent(true);
       } catch (err) {
         toast(err.message, "err");
@@ -2618,12 +2618,14 @@ dialog::backdrop { background:var(--scrim); }
         const payload = { code, verifier: (state.oauth && state.oauth.verifier) || "", redirect_uri: location.origin + location.pathname };
         const project = ($("#oauth-project").value || "").trim();
         if (project) payload.project_id = project;
-        await api("/oauth/exchange", { body: payload });
+        const res = await api("/oauth/exchange", { body: payload });
         state.oauth = null;
         // The lazy quota cache still holds the pre-OAuth "unconfigured" answer.
         state.quota = null;
         quotaAt = 0;
-        toast("Аккаунт подключён");
+        // One Google account is one key: a second login for the same account
+        // comes back as added:false instead of growing the list.
+        toast(res && res.added === false ? "Этот ключ уже в списке" : "Ключ добавлен");
         await refreshCurrent(true);
       } catch (err) {
         toast(err.message, "err");
