@@ -416,7 +416,7 @@ main.enter { animation:pmux-enter 260ms var(--ease); }
 .count.err b { color:var(--error); }
 
 /* ============ provider accordion ============ */
-.prov-list { display:flex; flex-direction:column; gap:10px; }
+.prov-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--s4); align-items:start; }
 .prov { background:var(--surface-lowest); border:1px solid var(--outline-variant); border-radius:var(--r-lg); overflow:clip; }
 .prov > summary {
   list-style:none; cursor:pointer;
@@ -438,6 +438,17 @@ main.enter { animation:pmux-enter 260ms var(--ease); }
 .prov-name span { font-size:11.5px; line-height:16px; color:var(--on-surface-variant); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .prov-stats { display:flex; align-items:center; gap:6px; flex:none; }
 .prov-body { padding:2px 14px 14px; }
+.param {
+  display:grid; grid-template-columns:minmax(0,1fr) 208px; align-items:center; gap:var(--s3);
+  min-height:46px; border-top:1px solid var(--outline-variant);
+}
+.param:first-child { border-top:0; }
+.param-label { display:flex; flex-direction:column; gap:1px; padding:7px 0; min-width:0; }
+.param-label b { font-size:12.5px; line-height:17px; font-weight:550; }
+.param-label span { font-size:11px; line-height:15px; color:var(--on-surface-variant); }
+.param-control { display:flex; justify-content:flex-end; align-items:center; gap:8px; min-width:0; }
+.param-control .select { height:32px; max-width:208px; }
+.param-control m3e-button-group { width:100%; }
 .prov .pill { height:22px; padding:0 8px; font-size:10.5px; }
 
 /* ============ chart ============ */
@@ -676,6 +687,7 @@ dialog::backdrop { background:var(--scrim); }
 @media (max-width: 1120px) {
   main { padding:var(--s5) var(--s5) var(--s7); }
   .c5, .c7 { grid-column:span 12; }
+  .prov-list { grid-template-columns:1fr; }
 }
 @media (max-width: 940px) {
   .rail { display:none; }
@@ -727,6 +739,10 @@ dialog::backdrop { background:var(--scrim); }
   .count { min-width:44px; }
   .prov-name span { white-space:normal; }
   .prov-stats { gap:4px; }
+  .param { grid-template-columns:1fr; gap:4px; padding:9px 0; }
+  .param-label { padding:0; }
+  .param-control { justify-content:flex-start; }
+  .param-control .select { max-width:none; }
 }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { animation-duration:.001ms !important; transition-duration:.001ms !important; }
@@ -1179,6 +1195,9 @@ dialog::backdrop { background:var(--scrim); }
       (lead ? '<p class="lead">' + lead + "</p>" : "") + "</div></div>";
   }
 
+  const TRANSPORT_TEXT = { direct: "напрямую", proxy: "через прокси", auto: "авто" };
+  function transportText(value) { return TRANSPORT_TEXT[value] || value; }
+
   function providerName(status, id) {
     const p = status && (status.providers || []).find((x) => x.id === id);
     return p ? p.id : id;
@@ -1545,7 +1564,8 @@ dialog::backdrop { background:var(--scrim); }
     }).join("");
 
     const transportOptions = transports.map((t) =>
-      '<option value="' + esc(t) + '"' + (t === (opt.transport || "auto") ? " selected" : "") + ">" + esc(t) + "</option>").join("");
+      '<option value="' + esc(t) + '"' + (t === (opt.transport || "auto") ? " selected" : "") + ">" +
+      esc(transportText(t)) + "</option>").join("");
 
     const accountOptions = ["", ...keys].map((k) =>
       '<option value="' + esc(k) + '"' + ((opt.account || "") === k ? " selected" : "") + ">" +
@@ -1558,28 +1578,26 @@ dialog::backdrop { background:var(--scrim); }
           '<m3e-icon name="close" aria-hidden="true"></m3e-icon></m3e-icon-button></span>').join("")
       : '<span class="hint">Ключей нет — провайдер работает анонимно.</span>';
 
-    const access = '<div class="sect"><div class="sect-head"><span class="sect-title">Доступ</span>' +
-      '<span class="spacer"></span><span class="hint">' + (isAccount ? "личный аккаунт" : "без ключа") + "</span></div>" +
-      '<div class="row">' +
-        '<label class="field field-grow"><span class="label">Учётные данные</span>' +
-          '<m3e-button-group class="group-fill" variant="connected" aria-label="Учётные данные">' + seg + "</m3e-button-group></label>" +
-        (keys.length ? '<label class="field field-grow"><span class="label">Аккаунт</span>' +
-          '<select class="select" data-act="set-select" data-provider="' + esc(p.id) + '" data-axis="account"' +
-          (!isAccount || state.busy.has("opts-" + p.id) ? " disabled" : "") + ">" + accountOptions + "</select></label>" : "") +
-      "</div>" +
-      '<div class="row mt3"><label class="field field-grow"><span class="label">Транспорт</span>' +
-        '<select class="select" data-act="set-select" data-provider="' + esc(p.id) + '" data-axis="transport"' +
-        (state.busy.has("opts-" + p.id) ? " disabled" : "") + ">" + transportOptions + "</select></label>" +
-        '<a class="hint" href="#/network">куда идёт трафик →</a></div>' +
+    const rotation = '<button class="switch" type="button" role="switch" aria-checked="' + (opt.key_rotation === "on") +
+      '" aria-label="Ротация ключей"' +
+      (!isAccount || state.busy.has("opts-" + p.id) ? " disabled" : "") +
+      ' data-act="toggle-rotation" data-provider="' + esc(p.id) + '"></button>';
+
+    const access = '<div class="sect"><div class="sect-head"><span class="sect-title">Параметры</span></div>' +
+      '<div class="param"><div class="param-label"><b>Учётные данные</b><span>аккаунт или анонимный доступ</span></div>' +
+        '<div class="param-control"><m3e-button-group variant="connected" aria-label="Учётные данные">' + seg + "</m3e-button-group></div></div>" +
+      (keys.length ? '<div class="param"><div class="param-label"><b>Аккаунт</b><span>основной ключ для запросов</span></div>' +
+        '<div class="param-control"><select class="select" data-act="set-select" data-provider="' + esc(p.id) + '" data-axis="account"' +
+        (!isAccount || state.busy.has("opts-" + p.id) ? " disabled" : "") + ">" + accountOptions + "</select></div></div>" : "") +
+      '<div class="param"><div class="param-label"><b>Транспорт</b><span><a class="link" href="#/network">куда идёт трафик</a></span></div>' +
+        '<div class="param-control"><select class="select" data-act="set-select" data-provider="' + esc(p.id) + '" data-axis="transport"' +
+        (state.busy.has("opts-" + p.id) ? " disabled" : "") + ">" + transportOptions + "</select></div></div>" +
+      '<div class="param"><div class="param-label"><b>Ротация ключей</b><span>переключать ключи между запросами</span></div>' +
+        '<div class="param-control">' + rotation + "</div></div>" +
       "</div>";
 
     const keysSect = '<div class="sect"><div class="sect-head"><span class="sect-title">Ключи</span>' +
-      '<span class="badge">' + fmt(keys.length) + "</span><span class=\"spacer\"></span>" +
-      '<label class="switch-label"><span class="hint">Ротация</span>' +
-        '<button class="switch" type="button" role="switch" aria-checked="' + (opt.key_rotation === "on") +
-        '" aria-label="Ротация ключей"' +
-        (!isAccount || state.busy.has("opts-" + p.id) ? " disabled" : "") +
-        ' data-act="toggle-rotation" data-provider="' + esc(p.id) + '"></button></label></div>' +
+      '<span class="spacer"></span><span class="hint">' + (keys.length ? "хранятся в демоне" : "не заданы") + "</span></div>" +
       '<div class="row">' + chips + "</div>" +
       '<form class="row mt3" data-keyform data-provider="' + esc(p.id) + '">' +
         '<input class="input input-grow" name="key" type="password" autocomplete="off" spellcheck="false" ' +
@@ -1595,7 +1613,7 @@ dialog::backdrop { background:var(--scrim); }
       "<summary>" + chevron() +
         '<span class="prov-glyph"><m3e-icon name="dns" aria-hidden="true"></m3e-icon></span>' +
         '<span class="prov-name"><b>' + esc(p.id) + "</b><span>" + (isAccount ? "личный аккаунт" : "анонимный доступ") +
-          " · " + esc(opt.transport || "auto") + "</span></span>" +
+          " · " + esc(transportText(opt.transport || "auto")) + "</span></span>" +
         '<span class="prov-stats">' +
           '<span class="pill">' + fmt(keys.length) + " " + plural(keys.length, "ключ", "ключа", "ключей") + "</span>" +
           '<span class="pill">' + fmt(st.free_models) + "/" + fmt(st.models) + " free</span>" +
@@ -1912,6 +1930,7 @@ dialog::backdrop { background:var(--scrim); }
         : v === "anonymous" ? "анонимно"
         : v === "local" ? "локальный"
         : v === "server" ? "сетевой"
+        : axis === "transport" ? transportText(value)
         : value;
       return '<m3e-button variant="outlined" size="small" toggle' + (value === String(current) ? " selected" : "") +
         (state.busy.has("global") ? " disabled" : "") +
