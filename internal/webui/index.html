@@ -282,7 +282,7 @@ main.enter { animation:pmux-enter 260ms var(--ease); }
 .settled { animation:pmux-settled 560ms var(--ease); border-radius:var(--r-lg); }
 
 /* ------------ exit: one line per node, grouped by subscription ------------ */
-.node-groups { display:flex; flex-direction:column; gap:var(--s3); margin-top:var(--s4); }
+.node-groups { display:flex; flex-direction:column; gap:var(--s3); margin-top:var(--s4); max-height:min(58vh, 560px); overflow-y:auto; overscroll-behavior:contain; padding-right:4px; scrollbar-width:thin; }
 .node-group { border-top:1px solid var(--outline-variant); padding-top:var(--s3); }
 .node-group:first-child { border-top:0; padding-top:0; }
 .node-group-head { display:flex; align-items:center; gap:var(--s2); margin-bottom:6px; }
@@ -300,6 +300,8 @@ main.enter { animation:pmux-enter 260ms var(--ease); }
 }
 .node:hover { background:var(--surface-container); }
 .node.now { background:var(--primary-container); color:var(--on-surface); font-weight:600; }
+.node-pick { flex:1; min-width:0; display:flex; align-items:center; gap:7px; padding:0; border:0; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+.node-pick:focus-visible { outline:2px solid var(--primary); outline-offset:1px; border-radius:var(--r-xs); }
 .node-dot { flex:none; width:6px; height:6px; border-radius:50%; background:var(--outline-variant); }
 .node-dot.ok { background:var(--ok); }
 .node-dot.err { background:var(--error); }
@@ -319,14 +321,13 @@ main.enter { animation:pmux-enter 260ms var(--ease); }
 
 /* ============ page furniture ============ */
 .page-head { display:flex; align-items:flex-end; gap:var(--s4); flex-wrap:wrap; margin-bottom:var(--s4); }
-.page-head h1 { font-size:27px; line-height:34px; font-weight:650; letter-spacing:-.025em; }
-.page-head .lead { color:var(--on-surface-variant); font-size:13px; line-height:19px; max-width:78ch; margin-top:3px; }
-.page-head .spacer { flex:1; }
+.page-head h1 { font-size:26px; line-height:32px; font-weight:650; letter-spacing:-.025em; }
+.page-head .lead { color:var(--on-surface-variant); font-size:12.5px; line-height:18px; max-width:80ch; margin-top:2px; }
+.page-head .spacer, .spacer { flex:1 1 auto; min-width:0; }
 
 .cols { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); gap:var(--s4); }
 .cols > * { min-width:0; }
-.c4 { grid-column:span 4; } .c5 { grid-column:span 5; } .c6 { grid-column:span 6; }
-.c7 { grid-column:span 7; } .c8 { grid-column:span 8; } .c12 { grid-column:span 12; }
+.c5 { grid-column:span 5; } .c7 { grid-column:span 7; } .c12 { grid-column:span 12; }
 .stack { display:flex; flex-direction:column; gap:var(--s3); }
 .row { display:flex; align-items:center; gap:var(--s3); flex-wrap:wrap; }
 .muted { color:var(--on-surface-variant); }
@@ -342,75 +343,111 @@ main.enter { animation:pmux-enter 260ms var(--ease); }
   background:var(--surface-lowest); border:1px solid var(--outline-variant);
   border-radius:var(--r-lg); padding:var(--s4);
 }
-.card-head { display:flex; align-items:center; gap:var(--s2); min-height:24px; margin-bottom:var(--s4); }
+.card-head { display:flex; align-items:center; gap:var(--s2); min-height:24px; margin-bottom:var(--s3); }
 .card-head .spacer { flex:1; }
 .card-title { font-size:14px; line-height:20px; font-weight:600; letter-spacing:-.005em; }
 .card-sub { font-size:12.5px; line-height:18px; font-weight:500; }
 .eyebrow {
   display:inline-flex; align-items:center; gap:7px;
   font-size:10.5px; line-height:14px; letter-spacing:.09em; text-transform:uppercase; font-weight:650;
+  color:var(--on-surface-variant);
 }
+.live-dot { width:7px; height:7px; border-radius:var(--r-full); background:var(--ok); flex:none; }
 
-/* ============ hero: the one saturated surface on the page ============ */
-.hero {
-  display:flex; align-items:center; gap:var(--s5); justify-content:space-between;
-  padding:var(--s5) var(--s6); border-radius:var(--r-2xl);
-  background:var(--primary-container); color:var(--on-primary-container);
-  border:1px solid transparent;
+/* ============ disclosure ============
+   One disclosure primitive for every collapsible object on the panel: the
+   provider accordion, the network groups and the read-only timeouts. Native
+   <details> keeps the keyboard model and the summary is the whole click target,
+   so nothing here re-implements focus or ARIA. */
+.disc {
+  background:var(--surface-lowest); border:1px solid var(--outline-variant);
+  border-radius:var(--r-lg); overflow:clip;
 }
-.hero-copy { min-width:0; display:flex; flex-direction:column; gap:10px; }
-.hero .eyebrow { opacity:.82; }
-.hero .live-dot { width:7px; height:7px; border-radius:var(--r-full); background:currentColor; }
-.hero-listen { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.hero-listen b {
-  font-family:var(--mono); font-size:25px; line-height:32px; font-weight:600; letter-spacing:-.02em;
-  overflow-wrap:anywhere;
+.disc > summary {
+  list-style:none; cursor:pointer;
+  display:flex; align-items:center; gap:10px;
+  min-height:50px; padding:9px 14px;
+  transition:background var(--dur) var(--ease);
 }
-.hero-copy .hero-meta { font-size:12.5px; line-height:18px; opacity:.8; }
-.mix { display:flex; flex-direction:column; gap:7px; max-width:460px; margin-top:2px; }
-.mix-bar { display:flex; height:8px; border-radius:var(--r-full); overflow:hidden; background:color-mix(in srgb, currentColor 16%, transparent); }
-.mix-bar span { display:block; min-width:0; }
-.mix-ok { background:var(--primary); }
-.mix-refused { background:var(--error); }
-.mix-aborted { background:color-mix(in srgb, currentColor 42%, transparent); }
-.mix-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; line-height:16px; opacity:.85; }
-.mix-legend span { display:inline-flex; align-items:center; gap:6px; }
-.mix-legend i { width:7px; height:7px; border-radius:2px; flex:none; }
-.hero-gauge { flex:none; display:flex; flex-direction:column; align-items:center; gap:6px; }
-.gauge { position:relative; width:148px; height:148px; }
-.gauge svg { width:100%; height:100%; transform:rotate(-90deg); }
-.gauge circle { fill:none; stroke-width:11; }
-.gauge-track { stroke:color-mix(in srgb, var(--on-primary-container) 16%, transparent); }
-.gauge-value { stroke:var(--primary); stroke-linecap:round; transition:stroke-dashoffset 600ms var(--ease); }
-.gauge-text { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; }
-.gauge-text b { font-size:31px; line-height:36px; font-weight:650; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
-.gauge-text span { font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; opacity:.75; }
-.hero-gauge .hint { color:inherit; opacity:.75; }
+.disc > summary::-webkit-details-marker { display:none; }
+.disc > summary:hover { background:var(--surface-low); }
+.disc > summary:focus-visible { outline:2px solid var(--primary); outline-offset:-2px; border-radius:var(--r-lg); }
+.disc[open] > summary { border-bottom:1px solid var(--outline-variant); background:var(--surface-low); }
+.disc-chev {
+  flex:none; display:grid; place-items:center; color:var(--on-surface-variant);
+  --m3e-icon-size:20px;
+  transition:transform var(--dur-sp-fast) var(--ease-sp-fast);
+}
+.disc[open] .disc-chev { transform:rotate(90deg); }
+.disc-title { font-size:13.5px; line-height:19px; font-weight:600; letter-spacing:-.005em; }
+.disc-meta { font-size:11.5px; line-height:16px; color:var(--on-surface-variant); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.disc-head-meta { margin-left:auto; display:flex; align-items:center; gap:8px; flex:none; }
+.disc-body { padding:2px 14px 14px; }
+.disc-flat { border:0; border-top:1px solid var(--outline-variant); border-radius:0; background:transparent; margin-top:var(--s3); }
+.disc-flat > summary { min-height:38px; padding:8px 0; }
+.disc-flat[open] > summary { background:transparent; border-bottom:0; }
+.disc-flat > .disc-body { padding:0 0 var(--s3); }
 
-/* ============ stat cards ============ */
-.stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--s4); }
-.stat { display:flex; align-items:flex-start; gap:var(--s3); }
-.stat-glyph {
-  width:36px; height:36px; border-radius:12px; flex:none;
-  display:grid; place-items:center;
-  background:var(--surface-container); color:var(--on-surface-variant);
+/* ============ sections inside an object ============ */
+.sect { padding:14px 0; }
+.sect:first-child { padding-top:2px; }
+.sect + .sect { border-top:1px solid var(--outline-variant); }
+.sect-head { display:flex; align-items:center; gap:8px; min-height:28px; margin-bottom:10px; }
+.sect-title { font-size:11px; line-height:15px; letter-spacing:.08em; text-transform:uppercase; color:var(--on-surface-variant); font-weight:650; }
+.sect-head .spacer { flex:1; }
+
+/* ============ overview: status band ============ */
+.status-card { display:flex; flex-direction:column; }
+.status-band { display:flex; align-items:center; gap:var(--s5); flex-wrap:wrap; }
+.status-main { flex:1 1 320px; min-width:0; display:flex; flex-direction:column; gap:5px; }
+.status-listen { font-family:var(--mono); font-size:21px; line-height:27px; font-weight:600; letter-spacing:-.02em; overflow-wrap:anywhere; }
+.status-meta { font-size:12px; line-height:17px; color:var(--on-surface-variant); font-variant-numeric:tabular-nums; }
+.status-counts { display:flex; align-items:center; gap:var(--s4); flex:none; }
+.ring { position:relative; width:54px; height:54px; flex:none; }
+.ring svg { width:100%; height:100%; transform:rotate(-90deg); }
+.ring circle { fill:none; stroke-width:5; }
+.ring-track { stroke:var(--surface-highest); }
+.ring-value { stroke:var(--primary); stroke-linecap:round; transition:stroke-dashoffset 600ms var(--ease); }
+.ring b { position:absolute; inset:0; display:grid; place-items:center; font-size:12.5px; font-weight:650; font-variant-numeric:tabular-nums; }
+.counts { display:flex; gap:var(--s4); flex-wrap:wrap; }
+.count { display:flex; flex-direction:column; min-width:52px; }
+.count b { font-size:19px; line-height:24px; font-weight:650; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+.count span { font-size:10px; line-height:14px; letter-spacing:.05em; text-transform:uppercase; color:var(--on-surface-variant); font-weight:600; white-space:nowrap; }
+.count.err b { color:var(--error); }
+
+/* ============ provider accordion ============ */
+.prov-list { display:flex; flex-direction:column; gap:10px; }
+.prov { background:var(--surface-lowest); border:1px solid var(--outline-variant); border-radius:var(--r-lg); overflow:clip; }
+.prov > summary {
+  list-style:none; cursor:pointer;
+  display:flex; align-items:center; gap:11px;
+  min-height:60px; padding:8px 14px;
+  transition:background var(--dur) var(--ease);
 }
-.stat-glyph.ok { background:var(--ok-container); color:var(--on-ok-container); }
-.stat-glyph.err { background:var(--error-container); color:var(--on-error-container); }
-.stat-body { display:flex; flex-direction:column; gap:1px; min-width:0; }
-.stat-label { font-size:11px; line-height:15px; letter-spacing:.06em; text-transform:uppercase; color:var(--on-surface-variant); font-weight:600; }
-.stat-value { font-size:30px; line-height:36px; font-weight:650; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
-.stat-value.err { color:var(--error); }
-.stat-note { font-size:11.5px; line-height:16px; color:var(--on-surface-variant); }
+.prov > summary::-webkit-details-marker { display:none; }
+.prov > summary:hover { background:var(--surface-low); }
+.prov > summary:focus-visible { outline:2px solid var(--primary); outline-offset:-2px; }
+.prov[open] > summary { border-bottom:1px solid var(--outline-variant); background:var(--surface-low); }
+.prov-glyph {
+  width:32px; height:32px; border-radius:10px; flex:none;
+  display:grid; place-items:center; background:var(--surface-container); color:var(--primary);
+  --m3e-icon-size:19px;
+}
+.prov-name { min-width:0; flex:1; display:flex; flex-direction:column; }
+.prov-name b { font-size:14px; line-height:19px; font-weight:650; }
+.prov-name span { font-size:11.5px; line-height:16px; color:var(--on-surface-variant); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.prov-stats { display:flex; align-items:center; gap:6px; flex:none; }
+.prov-body { padding:2px 14px 14px; }
+.prov .pill { height:22px; padding:0 8px; font-size:10.5px; }
 
 /* ============ chart ============ */
 .chart { display:flex; flex-direction:column; gap:8px; }
-.chart-plot { position:relative; height:164px; }
-.chart-lines { position:absolute; inset:18px 0 20px; display:flex; flex-direction:column; justify-content:space-between; pointer-events:none; }
+.chart-plot { position:relative; height:128px; }
+.chart-lines { position:absolute; inset:16px 0 18px; display:flex; flex-direction:column; justify-content:space-between; pointer-events:none; }
 .chart-lines span { border-top:1px dashed var(--outline-variant); height:0; }
 .chart-lines span:first-child { border-top-style:solid; border-top-color:var(--outline); }
-.chart-cols { position:absolute; inset:0 0 0; display:flex; align-items:flex-end; gap:10px; }
-.chart-col { position:relative; flex:1; min-width:0; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:5px; padding-bottom:18px; }
+.chart-cols { position:absolute; inset:0; display:flex; align-items:flex-end; gap:10px; }
+.chart-col { position:relative; flex:1; min-width:0; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:5px; padding-bottom:16px; }
 .chart-count { font-size:11px; line-height:14px; color:var(--on-surface-variant); font-variant-numeric:tabular-nums; }
 .chart-bar { width:100%; max-width:46px; display:flex; flex-direction:column; justify-content:flex-end; border-radius:6px 6px 3px 3px; overflow:hidden; }
 .chart-bar span { display:block; }
@@ -418,23 +455,20 @@ main.enter { animation:pmux-enter 260ms var(--ease); }
 .chart-bar .refused { background:var(--error); }
 .chart-bar .aborted { background:var(--outline); }
 .chart-day { position:absolute; bottom:0; font-size:11px; line-height:14px; color:var(--on-surface-variant); white-space:nowrap; font-variant-numeric:tabular-nums; }
-
-/* ============ addresses ============ */
-.addr { display:flex; align-items:flex-start; gap:10px; padding:11px 0; border-bottom:1px solid var(--outline-variant); }
-.addr:first-of-type { padding-top:0; }
-.addr:last-of-type { border-bottom:0; padding-bottom:0; }
-.addr-body { min-width:0; flex:1; display:flex; flex-direction:column; gap:2px; }
-.addr-line { display:flex; align-items:center; gap:6px; min-width:0; }
-.addr-line .mono { font-size:12.5px; font-weight:500; }
-.addr-meta { font-size:11.5px; line-height:16px; color:var(--on-surface-variant); font-variant-numeric:tabular-nums; }
+.mix-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:11px; line-height:16px; color:var(--on-surface-variant); }
+.mix-legend span { display:inline-flex; align-items:center; gap:6px; }
+.mix-legend i { width:7px; height:7px; border-radius:2px; flex:none; }
+.mix-ok { background:var(--primary); }
+.mix-refused { background:var(--error); }
+.mix-aborted { background:var(--outline); }
 
 /* ============ tables ============ */
 .table-wrap { overflow-x:auto; border-radius:var(--r-md); margin:0 calc(var(--s4) * -1) calc(var(--s4) * -1); }
 .table-wrap table { min-width:520px; }
 table { width:100%; border-collapse:collapse; font-size:12.5px; }
-th, td { text-align:left; vertical-align:middle; padding:9px 16px; }
+th, td { text-align:left; vertical-align:middle; padding:8px 16px; }
 thead th {
-  height:34px; padding:0 16px;
+  height:32px; padding:0 16px;
   font-size:10px; line-height:15px; letter-spacing:.09em; text-transform:uppercase; font-weight:650;
   color:var(--on-surface-variant); border-bottom:1px solid var(--outline);
   position:sticky; top:0; background:var(--surface-low); z-index:1;
@@ -445,8 +479,15 @@ tbody tr:hover { background:var(--surface-low); }
 td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 .cell-name { font-weight:550; }
 .cell-id { font-family:var(--mono); font-size:11px; color:var(--on-surface-variant); margin-top:1px; overflow-wrap:anywhere; }
+.models td { height:46px; padding-top:6px; padding-bottom:6px; }
+.models .cell-id { font-size:10.5px; }
+.mini-table table { min-width:0; }
+.mini-table th, .mini-table td { padding:7px 10px; }
+.mini-table th:first-child, .mini-table td:first-child { padding-left:0; }
+.mini-table th:last-child, .mini-table td:last-child { padding-right:0; }
+.mini-table .table-wrap { margin:0; }
 
-/* ============ pills, chips, badges ============ */
+/* ============ pills, chips, badges, flags ============ */
 .pill {
   display:inline-flex; align-items:center; gap:6px;
   height:24px; padding:0 10px; border-radius:var(--r-full);
@@ -474,7 +515,13 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
   background:var(--secondary-container); color:var(--on-secondary-container);
   font-size:11px; font-weight:600; font-variant-numeric:tabular-nums;
 }
-.kv { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); min-height:38px; padding:7px 0; border-bottom:1px solid var(--outline-variant); }
+.flag {
+  display:inline-grid; place-items:center; width:24px; height:24px;
+  border-radius:var(--r-full); background:var(--surface-container); color:var(--on-surface-variant);
+  --m3e-icon-size:15px;
+}
+.flag.free { background:var(--primary-container); color:var(--on-primary-container); }
+.kv { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); min-height:36px; padding:6px 0; border-bottom:1px solid var(--outline-variant); }
 .kv:last-child { border-bottom:0; }
 .kv .kv-k { color:var(--on-surface-variant); font-size:12.5px; }
 .kv .kv-v { margin:0; min-width:0; font-size:12.5px; font-weight:550; text-align:right; overflow-wrap:anywhere; }
@@ -484,6 +531,7 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
    own their shape, ripple and spring motion. Only layout glue lives here. */
 .chip m3e-icon-button { margin-left: auto; }
 .dialog-actions m3e-button { flex: none; }
+
 /* ============ forms ============ */
 .field { display:flex; flex-direction:column; gap:5px; min-width:0; }
 .field-grow { flex:1 1 180px; min-width:0; }
@@ -501,17 +549,13 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 .input:focus, .select:focus, .textarea:focus { border-color:var(--primary); outline:2px solid var(--primary); outline-offset:-1px; }
 .input::placeholder, .textarea::placeholder { color:var(--on-surface-variant); opacity:.8; }
 
-/* ============ groups ============
-   Connected groups replace segmented controls (toggles only, 2dp padding, fully
-   round outside, square inside when selected); standard groups hold related
-   actions and widen the gap while one of them is pressed. Both come from
-   @m3e/web — see the bridge block above for the tokens they read. */
-.group-wide { width: 360px; max-width: 100%; min-width: 0; }
-.group-fill { flex: 0 1 auto; min-width: 0; }
-.field m3e-button-group { flex: none; align-self: flex-start; }
-.row > m3e-button-group { min-width: 0; }
-.glyph m3e-icon { --m3e-icon-size: 20px; }
-.axis m3e-button-group { flex: none; width: 320px; max-width: 100%; }
+/* ============ groups ============ */
+.group-wide { width:360px; max-width:100%; min-width:0; }
+.group-fill { flex:0 1 auto; min-width:0; }
+.field m3e-button-group { flex:none; align-self:flex-start; }
+.row > m3e-button-group { min-width:0; }
+.glyph m3e-icon { --m3e-icon-size:20px; }
+.axis m3e-button-group { flex:none; width:320px; max-width:100%; }
 .switch {
   position:relative; width:52px; height:32px; flex:none; border-radius:var(--r-full);
   background:var(--surface-highest); border:1px solid var(--outline);
@@ -529,54 +573,35 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 .switch:disabled { opacity:.38; cursor:not-allowed; }
 
 /* ============ bars ============ */
-.bar-track { height:8px; border-radius:var(--r-full); background:var(--surface-highest); overflow:hidden; }
+.bar-track { height:6px; border-radius:var(--r-full); background:var(--surface-highest); overflow:hidden; }
 .bar-fill { height:100%; border-radius:var(--r-full); background:var(--primary); transition:width 240ms var(--ease); }
 .bar-fill.ok { background:var(--primary); }
 .bar-fill.warn { background:var(--warn); }
 .bar-fill.err { background:var(--error); }
 
 /* ============ states ============ */
-.empty { display:flex; flex-direction:column; align-items:center; gap:8px; padding:var(--s6) var(--s4); text-align:center; color:var(--on-surface-variant); font-size:12.5px; }
-.empty .mi { font-size: 24px; opacity:.65; }
+.empty { display:flex; flex-direction:column; align-items:center; gap:8px; padding:var(--s5) var(--s4); text-align:center; color:var(--on-surface-variant); font-size:12.5px; }
+.empty .mi { font-size:24px; opacity:.65; }
 .notice {
   display:flex; gap:10px; padding:12px 14px; border-radius:var(--r-sm);
   background:var(--primary-container); color:var(--on-primary-container);
   font-size:13px; line-height:19px;
 }
 .notice.danger { background:var(--error-container); color:var(--on-error-container); }
-.notice .mi { font-size: 18px; margin-top:1px; }
+.notice .mi { font-size:18px; margin-top:1px; }
 .skeleton { background:var(--surface-container); border-radius:var(--r-sm); height:16px; animation:pmux-pulse 1.6s ease-in-out infinite; }
 @keyframes pmux-pulse { 50% { opacity:.55; } }
 
-/* ============ provider cards ============ */
-.provider-head { display:flex; align-items:center; gap:10px; margin-bottom:var(--s4); }
-.provider-head .glyph {
-  width:34px; height:34px; border-radius:11px; flex:none;
-  display:grid; place-items:center; background:var(--surface-container); color:var(--primary);
-}
-.provider-head h2 { font-size:15px; line-height:20px; font-weight:650; letter-spacing:-.01em; }
-.provider-head .spacer { flex:1; }
-.metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:var(--s4); }
-.metric { background:var(--surface-low); border-radius:var(--r-md); padding:10px 12px; }
-.metric b { display:block; font-size:16px; line-height:22px; font-weight:650; font-variant-numeric:tabular-nums; }
-.metric span { font-size:10.5px; line-height:14px; letter-spacing:.05em; text-transform:uppercase; color:var(--on-surface-variant); font-weight:600; }
-.switch-row { display:flex; align-items:center; justify-content:space-between; gap:var(--s4); padding:4px 0 2px; }
-.switch-row + .switch-row { margin-top:var(--s3); }
-.keys-block { margin-top:var(--s4); padding-top:var(--s4); border-top:1px solid var(--outline-variant); }
-.keys-head { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
-.keys-head .badge { margin-left:auto; }
-
 /* ============ quota ============ */
-.win { margin-top:var(--s4); }
-.win-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:6px; }
+.win { margin-top:10px; }
+.win-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:5px; }
 .win-head b { font-size:12.5px; font-weight:550; }
 .win-head span { font-size:11.5px; color:var(--on-surface-variant); font-variant-numeric:tabular-nums; }
 .group + .group { margin-top:var(--s4); }
-.group-title { display:flex; align-items:center; gap:8px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; font-weight:650; color:var(--on-surface-variant); }
+.group-title { display:flex; align-items:center; gap:8px; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:650; color:var(--on-surface-variant); }
 .account-head { display:flex; align-items:center; gap:10px; margin-bottom:2px; flex-wrap:wrap; }
-.account-head .mail { font-size:14px; font-weight:600; }
 .account-id { font-family:var(--mono); font-size:11px; color:var(--on-surface-variant); overflow-wrap:anywhere; }
-.steps { margin:0; padding:0; list-style:none; counter-reset:step; display:flex; flex-direction:column; gap:12px; }
+.steps { margin:0; padding:0; list-style:none; counter-reset:step; display:flex; flex-direction:column; gap:10px; }
 .steps li { counter-increment:step; display:flex; gap:12px; }
 .steps li::before {
   content:counter(step); flex:none; width:22px; height:22px; border-radius:var(--r-full);
@@ -587,9 +612,36 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 .steps span { display:block; font-size:11.5px; line-height:16px; color:var(--on-surface-variant); }
 
 /* ============ settings ============ */
-.axis { display:flex; align-items:center; justify-content:space-between; gap:var(--s5); }
+.axis { display:flex; align-items:center; justify-content:space-between; gap:var(--s5); padding:12px 0; border-bottom:1px solid var(--outline-variant); }
+.axis:first-child { padding-top:0; }
+.axis:last-child { border-bottom:0; padding-bottom:0; }
 .axis-text { min-width:0; max-width:46ch; }
 .axis-text .card-title { margin-bottom:2px; }
+
+/* ============ network ============ */
+.net-list { display:flex; flex-direction:column; gap:10px; }
+.search { position:relative; flex:1 1 240px; min-width:180px; }
+.search m3e-icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--on-surface-variant); pointer-events:none; --m3e-icon-size:18px; }
+.search .input { padding-left:34px; height:36px; }
+.toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+.toolbar-note { font-size:11.5px; color:var(--on-surface-variant); white-space:nowrap; }
+
+/* ============ overview rows ============ */
+.status-line { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.addr-row { padding:7px 0; border-bottom:1px solid var(--outline-variant); }
+.addr-row:last-child { border-bottom:0; padding-bottom:0; }
+.addr-line { display:flex; align-items:center; gap:8px; min-width:0; }
+.addr-line .mono { flex:1; min-width:0; }
+.addr-meta { display:block; margin-top:2px; font-size:11px; line-height:16px; color:var(--on-surface-variant); overflow-wrap:anywhere; }
+.prov-row { display:flex; align-items:center; gap:9px; min-height:38px; padding:6px 0; border-bottom:1px solid var(--outline-variant); }
+.prov-row:last-child { border-bottom:0; padding-bottom:0; }
+.prov-row .dot { width:7px; height:7px; border-radius:var(--r-full); background:var(--outline); flex:none; }
+.prov-row .dot.ok { background:var(--ok); }
+.switch-label { display:flex; align-items:center; gap:8px; }
+.sub-row { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--outline-variant); }
+.sub-row:last-of-type { border-bottom:0; }
+.sub-main { min-width:0; flex:1; display:flex; flex-direction:column; gap:1px; }
+.sub-main .mono { font-size:11.5px; }
 
 /* ============ snackbar + dialogs ============ */
 .snackbar {
@@ -618,16 +670,16 @@ dialog::backdrop { background:var(--scrim); }
 .dialog-title { font-size:20px; line-height:26px; font-weight:650; letter-spacing:-.01em; }
 .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:4px; }
 
+.link { color:var(--primary); font-weight:600; font-size:12.5px; text-decoration:underline; text-underline-offset:2px; }
+
 /* ============ responsive ============ */
 @media (max-width: 1120px) {
   main { padding:var(--s5) var(--s5) var(--s7); }
   .c5, .c7 { grid-column:span 12; }
-  .c4, .c8 { grid-column:span 6; }
-  .c4:only-child { grid-column:span 12; }
 }
 @media (max-width: 940px) {
   .rail { display:none; }
-  .c4, .c5, .c6, .c7, .c8 { grid-column:span 12; }
+  .c5, .c7, .c12 { grid-column:span 12; }
   .appbar { padding:0 var(--s3); }
   .stamp { display:none; }
   .bottom-nav {
@@ -649,30 +701,32 @@ dialog::backdrop { background:var(--scrim); }
   .snackbar { bottom:78px; }
 }
 @media (max-width: 720px) {
-  .hero { flex-direction:column; align-items:flex-start; padding:var(--s5); }
-  .hero-gauge { flex-direction:row; align-items:center; gap:14px; }
-  .gauge { width:108px; height:108px; }
-  .gauge-text b { font-size:23px; line-height:28px; }
-  .hero-listen b { font-size:21px; line-height:28px; }
-  .stats { grid-template-columns:1fr; }
   .page-head h1 { font-size:23px; line-height:29px; }
+  .status-band { align-items:flex-start; gap:var(--s4); }
+  .status-counts { width:100%; justify-content:space-between; }
   .axis { flex-direction:column; align-items:flex-start; gap:var(--s3); }
+  .axis m3e-button-group { width:100%; }
   .hide-sm { display:none; }
+  .prov-stats .pill:first-child { display:none; }
 }
 @media (max-width: 560px) {
   .brand-sub { display:none; }
   .appbar .pill { display:none; }
   .appbar .btn-token span { display:none; }
   .appbar .btn-token { width:38px; padding:0; }
-  .metrics { grid-template-columns:1fr; }
   .card { padding:var(--s3); border-radius:var(--r-md); }
   .table-wrap { margin:0 calc(var(--s3) * -1) calc(var(--s3) * -1); }
-  th, td { padding:9px 12px; }
+  th, td { padding:8px 12px; }
   thead th { padding:0 12px; }
   m3e-button-group { --m3e-connected-button-group-spacing: 1px; }
   .chart-cols { gap:5px; }
   .chart-day { font-size:10px; }
   .chart-count { font-size:10px; }
+  .status-listen { font-size:18px; line-height:24px; }
+  .counts { gap:var(--s3); }
+  .count { min-width:44px; }
+  .prov-name span { white-space:normal; }
+  .prov-stats { gap:4px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { animation-duration:.001ms !important; transition-duration:.001ms !important; }
@@ -713,29 +767,20 @@ dialog::backdrop { background:var(--scrim); }
   <nav class="rail" aria-label="Разделы">
     <div class="rail-group">Мониторинг</div>
     <a class="rail-item" href="#/overview" data-route="overview"><m3e-icon name="dashboard" optical-size="24" aria-hidden="true"></m3e-icon>Обзор</a>
-    <a class="rail-item" href="#/models" data-route="models"><m3e-icon name="view_list" optical-size="24" aria-hidden="true"></m3e-icon>Каталог моделей</a>
+    <a class="rail-item" href="#/models" data-route="models"><m3e-icon name="view_list" optical-size="24" aria-hidden="true"></m3e-icon>Модели</a>
     <div class="rail-group">Управление</div>
     <a class="rail-item" href="#/providers" data-route="providers"><m3e-icon name="dns" optical-size="24" aria-hidden="true"></m3e-icon>Провайдеры</a>
-    <a class="rail-item" href="#/exit" data-route="exit"><m3e-icon name="public" optical-size="24" aria-hidden="true"></m3e-icon>Выход</a>
-    <a class="rail-item" href="#/quota" data-route="quota"><m3e-icon name="data_usage" optical-size="24" aria-hidden="true"></m3e-icon>Квоты</a>
+    <a class="rail-item" href="#/network" data-route="network"><m3e-icon name="public" optical-size="24" aria-hidden="true"></m3e-icon>Сеть</a>
     <a class="rail-item" href="#/settings" data-route="settings"><m3e-icon name="tune" optical-size="24" aria-hidden="true"></m3e-icon>Параметры</a>
     <div class="rail-foot" id="rail-meta"></div>
   </nav>
 
   <main id="main" tabindex="-1">
-    <div class="page-head">
-      <div>
-        <h1>Обзор</h1>
-        <p class="lead">Загрузка состояния шлюза…</p>
-      </div>
-    </div>
+    <div class="page-head"><div><h1>Обзор</h1><p class="lead">Загрузка состояния шлюза…</p></div></div>
     <div class="cols">
-      <div class="c12"><div class="skeleton" style="height:176px;border-radius:24px"></div></div>
-      <div class="c4"><div class="skeleton" style="height:92px"></div></div>
-      <div class="c4"><div class="skeleton" style="height:92px"></div></div>
-      <div class="c4"><div class="skeleton" style="height:92px"></div></div>
-      <div class="c8"><div class="skeleton" style="height:280px"></div></div>
-      <div class="c4"><div class="skeleton" style="height:280px"></div></div>
+      <div class="c12"><div class="skeleton" style="height:104px;border-radius:16px"></div></div>
+      <div class="c7"><div class="skeleton" style="height:220px;border-radius:16px"></div></div>
+      <div class="c5"><div class="skeleton" style="height:220px;border-radius:16px"></div></div>
     </div>
   </main>
 </div>
@@ -743,9 +788,8 @@ dialog::backdrop { background:var(--scrim); }
 <nav class="bottom-nav" aria-label="Разделы">
   <a class="bottom-item" href="#/overview" data-route="overview"><m3e-icon name="dashboard" optical-size="24" aria-hidden="true"></m3e-icon>Обзор</a>
   <a class="bottom-item" href="#/providers" data-route="providers"><m3e-icon name="dns" optical-size="24" aria-hidden="true"></m3e-icon>Провайдеры</a>
-  <a class="bottom-item" href="#/exit" data-route="exit"><m3e-icon name="public" optical-size="24" aria-hidden="true"></m3e-icon>Выход</a>
   <a class="bottom-item" href="#/models" data-route="models"><m3e-icon name="view_list" optical-size="24" aria-hidden="true"></m3e-icon>Модели</a>
-  <a class="bottom-item" href="#/quota" data-route="quota"><m3e-icon name="data_usage" optical-size="24" aria-hidden="true"></m3e-icon>Квоты</a>
+  <a class="bottom-item" href="#/network" data-route="network"><m3e-icon name="public" optical-size="24" aria-hidden="true"></m3e-icon>Сеть</a>
   <a class="bottom-item" href="#/settings" data-route="settings"><m3e-icon name="tune" optical-size="24" aria-hidden="true"></m3e-icon>Параметры</a>
 </nav>
 
@@ -791,7 +835,7 @@ dialog::backdrop { background:var(--scrim); }
   const POLL_MS = 5000;
   const LS_POLL = "pmux_poll_ms";
   const POLL_CHOICES = [[0, "выключено"], [2000, "2 с"], [5000, "5 с"], [10000, "10 с"], [30000, "30 с"], [60000, "1 мин"]];
-  const ROUTES = ["overview", "providers", "exit", "models", "quota", "settings"];
+  const ROUTES = ["overview", "providers", "models", "network", "settings"];
   const THEMES = ["auto", "light", "dark"];
   const THEME_ICON = { auto: "i-auto", light: "i-sun", dark: "i-moon" };
 
@@ -828,6 +872,7 @@ dialog::backdrop { background:var(--scrim); }
     keys: null,
     quota: null,    exit: null,
     subs: null,
+    subsUnsupported: false,
     subDraft: null,
     probes: null,
     oauth: null,
@@ -963,15 +1008,25 @@ dialog::backdrop { background:var(--scrim); }
     keys: () => api("/_control/keys"),
     quota: () => api("/_control/antigravity/quota"),
     exit: () => api("/_control/exit"),
-    subs: () => api("/_control/subscriptions"),
+    subs: () => {
+      // A deployment without a store answers 501 on every poll, and the browser
+      // logs each one. After the first answer the panel stops asking.
+      if (state.subsUnsupported) return Promise.resolve(state.subs);
+      return api("/_control/subscriptions").catch((err) => {
+        if (/egress_refresh\.subscriptions is not set/.test(err.message)) {
+          state.subsUnsupported = true;
+          return { unsupported: true, store: "", dedupe: "strict", items: [] };
+        }
+        throw err;
+      });
+    },
   };
 
   const ROUTE_DATA = {
     overview: ["status", "stats"],
     providers: ["status", "options", "stats", "keys"],
     models: ["models", "status"],
-    quota: ["quota", "status"],
-    exit: ["exit", "subs", "status"],
+    network: ["exit", "subs", "status"],
     settings: ["options", "status"],
   };
 
@@ -1062,7 +1117,7 @@ dialog::backdrop { background:var(--scrim); }
       : "";
 
     $("#brand-sub").textContent = s
-      ? (s.listen + " · режим " + s.mode)
+      ? (s.listen + " · " + (s.mode === "local" ? "локальный" : "сетевой"))
       : "локальный шлюз";
 
     $("#token-label").textContent = state.token ? "Токен задан" : "Токен";
@@ -1090,22 +1145,38 @@ dialog::backdrop { background:var(--scrim); }
         ? s.providers.reduce((sum, p) => sum + (p.models || 0), 0)
         : 0;
       meta.innerHTML = s
-        ? "<b>" + esc(s.listen || "—") + "</b><span>" + fmt(providerCount) + " провайдер · " + fmt(modelCount) + " моделей</span>"
+        ? "<b>" + esc(s.listen || "—") + "</b><span>" + fmt(providerCount) + " " + plural(providerCount, "провайдер", "провайдера", "провайдеров") + " · " + fmt(modelCount) + " " + plural(modelCount, "модель", "модели", "моделей") + "</span>"
         : "<span>данные ещё не пришли</span>";
     }
   }
 
-  // ---------------------------------------------------------------- view: shared
+// ---------------------------------------------------------------- view: shared
 
-  function pageHead(title, lead, actions = "") {
-    return '<div class="page-head"><div><h1>' + esc(title) + "</h1>" +
-      (lead ? '<p class="lead">' + lead + "</p>" : "") + "</div>" +
-      '<div class="spacer"></div><div class="row">' + actions + "</div></div>";
+  // Disclosures are native <details>. The open state lives here, not in the
+  // markup, so a poll repaint cannot collapse the card the operator is reading.
+  const UI_KEY = "pmux_ui";
+
+  function loadUI() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(UI_KEY) || "{}");
+      return raw && typeof raw === "object" ? raw : {};
+    } catch { return {}; }
   }
 
-  function refreshButton(label = "Обновить") {
-    return '<m3e-button variant="outlined" size="small" data-act="refresh">' +
-      '<m3e-icon slot="icon" name="refresh" aria-hidden="true"></m3e-icon>' + esc(label) + "</m3e-button>";
+  const uiState = loadUI();
+
+  function uiOpen(key, fallback = false) {
+    return typeof uiState[key] === "boolean" ? uiState[key] : fallback;
+  }
+
+  function setUiOpen(key, open) {
+    uiState[key] = open;
+    try { localStorage.setItem(UI_KEY, JSON.stringify(uiState)); } catch { /* private mode */ }
+  }
+
+  function pageHead(title, lead) {
+    return '<div class="page-head"><div><h1>' + esc(title) + "</h1>" +
+      (lead ? '<p class="lead">' + lead + "</p>" : "") + "</div></div>";
   }
 
   function providerName(status, id) {
@@ -1118,6 +1189,10 @@ dialog::backdrop { background:var(--scrim); }
       "<div><b>" + esc(title) + "</b>" + (hint ? '<div class="mt3 hint">' + esc(hint) + "</div>" : "") + "</div></div>";
   }
 
+  function chevron() {
+    return '<span class="disc-chev" aria-hidden="true"><m3e-icon name="chevron_right"></m3e-icon></span>';
+  }
+
   // ---------------------------------------------------------------- view: overview
 
   function todayTotals() {
@@ -1128,70 +1203,95 @@ dialog::backdrop { background:var(--scrim); }
     return { ok, refused, aborted, total: ok + refused + aborted };
   }
 
-  function heroBlock() {
+  function statusCount(label, value, cls) {
+    return '<div class="count' + (cls ? " " + cls : "") + '"><b>' + fmt(value) +
+      "</b><span>" + esc(label) + "</span></div>";
+  }
+
+  function statusBand() {
     const s = state.status;
     const t = todayTotals();
-    const share = t.total > 0 ? t.ok / t.total : 1;
-    const circumference = 2 * Math.PI * 62;
-    const dash = (circumference * clamp01(share)).toFixed(1);
-
+    // No traffic yet is not 100% success: an empty day has no rate at all.
+    const share = t.total > 0 ? t.ok / t.total : null;
+    const circumference = 2 * Math.PI * 22;
+    const dash = share === null ? 0 : circumference * clamp01(share);
     const providers = s && s.providers ? s.providers.length : 0;
     const models = s && s.providers ? s.providers.reduce((sum, p) => sum + (p.models || 0), 0) : 0;
+    const mode = s ? (s.mode === "local" ? "локальный режим" : "режим " + s.mode) : "состояние загружается";
+    const health = s && !state.failing
+      ? '<span class="pill ok"><span class="dot"></span>работает ' + esc(fmtDur(s.uptime_seconds)) + "</span>"
+      : '<span class="pill err"><span class="dot"></span>нет связи</span>';
 
-    const legend = [
-      ["mix-ok", "успешно", t.ok],
-      ["mix-refused", "отказы", t.refused],
-      ["mix-aborted", "обрывы", t.aborted],
-    ].map(([cls, label, count]) =>
-      '<span><i class="' + cls + '"></i>' + esc(label) + " · <b>" + fmt(count) + "</b></span>").join("");
-
-    const segments = [["mix-ok", t.ok], ["mix-refused", t.refused], ["mix-aborted", t.aborted]]
-      .filter(([, n]) => n > 0)
-      .map(([cls, n]) => '<span class="' + cls + '" style="width:' + ((n / t.total) * 100).toFixed(2) + '%"></span>')
-      .join("");
-
-    return '<section class="hero" aria-label="Состояние шлюза">' +
-      '<div class="hero-copy">' +
-        '<span class="eyebrow"><i class="live-dot"></i>' + (s && s.mode === "local" ? "локальный режим" : "режим " + esc(s ? s.mode : "…")) + "</span>" +
-        '<div class="hero-listen"><b>' + esc(s ? s.listen : "—") + "</b></div>" +
-        '<p class="hero-meta">' + (s ? "работает " + esc(fmtDur(s.uptime_seconds)) : "состояние загружается") +
-          " · " + fmt(providers) + " провайдеров · " + fmt(models) + " моделей</p>" +
-        '<div class="mix"><div class="mix-bar">' + segments + '</div><div class="mix-legend">' + legend + "</div></div>" +
+    return '<section class="card status-card">' +
+      '<div class="status-band">' +
+        '<div class="status-main">' +
+          '<span class="eyebrow"><i class="live-dot"></i>' + esc(mode) + "</span>" +
+          '<div class="status-line"><span class="status-listen">' + esc(s ? s.listen : "—") + "</span>" + health + "</div>" +
+          '<span class="status-meta">' + fmt(providers) + " " + plural(providers, "провайдер", "провайдера", "провайдеров") + " · " + fmt(models) + " " + plural(models, "модель", "модели", "моделей") + " · " +
+            fmt(t.total) + " ответов сегодня</span>" +
+        "</div>" +
+        '<div class="status-counts">' +
+          '<div class="ring" role="img" aria-label="' + (share === null ? "Ответов ещё не было" : "Доля успешных ответов " + pctLabel(share)) + '">' +
+            '<svg viewBox="0 0 54 54" aria-hidden="true">' +
+              '<circle class="ring-track" cx="27" cy="27" r="22"></circle>' +
+              '<circle class="ring-value" cx="27" cy="27" r="22" stroke-dasharray="' + circumference.toFixed(1) +
+                '" stroke-dashoffset="' + (circumference - dash).toFixed(1) + '"></circle>' +
+            "</svg><b>" + (share === null ? "—" : pctLabel(share)) + "</b></div>" +
+          '<div class="counts">' + statusCount("успешно", t.ok) + statusCount("отказы", t.refused, "err") +
+            statusCount("обрывы", t.aborted) + "</div>" +
+        "</div>" +
       "</div>" +
-      '<div class="hero-gauge"><div class="gauge"><svg viewBox="0 0 148 148" aria-hidden="true">' +
-        '<circle class="gauge-track" cx="74" cy="74" r="62"></circle>' +
-        '<circle class="gauge-value" cx="74" cy="74" r="62" stroke-dasharray="' + circumference.toFixed(1) + '" stroke-dashoffset="' + (circumference - dash).toFixed(1) + '"></circle>' +
-        '</svg><div class="gauge-text"><b>' + pctLabel(share) + '</b><span>успех</span></div></div>' +
-        '<span class="hint">' + fmt(t.total) + " ответов сегодня</span>" +
-      "</div>" +
+      addressesDisclosure() +
       "</section>";
   }
 
-  function statCards() {
-    const t = todayTotals();
-    const dim = (cls, icon, label, value, note, extra = "") =>
-      '<article class="card"><div class="stat"><div class="stat-glyph ' + cls + '">' +
-        mi(icon) + '</div>' +
-        '<div class="stat-body"><span class="stat-label">' + esc(label) + "</span>" +
-        '<span class="stat-value ' + extra + '">' + esc(value) + "</span>" +
-        '<span class="stat-note">' + esc(note) + "</span></div></div></article>";
+  function addressesDisclosure() {
+    const s = state.status;
+    const addresses = (s && s.addresses) || [];
+    const byAddress = (s && s.totals_today && s.totals_today.by_address) || [];
+    const open = uiOpen("overview:addr");
 
-    return '<div class="stats">' +
-      dim("ok", "i-check", "Успешно", fmt(t.ok), "ответов ушло клиентам") +
-      dim(t.refused ? "err" : "", "i-alert", "Отказы", fmt(t.refused), "ошибки переданы дословно", t.refused ? "err" : "") +
-      dim("", "i-clock", "Оборвано", fmt(t.aborted), "клиент закрыл поток") +
-      "</div>";
+    const rows = addresses.map((a) => {
+      const stat = byAddress.find((x) => x.address === a.address) || {};
+      const pill = a.error
+        ? '<span class="pill err">' + esc(a.family) + "</span>"
+        : '<span class="pill ok">' + esc(a.family) + "</span>";
+      const value = a.address
+        ? '<span class="mono">' + esc(a.address) + "</span>"
+        : '<span class="mono muted">не определён</span>';
+      const meta = a.error
+        ? '<span class="addr-meta" title="' + esc(a.error) + '">' + esc(truncate(a.error, 96)) + "</span>"
+        : '<span class="addr-meta">' + fmt(stat.ok) + " ok · " + fmt(stat.refused) + " отказ · " +
+          fmt(stat.aborted) + " обрыв · " + esc(relTime(a.resolved_at)) + "</span>";
+      return '<div class="addr-row"><div class="addr-line">' + pill + value +
+        '<m3e-icon-button variant="text" size="extra-small" data-act="copy" data-copy="' + esc(a.address || "") +
+        '" title="Скопировать адрес" aria-label="Скопировать адрес">' +
+        '<m3e-icon name="content_copy" aria-hidden="true"></m3e-icon></m3e-icon-button></div>' + meta + "</div>";
+    }).join("");
+
+    const families = addresses.filter((a) => a.address).map((a) => a.family).join(", ");
+
+    return '<details class="disc disc-flat" data-open-key="overview:addr"' + (open ? " open" : "") + ">" +
+      "<summary>" + chevron() + '<span class="disc-title">Адреса выхода</span>' +
+        '<span class="disc-head-meta"><span class="hint">' + (families ? esc(families) : "нет данных") + "</span></span>" +
+      "</summary>" +
+      '<div class="disc-body">' + (rows || emptyBlock("i-globe", "Адреса не определены")) +
+        '<p class="hint mt3">Лимиты бесплатных моделей считаются по адресу, поэтому семейство — ось сети, а не мелочь.</p>' +
+      "</div></details>";
   }
 
-  function chartBlock() {
+  function chartCard() {
     const days = ((state.stats && state.stats.days) || []).slice(0, 7).reverse();
-    if (!days.length) {
-      return '<section class="card"><div class="card-head"><h2 class="card-title">Динамика</h2></div>' +
-        emptyBlock("i-info", "Истории пока нет", "Статистика появится после первых запросов.") + "</section>";
-    }
-    const max = Math.max(1, ...days.map((d) => (d.ok || 0) + (d.refused || 0) + (d.aborted || 0)));
     const total = days.reduce((sum, d) => sum + (d.ok || 0) + (d.refused || 0) + (d.aborted || 0), 0);
+    const head = '<div class="card-head"><h2 class="card-title">За неделю</h2><span class="spacer"></span>' +
+      '<span class="hint">' + fmt(total) + " ответов</span></div>";
 
+    if (!days.length) {
+      return '<section class="card">' + head +
+        '<div class="hint">Истории пока нет — статистика появится после первых запросов.</div></section>';
+    }
+
+    const max = Math.max(1, ...days.map((d) => (d.ok || 0) + (d.refused || 0) + (d.aborted || 0)));
     const cols = days.map((d) => {
       const ok = d.ok || 0, refused = d.refused || 0, aborted = d.aborted || 0;
       const sum = ok + refused + aborted;
@@ -1207,110 +1307,241 @@ dialog::backdrop { background:var(--scrim); }
         "</div>";
     }).join("");
 
-    return '<section class="card"><div class="card-head">' +
-      '<h2 class="card-title">Динамика за неделю</h2><span class="spacer"></span>' +
-      '<span class="hint">' + fmt(total) + " ответов</span></div>" +
-      '<div class="chart"><div class="chart-plot"><div class="chart-lines"><span></span><span></span><span></span><span></span></div>' +
+    return '<section class="card">' + head +
+      '<div class="chart"><div class="chart-plot"><div class="chart-lines"><span></span><span></span><span></span></div>' +
       '<div class="chart-cols">' + cols + "</div></div>" +
-      '<div class="mix-legend muted"><span><i class="mix-ok"></i>успешно</span><span><i class="mix-refused"></i>отказы</span><span><i class="mix-aborted"></i>обрывы</span></div>' +
+      '<div class="mix-legend"><span><i class="mix-ok"></i>успешно</span>' +
+        '<span><i class="mix-refused"></i>отказы</span><span><i class="mix-aborted"></i>обрывы</span></div>' +
       "</div></section>";
   }
 
-  function addressesBlock() {
-    const s = state.status;
-    const addresses = (s && s.addresses) || [];
-    const byAddress = (s && s.totals_today && s.totals_today.by_address) || [];
-
-    const rows = addresses.map((a) => {
-      const stat = byAddress.find((x) => x.address === a.address) || {};
-      const pill = a.error
-        ? '<span class="pill err"><span class="dot"></span>ошибка</span>'
-        : '<span class="pill ok"><span class="dot"></span>' + esc(a.family) + "</span>";
-      const value = a.address
-        ? '<span class="mono">' + esc(a.address) + "</span>"
-        : '<span class="mono muted">адрес не определён</span>';
-      // A resolver failure is long, so the detail goes to the meta line where it
-      // can wrap, and the row keeps the same height as a healthy one.
-      const meta = a.error
-        ? '<span class="addr-meta" title="' + esc(a.error) + '">' + esc(truncate(a.error, 96)) + "</span>"
-        : '<span class="addr-meta">' + fmt(stat.ok) + " ok · " + fmt(stat.refused) + " отказ · " + fmt(stat.aborted) + " обрыв · " + esc(relTime(a.resolved_at)) + "</span>";
-      return '<div class="addr"><div class="addr-body"><div class="addr-line">' + pill + value +
-        '<m3e-icon-button variant="text" size="extra-small" data-act="copy" data-copy="' + esc(a.address || "") + '" title="Скопировать адрес" aria-label="Скопировать адрес">' +
-        '<m3e-icon name="content_copy" aria-hidden="true"></m3e-icon></m3e-icon-button></div>' + meta + "</div></div>";
-    }).join("");
-
-    return '<section class="card"><div class="card-head"><h2 class="card-title">Адреса выхода</h2><span class="spacer"></span>' +
-      '<span class="pill">' + esc(s ? s.mode : "—") + "</span></div>" +
-      (rows || emptyBlock("i-globe", "Адреса не определены")) +
-      '<p class="hint mt4">Лимиты бесплатных моделей считаются по адресу, поэтому семейство — это ось конфигурации, а не мелочь.</p>' +
-      "</section>";
-  }
-
-  function modelsTodayBlock() {
+  function modelsTodayCard() {
     const rows = (state.status && state.status.totals_today && state.status.totals_today.by_model) || [];
+    const head = '<div class="card-head"><h2 class="card-title">Модели сегодня</h2><span class="spacer"></span>' +
+      '<span class="hint">' + fmt(rows.length) + " в работе</span></div>";
+
     if (!rows.length) {
-      return '<section class="card"><div class="card-head"><h2 class="card-title">Модели сегодня</h2></div>' +
-        emptyBlock("i-models", "Запросов ещё не было", "Таблица заполнится, как только клиенты начнут обращаться.") + "</section>";
+      return '<section class="card">' + head +
+        '<div class="hint">Таблица заполнится, как только клиенты начнут обращаться.</div></section>';
     }
+
     const body = rows.slice().sort((a, b) => (b.ok + b.refused + b.aborted) - (a.ok + a.refused + a.aborted))
-      .map((m) => "<tr><td><div class=\"cell-name mono\">" + esc(m.model) + "</div></td>" +
+      .map((m) => "<tr><td><div class=\"cell-name\">" + esc(m.model) + "</div></td>" +
         '<td class="num">' + fmt(m.ok) + "</td>" +
         '<td class="num">' + fmt(m.refused) + "</td>" +
         '<td class="num">' + fmt(m.aborted) + "</td>" +
         '<td class="muted small">' + esc(relTime(m.last_seen)) + "</td></tr>").join("");
 
-    return '<section class="card"><div class="card-head"><h2 class="card-title">Модели сегодня</h2><span class="spacer"></span>' +
-      '<span class="hint">' + fmt(rows.length) + " в работе</span></div>" +
-      '<div class="table-wrap"><table><thead><tr><th>Модель</th><th class="num">OK</th><th class="num">Отказ</th><th class="num">Обрыв</th><th>Активность</th></tr></thead>' +
+    return '<section class="card">' + head +
+      '<div class="table-wrap"><table><thead><tr><th>Модель</th><th class="num">OK</th>' +
+      '<th class="num">Отказ</th><th class="num">Обрыв</th><th>Активность</th></tr></thead>' +
       "<tbody>" + body + "</tbody></table></div></section>";
   }
 
-  function providersSummary() {
+  function providersSummaryCard() {
     const providers = (state.status && state.status.providers) || [];
-    if (!providers.length) {
-      return '<section class="card"><div class="card-head"><h2 class="card-title">Провайдеры</h2></div>' +
-        emptyBlock("i-server", "Провайдеров нет") + "</section>";
-    }
     const rows = providers.map((p) => {
       const cred = p.credential === "account" ? "аккаунт" : "анонимно";
-      return '<div class="kv"><div class="kv-k"><div class="cell-name">' + esc(p.id) + '</div><div class="hint">' + esc(cred) + " · ключей " + fmt(p.keys) + "</div></div>" +
-        '<div class="kv-v"><span class="badge">' + fmt(p.free_models) + "/" + fmt(p.models) + "</span></div></div>";
+      return '<div class="prov-row">' +
+        '<span class="dot ' + (p.keys ? "ok" : "") + '"></span>' +
+        '<b>' + esc(p.id) + "</b>" +
+        '<span class="hint">' + esc(cred) + " · " + fmt(p.keys) + " " + plural(p.keys, "ключ", "ключа", "ключей") + "</span>" +
+        '<span class="spacer"></span>' +
+        '<span class="badge">' + fmt(p.free_models) + "/" + fmt(p.models) + "</span>" +
+        "</div>";
     }).join("");
-    return '<section class="card"><div class="card-head"><h2 class="card-title">Провайдеры</h2><span class="spacer"></span>' +
-      '<m3e-button variant="text" size="small" href="#/providers">Настроить</m3e-button></div><div>' + rows + "</div></section>";
+
+    return '<section class="card"><div class="card-head"><h2 class="card-title">Провайдеры</h2>' +
+      '<span class="spacer"></span><a class="link" href="#/providers">Настроить →</a></div>' +
+      (rows || emptyBlock("i-server", "Провайдеров нет")) + "</section>";
   }
 
   function viewOverview() {
     const day = state.status && state.status.totals_today ? state.status.totals_today.day : "";
-    const mode = state.status ? state.status.mode : "…";
-    return pageHead("Обзор", (day ? "Сводка за " + esc(day) : "Сводка за сегодня") + " · режим " + esc(mode), refreshButton()) +
+    return pageHead("Обзор", day ? "Сводка за " + esc(day) : "Сводка за сегодня") +
       '<div class="cols">' +
-        '<div class="c12">' + heroBlock() + "</div>" +
-        '<div class="c12">' + statCards() + "</div>" +
-        '<div class="c7">' + chartBlock() + "</div>" +
-        '<div class="c5">' + addressesBlock() + "</div>" +
-        '<div class="c8">' + modelsTodayBlock() + "</div>" +
-        '<div class="c4">' + providersSummary() + "</div>" +
+        '<div class="c12">' + statusBand() + "</div>" +
+        '<div class="c7">' + chartCard() + "</div>" +
+        '<div class="c5">' + modelsTodayCard() + "</div>" +
+        '<div class="c12">' + providersSummaryCard() + "</div>" +
       "</div>";
   }
 
   // ---------------------------------------------------------------- view: providers
 
+  let quotaAt = 0;
+  const QUOTA_TTL = 60000;
+
+  function loadQuota() {
+    if (state.busy.has("quota")) return;
+    state.busy.add("quota");
+    render(true);
+    loaders.quota().then((q) => {
+      state.quota = q;
+      quotaAt = Date.now();
+    }).catch((err) => {
+      state.quota = { error: err.message || String(err), accounts: [] };
+      quotaAt = Date.now();
+    }).finally(() => {
+      state.busy.delete("quota");
+      render(true);
+    });
+  }
+
+  function ensureQuota(openKey) {
+    // The quota endpoint reaches the provider's account API; polling it with the
+    // panel would be rude. One fetch per open, then a minute of reuse.
+    if (!openKey.startsWith("prov:antigravity")) return;
+    if (quotaAt && Date.now() - quotaAt < QUOTA_TTL) return;
+    loadQuota();
+  }
+
+  document.addEventListener("toggle", (event) => {
+    const d = event.target;
+    if (!(d instanceof HTMLDetailsElement)) return;
+    const key = d.getAttribute("data-open-key");
+    if (!key) return;
+    setUiOpen(key, d.open);
+    if (d.open) ensureQuota(key);
+  }, true);
+
+  document.addEventListener("click", (event) => {
+    const el = event.target.closest("[data-act='quota-load']");
+    if (!el) return;
+    event.preventDefault();
+    quotaAt = 0;
+    loadQuota();
+  });
+
+  function quotaBest() {
+    const q = state.quota;
+    if (!q || q.error || !q.configured) return null;
+    let best = null;
+    for (const acc of q.accounts || []) {
+      for (const g of acc.groups || []) {
+        for (const w of g.windows || []) {
+          const f = clamp01(w.remaining_fraction);
+          if (best === null || f < best) best = f;
+        }
+      }
+    }
+    return best;
+  }
+
+  function quotaChip() {
+    const q = state.quota;
+    if (!q) return '<span class="pill">квоты</span>';
+    if (q.error) return '<span class="pill err">квоты —</span>';
+    if (!q.configured) return '<span class="pill">нет аккаунта</span>';
+    const best = quotaBest();
+    if (best === null) return '<span class="pill">квоты</span>';
+    const cls = best > 0.35 ? "ok" : best > 0.1 ? "warn" : "err";
+    return '<span class="pill ' + cls + '">остаток ' + pctLabel(best) + "</span>";
+  }
+
+  function quotaWindow(fraction) {
+    const cls = fraction > 0.35 ? "ok" : fraction > 0.1 ? "warn" : "err";
+    return '<div class="bar-track"><div class="bar-fill ' + cls + '" style="width:' +
+      (clamp01(fraction) * 100).toFixed(1) + '%"></div></div>';
+  }
+
+  function quotaAccounts(q) {
+    const accounts = q.accounts || [];
+    if (!accounts.length) {
+      return '<div class="hint">Аккаунт подключён, но квот в ответе нет. Нажмите «Обновить» — внешний API иногда отвечает пусто.</div>';
+    }
+    return accounts.map((acc) => {
+      const groups = (acc.groups || []).map((g) => {
+        const windows = (g.windows || []).map((w) => {
+          const left = clamp01(w.remaining_fraction);
+          return '<div class="win"><div class="win-head"><b>' + esc(w.display_name || w.window) + "</b>" +
+            "<span>" + pctLabel(left) + " · сброс " + esc(untilTime(w.reset_time)) + "</span></div>" +
+            quotaWindow(left) + "</div>";
+        }).join("");
+        return '<div class="group"><div class="group-title">' + esc(g.group) +
+          (g.model_count ? '<span class="badge">' + fmt(g.model_count) + "</span>" : "") + "</div>" +
+          (g.description ? '<div class="hint">' + esc(g.description) + "</div>" : "") + windows + "</div>";
+      }).join("");
+
+      return '<div class="account-head"><span class="pill accent"><span class="dot"></span>' +
+        esc(acc.email || acc.account_id) + '</span><span class="account-id">' + esc(acc.account_id) + "</span></div>" +
+        (groups || '<div class="hint">Групп нет.</div>');
+    }).join("");
+  }
+
+  function oauthDisclosure() {
+    const o = state.oauth;
+    const link = o && o.url
+      ? '<a class="link" href="' + esc(o.url) + '" target="_blank" rel="noreferrer noopener">Страница согласия ↗</a>'
+      : "";
+    const open = uiOpen("prov:antigravity:oauth");
+    return '<details class="disc disc-flat" data-open-key="prov:antigravity:oauth"' + (open ? " open" : "") + ">" +
+      "<summary>" + chevron() + '<span class="disc-title">Подключение аккаунта</span>' +
+        '<span class="disc-head-meta"><span class="hint">OAuth</span></span></summary>' +
+      '<div class="disc-body">' +
+        '<ol class="steps">' +
+          '<li><div><b>Нажмите «Начать»</b><span>Ссылка на согласие откроется в новой вкладке.</span></div></li>' +
+          '<li><div><b>Разрешите доступ</b><span>После редиректа скопируйте адрес из строки браузера — в нём есть <code>code</code>.</span></div></li>' +
+          '<li><div><b>Вставьте сюда</b><span>Ссылка целиком тоже подойдёт: код вытащим сами.</span></div></li>' +
+        "</ol>" +
+        '<div class="row mt3"><m3e-button variant="tonal" size="small" data-act="oauth-start"' +
+          (state.busy.has("oauth") ? " disabled" : "") + ">Начать</m3e-button>" + link + "</div>" +
+        '<form class="stack mt3" id="oauth-form">' +
+          '<label class="field"><span class="label">Код или адрес редиректа</span>' +
+            '<input class="input" id="oauth-code" name="code" autocomplete="off" spellcheck="false" placeholder="https://…?code=…"></label>' +
+          '<label class="field"><span class="label">Project ID (необязательно)</span>' +
+            '<input class="input" id="oauth-project" name="project" autocomplete="off" spellcheck="false" placeholder="project-id"></label>' +
+          '<div class="row"><m3e-button variant="filled" size="small" type="submit"' +
+            (state.busy.has("oauth") ? " disabled" : "") + ">Подтвердить</m3e-button>" +
+          '<span class="hint">Токены хранит демон, в браузер они не попадают.</span></div>' +
+        "</form>" +
+      "</div></details>";
+  }
+
+  function quotaSect() {
+    const q = state.quota;
+    const busy = state.busy.has("quota");
+    const refresh = '<m3e-icon-button variant="text" size="extra-small" data-act="quota-load" title="Обновить квоты" ' +
+      'aria-label="Обновить квоты"' + (busy ? " disabled" : "") + ">" +
+      '<m3e-icon name="refresh" aria-hidden="true"></m3e-icon></m3e-icon-button>';
+
+    let body;
+    if (!q) {
+      body = '<div class="row"><m3e-button variant="outlined" size="small" data-act="quota-load"' +
+        (busy ? " disabled" : "") + ">Загрузить квоты</m3e-button>" +
+        '<span class="hint">Запрашиваются при раскрытии карточки, чтобы не дёргать API аккаунта на каждом опросе.</span></div>';
+    } else if (q.error) {
+      body = '<div class="notice danger"><m3e-icon name="error" aria-hidden="true"></m3e-icon>' +
+        "<div><b>Квоты не получены</b><div>" + esc(q.error) + "</div></div></div>";
+    } else if (!q.configured) {
+      body = '<div class="hint">Аккаунт не подключён: окна квот появятся после OAuth. До этого провайдер работает анонимно.</div>';
+    } else {
+      body = quotaAccounts(q);
+    }
+
+    return '<div class="sect"><div class="sect-head"><span class="sect-title">Квоты</span>' +
+      '<span class="spacer"></span>' + refresh + "</div>" + body +
+      (!q || q.error || q.configured === false ? oauthDisclosure() : "") +
+      "</div>";
+  }
+
   function providerCard(p) {
     const st = (state.status && state.status.providers || []).find((x) => x.id === p.id) || p;
-    const opt = (state.options && state.options.current && state.options.current.providers && state.options.current.providers[p.id]) || {};
+    const opt = (state.options && state.options.current && state.options.current.providers &&
+      state.options.current.providers[p.id]) || {};
     const pool = (state.keys && state.keys.providers || []).find((k) => k.provider === p.id) || { keys: [] };
     const transports = (state.options && state.options.transports) || [];
-    const credentials = ["account", "anonymous"];
     const credential = opt.credential || st.credential || "anonymous";
     const isAccount = credential === "account";
     const keys = pool.keys || [];
+    const open = uiOpen("prov:" + p.id);
 
-    const seg = credentials.map((value) => {
+    const seg = ["account", "anonymous"].map((value) => {
       const label = value === "account" ? "аккаунт" : "анонимно";
       return '<m3e-button variant="outlined" size="small" toggle' + (value === credential ? " selected" : "") +
         (state.busy.has("opts-" + p.id) ? " disabled" : "") +
-        ' data-act="set-axis" data-provider="' + esc(p.id) + '" data-axis="credential" data-value="' + esc(value) + '">' + esc(label) + "</m3e-button>";
+        ' data-act="set-axis" data-provider="' + esc(p.id) + '" data-axis="credential" data-value="' + esc(value) + '">' +
+        esc(label) + "</m3e-button>";
     }).join("");
 
     const transportOptions = transports.map((t) =>
@@ -1322,58 +1553,64 @@ dialog::backdrop { background:var(--scrim); }
 
     const chips = keys.length
       ? keys.map((k) => '<span class="chip"><span class="mono">' + esc(k) + "</span>" +
-          '<m3e-icon-button variant="text" size="extra-small" data-act="remove-key" data-provider="' + esc(p.id) + '" data-key="' + esc(k) + '" title="Удалить ключ" aria-label="Удалить ключ ' + esc(k) + '">' +
+          '<m3e-icon-button variant="text" size="extra-small" data-act="remove-key" data-provider="' + esc(p.id) +
+          '" data-key="' + esc(k) + '" title="Удалить ключ" aria-label="Удалить ключ ' + esc(k) + '">' +
           '<m3e-icon name="close" aria-hidden="true"></m3e-icon></m3e-icon-button></span>').join("")
       : '<span class="hint">Ключей нет — провайдер работает анонимно.</span>';
 
-    return '<section class="card"><div class="provider-head">' +
-      '<span class="glyph"><m3e-icon name="dns" aria-hidden="true"></m3e-icon></span>' +
-      "<div><h2>" + esc(p.id) + '</h2><div class="hint">' + (isAccount ? "личный аккаунт" : "анонимный доступ") + "</div></div>" +
-      '<span class="spacer"></span><span class="badge">' + fmt(st.free_models) + "/" + fmt(st.models) + "</span></div>" +
-
-      '<div class="metrics">' +
-        '<div class="metric"><b>' + fmt(st.models) + "</b><span>моделей</span></div>" +
-        '<div class="metric"><b>' + fmt(st.free_models) + "</b><span>бесплатных</span></div>" +
-        '<div class="metric"><b>' + fmt(keys.length) + "</b><span>" + plural(keys.length, "ключ", "ключа", "ключей") + "</span></div>" +
-      "</div>" +
-
-      '<div class="field"><span class="label">Учётные данные</span>' +
-        '<m3e-button-group class="group-wide" variant="connected" aria-label="Учётные данные">' + seg + "</m3e-button-group></div>" +
-
-      '<div class="switch-row"><div><div class="card-sub">Ротация ключей</div>' +
-        '<div class="hint">' + (isAccount ? "Переключение между ключами пула на каждом запросе" : "Доступна только для аккаунта") + "</div></div>" +
-        '<button class="switch" type="button" role="switch" aria-checked="' + (opt.key_rotation === "on") + '" aria-label="Ротация ключей"' +
-        (!isAccount || state.busy.has("opts-" + p.id) ? " disabled" : "") +
-        ' data-act="toggle-rotation" data-provider="' + esc(p.id) + '"></button></div>' +
-
-      '<div class="row mt4">' +
-        '<label class="field field-grow"><span class="label">Транспорт</span>' +
-          '<select class="select" data-act="set-select" data-provider="' + esc(p.id) + '" data-axis="transport"' +
-          (state.busy.has("opts-" + p.id) ? " disabled" : "") + ">" + transportOptions + "</select></label>" +
-        '<label class="field field-grow"><span class="label">Аккаунт</span>' +
+    const access = '<div class="sect"><div class="sect-head"><span class="sect-title">Доступ</span>' +
+      '<span class="spacer"></span><span class="hint">' + (isAccount ? "личный аккаунт" : "без ключа") + "</span></div>" +
+      '<div class="row">' +
+        '<label class="field field-grow"><span class="label">Учётные данные</span>' +
+          '<m3e-button-group class="group-fill" variant="connected" aria-label="Учётные данные">' + seg + "</m3e-button-group></label>" +
+        (keys.length ? '<label class="field field-grow"><span class="label">Аккаунт</span>' +
           '<select class="select" data-act="set-select" data-provider="' + esc(p.id) + '" data-axis="account"' +
-          (!isAccount || !keys.length || state.busy.has("opts-" + p.id) ? " disabled" : "") + ">" + accountOptions + "</select></label>" +
+          (!isAccount || state.busy.has("opts-" + p.id) ? " disabled" : "") + ">" + accountOptions + "</select></label>" : "") +
       "</div>" +
+      '<div class="row mt3"><label class="field field-grow"><span class="label">Транспорт</span>' +
+        '<select class="select" data-act="set-select" data-provider="' + esc(p.id) + '" data-axis="transport"' +
+        (state.busy.has("opts-" + p.id) ? " disabled" : "") + ">" + transportOptions + "</select></label>" +
+        '<a class="hint" href="#/network">куда идёт трафик →</a></div>' +
+      "</div>";
 
-      '<div class="keys-block"><div class="keys-head"><m3e-icon name="key" aria-hidden="true"></m3e-icon>' +
-        '<span class="card-sub">Ключи</span><span class="badge">' + fmt(keys.length) + "</span></div>" +
-        '<div class="row">' + chips + "</div>" +
-        '<form class="row mt3" data-keyform data-provider="' + esc(p.id) + '">' +
-          '<input class="input" name="key" type="password" autocomplete="off" spellcheck="false" placeholder="Добавить ключ" class="input-grow" aria-label="Новый ключ для ' + esc(p.id) + '">' +
-          '<m3e-button variant="tonal" size="small" type="submit"><m3e-icon slot="icon" name="add" aria-hidden="true"></m3e-icon>Добавить</m3e-button>' +
-        "</form></div>" +
+    const keysSect = '<div class="sect"><div class="sect-head"><span class="sect-title">Ключи</span>' +
+      '<span class="badge">' + fmt(keys.length) + "</span><span class=\"spacer\"></span>" +
+      '<label class="switch-label"><span class="hint">Ротация</span>' +
+        '<button class="switch" type="button" role="switch" aria-checked="' + (opt.key_rotation === "on") +
+        '" aria-label="Ротация ключей"' +
+        (!isAccount || state.busy.has("opts-" + p.id) ? " disabled" : "") +
+        ' data-act="toggle-rotation" data-provider="' + esc(p.id) + '"></button></label></div>' +
+      '<div class="row">' + chips + "</div>" +
+      '<form class="row mt3" data-keyform data-provider="' + esc(p.id) + '">' +
+        '<input class="input input-grow" name="key" type="password" autocomplete="off" spellcheck="false" ' +
+        'placeholder="Добавить ключ" aria-label="Новый ключ для ' + esc(p.id) + '">' +
+        '<m3e-button variant="tonal" size="small" type="submit">' +
+        '<m3e-icon slot="icon" name="add" aria-hidden="true"></m3e-icon>Добавить</m3e-button>' +
+      "</form></div>";
 
-      (p.id === "antigravity" ? '<div class="row mt4"><m3e-button variant="text" size="small" href="#/quota">Открыть квоты и OAuth →</m3e-button></div>' : "") +
-      "</section>";
+    const quota = p.id === "antigravity" ? quotaSect() : "";
+
+    return '<details class="prov" data-provider="' + esc(p.id) + '" data-open-key="prov:' + esc(p.id) + '"' +
+      (open ? " open" : "") + ">" +
+      "<summary>" + chevron() +
+        '<span class="prov-glyph"><m3e-icon name="dns" aria-hidden="true"></m3e-icon></span>' +
+        '<span class="prov-name"><b>' + esc(p.id) + "</b><span>" + (isAccount ? "личный аккаунт" : "анонимный доступ") +
+          " · " + esc(opt.transport || "auto") + "</span></span>" +
+        '<span class="prov-stats">' +
+          '<span class="pill">' + fmt(keys.length) + " " + plural(keys.length, "ключ", "ключа", "ключей") + "</span>" +
+          '<span class="pill">' + fmt(st.free_models) + "/" + fmt(st.models) + " free</span>" +
+          (p.id === "antigravity" ? quotaChip() : "") +
+        "</span>" +
+      "</summary>" +
+      '<div class="prov-body">' + access + keysSect + quota + "</div></details>";
   }
 
   function viewProviders() {
     const providers = (state.status && state.status.providers) || [];
-    const lead = "Учётные данные, транспорт и пул ключей по каждому провайдеру.";
-    return pageHead("Провайдеры", esc(lead), refreshButton()) +
-      '<div class="cols">' + (providers.length
-        ? providers.map((p) => '<div class="c6">' + providerCard(p) + "</div>").join("")
-        : '<div class="c12"><section class="card">' + emptyBlock("i-server", "Провайдеров нет", "Проверьте конфигурацию демона.") + "</section></div>") +
+    return pageHead("Провайдеры", "Доступ, ключи, транспорт и лимиты — в одной карточке. Карточка раскрывается по клику.") +
+      '<div class="prov-list">' + (providers.length
+        ? providers.map(providerCard).join("")
+        : '<section class="card">' + emptyBlock("i-server", "Провайдеров нет", "Проверьте конфигурацию демона.") + "</section>") +
       "</div>";
   }
 
@@ -1390,9 +1627,9 @@ dialog::backdrop { background:var(--scrim); }
       return (m.id + " " + (m.name || "")).toLowerCase().includes(query);
     }).sort((a, b) => (a.provider === b.provider ? a.id.localeCompare(b.id) : a.provider.localeCompare(b.provider)));
 
-    const filters = ['<m3e-button variant="outlined" size="small" toggle' + (state.providerFilter === "all" ? " selected" : "") + ' data-act="filter-provider" data-provider="all">все</m3e-button>']
+    const providerOptions = ['<option value="all">все провайдеры</option>']
       .concat(providers.map((p) =>
-        '<m3e-button variant="outlined" size="small" toggle' + (state.providerFilter === p ? " selected" : "") + ' data-act="filter-provider" data-provider="' + esc(p) + '">' + esc(p) + "</m3e-button>"))
+        '<option value="' + esc(p) + '"' + (state.providerFilter === p ? " selected" : "") + ">" + esc(p) + "</option>"))
       .join("");
 
     const rows = filtered.map((m) => {
@@ -1402,167 +1639,42 @@ dialog::backdrop { background:var(--scrim); }
         m.free ? '<span class="pill accent">free</span>' : "",
       ].filter(Boolean).join(" ");
       const copyId = m.provider + "/" + m.id;
-      return "<tr><td><div class=\"cell-name\">" + esc(m.name || m.id) + '</div><div class="cell-id">' + esc(m.id) + "</div></td>" +
+      return '<tr><td><div class="cell-name">' + esc(m.name || m.id) + '</div><div class="cell-id">' + esc(m.id) + "</div></td>" +
         '<td><span class="pill">' + esc(m.provider) + "</span></td>" +
-        '<td class="num">' + fmt(m.context) + "</td>" +
-        '<td class="num">' + fmt(m.max_output) + "</td>" +
+        '<td class="num hide-sm">' + fmt(m.context) + "</td>" +
+        '<td class="num hide-sm">' + fmt(m.max_output) + "</td>" +
         '<td><div class="row" style="gap:4px;flex-wrap:nowrap">' + (flags || '<span class="hint">—</span>') + "</div></td>" +
-        '<td class="num"><m3e-icon-button variant="text" size="extra-small" data-act="copy" data-copy="' + esc(copyId) + '" title="Скопировать provider/id" aria-label="Скопировать ' + esc(copyId) + '">' +
+        '<td class="num"><m3e-icon-button variant="text" size="extra-small" data-act="copy" data-copy="' + esc(copyId) +
+        '" title="Скопировать provider/id" aria-label="Скопировать ' + esc(copyId) + '">' +
         '<m3e-icon name="content_copy" aria-hidden="true"></m3e-icon></m3e-icon-button></td></tr>';
     }).join("");
 
     const body = rows || '<tr><td colspan="6">' + emptyBlock("i-search", "Ничего не найдено", "Измените запрос или сбросьте фильтр.") + "</td></tr>";
 
-    return pageHead("Каталог моделей", "Что отдаёт шлюз и с какими лимитами · " + fmt(all.length) + " моделей", refreshButton()) +
-      '<section class="card"><div class="row" style="margin-bottom:var(--s4)">' +
-        '<label class="field field-grow"><span class="sr-only">Поиск модели</span>' +
-        '<div style="position:relative"><m3e-icon name="search" aria-hidden="true" style="position:absolute;left:11px;top:12px;color:var(--on-surface-variant)"></m3e-icon>' +
-        '<input class="input" id="model-search" type="search" placeholder="Поиск по имени или id" value="' + esc(state.modelQuery) + '" style="padding-left:36px"></div></label>' +
-        '<m3e-button-group class="group-fill" variant="connected" aria-label="Провайдер">' + filters + "</m3e-button-group>" +
+    return pageHead("Модели", "Что отдаёт шлюз и с какими лимитами · " + fmt(all.length) + " моделей") +
+      '<section class="card"><div class="toolbar">' +
+        '<label class="search"><span class="sr-only">Поиск модели</span>' +
+          '<m3e-icon name="search" aria-hidden="true"></m3e-icon>' +
+          '<input class="input" id="model-search" type="search" placeholder="Имя или id модели" value="' + esc(state.modelQuery) + '"></label>' +
+        '<label class="field"><span class="sr-only">Провайдер</span>' +
+          '<select class="select" id="model-provider">' + providerOptions + "</select></label>" +
+        '<span class="spacer"></span>' +
+        '<span class="toolbar-note">' + fmt(filtered.length) + " из " + fmt(all.length) + "</span>" +
       "</div>" +
-      '<div class="table-wrap"><table><thead><tr><th>Модель</th><th>Провайдер</th><th class="num">Контекст</th><th class="num">Вывод</th><th>Флаги</th><th></th></tr></thead>' +
-      "<tbody>" + body + "</tbody></table></div>" +
-      '<p class="hint mt4">Показано ' + fmt(filtered.length) + " из " + fmt(all.length) + ".</p></section>";
+      '<div class="table-wrap"><table class="models"><thead><tr><th>Модель</th><th>Провайдер</th>' +
+      '<th class="num hide-sm">Контекст</th><th class="num hide-sm">Вывод</th><th>Флаги</th><th></th></tr></thead>' +
+      "<tbody>" + body + "</tbody></table></div></section>";
   }
 
-  // ---------------------------------------------------------------- view: quota
+  document.addEventListener("change", (event) => {
+    if (event.target.id !== "model-provider") return;
+    state.providerFilter = event.target.value;
+    const suffix = state.providerFilter === "all" ? "" : "?provider=" + encodeURIComponent(state.providerFilter);
+    history.replaceState(null, "", "#/models" + suffix);
+    render(true);
+  });
 
-  function quotaWindowBar(fraction) {
-    const cls = fraction > 0.35 ? "ok" : fraction > 0.1 ? "warn" : "err";
-    return '<div class="bar-track"><div class="bar-fill ' + cls + '" style="width:' + (clamp01(fraction) * 100).toFixed(1) + '%"></div></div>';
-  }
-
-  function quotaCard() {
-    const q = state.quota;
-    if (!q) {
-      const loading = state.busy.has("refresh");
-      return '<section class="card">' + emptyBlock("i-gauge",
-        loading ? "Квоты загружаются…" : "Квоты не загружены",
-        loading ? "Ответ зависит от внешнего API аккаунта, это занимает пару секунд." : "Нажмите «Обновить».") + "</section>";
-    }
-
-    const accounts = q.accounts || [];
-    const cards = accounts.map((acc) => {
-      const groups = (acc.groups || []).map((g) => {
-        const windows = (g.windows || []).map((w) => {
-          const left = clamp01(w.remaining_fraction);
-          return '<div class="win"><div class="win-head"><b>' + esc(w.display_name || w.window) + "</b>" +
-            "<span>" + pctLabel(left) + " · сброс " + esc(untilTime(w.reset_time)) + "</span></div>" +
-            quotaWindowBar(left) + "</div>";
-        }).join("");
-        return '<div class="group"><div class="group-title">' + esc(g.group) +
-          (g.model_count ? '<span class="badge">' + fmt(g.model_count) + "</span>" : "") + "</div>" +
-          (g.description ? '<div class="hint">' + esc(g.description) + "</div>" : "") + windows + "</div>";
-      }).join("");
-
-      return '<section class="card"><div class="card-head"><div class="account-head">' +
-        '<span class="pill accent"><span class="dot"></span>' + esc(acc.email || acc.account_id) + "</span></div></div>" +
-        '<div class="account-id">' + esc(acc.account_id) + "</div>" +
-        (groups || emptyBlock("i-info", "Групп нет")) + "</section>";
-    }).join("");
-
-    return cards || '<section class="card">' + emptyBlock("i-gauge", "Аккаунтов нет", "Подключите аккаунт через OAuth ниже.") + "</section>";
-  }
-
-  function oauthCard() {
-    const o = state.oauth;
-    const link = o && o.url
-      ? '<m3e-button variant="outlined" size="small" href="' + esc(o.url) + '" target="_blank" rel="noreferrer noopener"><m3e-icon slot="icon" name="open_in_new" aria-hidden="true"></m3e-icon>Открыть страницу согласия</m3e-button>'
-      : "";
-
-    return '<section class="card"><div class="card-head"><h2 class="card-title">Подключение аккаунта</h2><span class="spacer"></span>' +
-      '<m3e-button variant="tonal" size="small" data-act="oauth-start"' + (state.busy.has("oauth") ? " disabled" : "") + ">Начать</m3e-button></div>" +
-      '<ol class="steps">' +
-        '<li><div><b>Нажмите «Начать»</b><span>Ссылка на согласие откроется в новой вкладке.</span></div></li>' +
-        '<li><div><b>Разрешите доступ</b><span>После редиректа скопируйте адрес из строки браузера — он содержит <code>code</code>.</span></div></li>' +
-        '<li><div><b>Вставьте его сюда</b><span>Ссылка целиком тоже подойдёт: код вытащим сами.</span></div></li>' +
-      "</ol>" +
-      (link ? '<div class="row mt4">' + link + "</div>" : "") +
-      '<form class="stack mt4" id="oauth-form">' +
-        '<label class="field"><span class="label">Код или адрес редиректа</span>' +
-          '<input class="input" id="oauth-code" name="code" autocomplete="off" spellcheck="false" placeholder="https://…?code=…"></label>' +
-        '<label class="field"><span class="label">Project ID (необязательно)</span>' +
-          '<input class="input" id="oauth-project" name="project" autocomplete="off" spellcheck="false" placeholder="project-id"></label>' +
-        '<div class="row"><m3e-button variant="filled" size="small" type="submit"' + (state.busy.has("oauth") ? " disabled" : "") + ">Подтвердить</m3e-button>" +
-        '<span class="hint">Токены хранит демон, в браузер они не попадают.</span></div>' +
-      "</form></section>";
-  }
-
-  function viewQuota() {
-    const q = state.quota;
-    const lead = q
-      ? (q.configured ? "Аккаунт подключён · " + (q.credential === "account" ? "личный" : "анонимно") : "Аккаунт не подключён")
-      : "Состояние квот";
-    return pageHead("Квоты", esc(lead), refreshButton()) +
-      '<div class="cols"><div class="c7">' + quotaCard() + "</div><div class=\"c5\">" + oauthCard() + "</div></div>";
-  }
-
-  // ---------------------------------------------------------------- view: settings
-
-  function axisRow(axis, label, values, current, hint) {
-    const buttons = values.map((v) => {
-      const value = String(v);
-      const text = v === true || v === "true" || v === "on" ? "вкл"
-        : v === false || v === "false" || v === "off" ? "выкл"
-        : v === "account" ? "аккаунт"
-        : v === "anonymous" ? "анонимно"
-        : v === "local" ? "локальный"
-        : v === "server" ? "сетевой"
-        : value;
-      return '<m3e-button variant="outlined" size="small" toggle' + (value === String(current) ? " selected" : "") +
-        (state.busy.has("global") ? " disabled" : "") +
-        ' data-act="set-global" data-axis="' + esc(axis) + '" data-value="' + esc(value) + '">' + esc(text) + "</m3e-button>";
-    }).join("");
-    return '<div class="axis"><div class="axis-text"><div class="card-title">' + esc(label) + "</div>" +
-      (hint ? '<div class="hint">' + esc(hint) + "</div>" : "") + "</div>" +
-      '<m3e-button-group variant="connected" aria-label="' + esc(label) + '">' + buttons + "</m3e-button-group></div>";
-  }
-
-  function viewSettings() {
-    const o = state.options;
-    const cur = (o && o.current) || {};
-    const families = Array.from(new Set(((state.status && state.status.addresses) || []).map((a) => a.family)));
-
-    const rows = [
-      axisRow("mode", "Режим шлюза", (o && o.modes) || [], cur.mode, "local — только петлевой интерфейс, server — доступ по сети"),
-      axisRow("credential", "Учётные данные по умолчанию", ["account", "anonymous"], cur.credential, "Значение по умолчанию для всех провайдеров"),
-      axisRow("key_rotation", "Ротация ключей", ["on", "off"], cur.key_rotation, "Переключаться между ключами пула на каждом запросе"),
-      axisRow("family", "Семейство адресов", ["auto", "v4", "v6"], cur.family, "Лимиты бесплатных моделей привязаны к адресу" + (families.length ? " · сейчас доступны: " + families.join(", ") : "")),
-      axisRow("transport", "Транспорт", (o && o.transports) || [], cur.transport, "Как демон говорит с провайдером"),
-    ].join("");
-
-    const timeouts = [
-      ["first_event_timeout", "Первый байт", "Сколько ждать начало ответа"],
-      ["idle_timeout", "Простой", "Пауза в потоке до разрыва"],
-      ["reasoning_idle_timeout", "Простой в рассуждении", "Отдельный лимит для reasoning-моделей"],
-    ].map(([key, label, hint]) =>
-      '<div class="kv"><div class="kv-k"><div>' + esc(label) + '</div><div class="hint">' + esc(hint) + "</div></div>" +
-      '<div class="kv-v">' + esc(prettyDuration(cur[key])) + "</div></div>").join("");
-
-    return pageHead("Параметры", "Оси конфигурации применяются сразу и сохраняются демоном.", refreshButton()) +
-      '<div class="cols">' +
-        '<div class="c7"><section class="card"><div class="card-head"><h2 class="card-title">Оси конфигурации</h2></div>' +
-          '<div class="stack" style="gap:var(--s4)">' + rows + "</div></section></div>" +
-        '<div class="c5 stack">' +
-          '<section class="card"><div class="card-head"><h2 class="card-title">Таймауты</h2></div><div>' + timeouts + "</div></section>" +
-          '<section class="card" id="panel-card"><div class="card-head"><h2 class="card-title">Панель</h2></div>' +
-            '<div class="stack" style="gap:var(--s3)"><div class="axis-text"><div class="card-title">Обновление</div>' +
-              '<div class="hint">Как часто панель перечитывает состояние. Выключено — только по кнопке «Обновить».</div></div>' +
-              '<div class="row">' +
-              POLL_CHOICES.map(([ms, label]) =>
-                '<m3e-button variant="outlined" size="small" toggle' + (ms === state.pollMs ? " selected" : "") +
-                ' data-act="set-poll" data-value="' + ms + '">' + esc(label) + "</m3e-button>").join("") +
-              "</div></div></section>" +
-          '<section class="card"><div class="card-head"><h2 class="card-title">Доступ</h2></div>' +
-            '<div class="kv"><div class="kv-k">Токен</div><div class="kv-v">' + (state.token ? "задан" : "не задан") + "</div></div>" +
-            '<div class="kv"><div class="kv-k">Тема</div><div class="kv-v">' + esc(state.theme === "auto" ? "как в системе" : state.theme === "light" ? "светлая" : "тёмная") + "</div></div>" +
-            '<div class="row mt4"><m3e-button variant="tonal" size="small" data-act="token-open">Токен</m3e-button>' +
-            '<m3e-button variant="outlined" size="small" data-act="theme">Сменить тему</m3e-button></div>' +
-          "</section></div>" +
-      "</div>";
-  }
-
-  // ---------------------------------------------------------------- view: exit
+  // ---------------------------------------------------------------- view: network
 
   function intervalField(raw) {
     // The daemon speaks Go durations; the field shows the same unit the
@@ -1616,11 +1728,12 @@ dialog::backdrop { background:var(--scrim); }
     const probe = state.probes && state.probes[node.name];
     const ms = probe ? (probe.error ? "—" : String(probe.delay) + " мс") : "";
     const dot = !probe ? "" : probe.error ? " err" : " ok";
-    return '<div class="node' + (node.now ? " now" : "") + '" data-act="exit-select" data-name="' + esc(node.name) + '"' +
-      ' title="' + esc(node.name) + (node.now ? " — выбран сейчас" : " — выбрать") + '">' +
+    return '<div class="node' + (node.now ? " now" : "") + '">' +
       '<span class="node-dot' + dot + '"></span>' +
+      '<button class="node-pick" type="button" data-act="exit-select" data-name="' + esc(node.name) + '"' +
+      ' title="' + esc(node.name) + (node.now ? " — выбран сейчас" : " — выбрать") + '">' +
       '<span class="node-name">' + esc(node.name) + "</span>" +
-      '<span class="node-ms">' + esc(ms) + "</span>" +
+      '<span class="node-ms">' + esc(ms) + "</span></button>" +
       '<button class="node-ping" data-act="exit-probe" data-name="' + esc(node.name) + '" title="Пинг" type="button">' +
       '<m3e-icon name="sync"></m3e-icon></button></div>';
   }
@@ -1635,137 +1748,232 @@ dialog::backdrop { background:var(--scrim); }
       '<div class="node-grid">' + nodes.map(nodeChip).join("") + "</div></section>";
   }
 
-  function exitCard() {
+  function networkNow() {
     const e = state.exit;
-    if (!e) return '<section class="card"><div class="card-head"><h2 class="card-title">Выход</h2></div><div class="hint">Загрузка…</div></section>';
-    if (e.error) {
-      return '<section class="card"><div class="card-head"><h2 class="card-title">Выход</h2>' +
-        '<span class="spacer"></span><span class="pill err">нет связи с ядром</span></div>' +
-        '<div class="hint">' + esc(e.error) + "</div></section>";
-    }
-    const nodes = nodeGroups(e.nodes || []).map(([source, list]) => nodeGroupBlock(source, list)).join("") ||
-      '<div class="hint">Группа пуста.</div>';
-    return '<section class="card" id="exit-card"><div class="card-head"><h2 class="card-title">Группа ' + esc(e.group) + "</h2>" +
-      '<span class="spacer"></span><span class="hint">' + (e.nodes || []).length + " узлов</span>" +
-      '<m3e-button variant="outlined" size="small" data-act="exit-probe"' + (state.busy.has("exit") ? " disabled" : "") + ">Проверить все</m3e-button></div>" +
-      '<div class="kv"><div class="kv-k"><div>Сейчас</div><div class="hint">Куда уходит трафик прямо сейчас</div></div>' +
-        '<div class="kv-v">' + esc(e.now) + "</div></div>" +
-      '<div class="kv"><div class="kv-k"><div>Дом</div><div class="hint">Куда возвращается выход после ответа</div></div>' +
-        '<div class="kv-v">' + esc(e.home) + "</div></div>" +
-      '<div class="node-groups">' + nodes + "</div></section>";
-  }
+    const open = uiOpen("network:now", true);
+    const meta = e && !e.error ? e.group + " · " + nodeCount((e.nodes || []).length) : "нет данных";
+    let body;
 
-  function exitRefreshCard() {
-    const e = state.exit;
-    const r = (e && e.refresh) || {};
-    const running = Boolean(r.running);
-    // An unrun refresh carries the zero time, which reads as a real date.
-    const finished = r.finished && !r.finished.startsWith("0001-01-01")
-      ? r.finished.slice(0, 16).replace("T", " ") : "";
-    const refreshState = running ? "идёт сборка списка…"
-      : r.error ? "прошлая сборка не удалась"
-      : finished ? "список собран " + esc(finished)
-      : "сборка ещё не запускалась";
-    const rows = [
-      ["Подписки", refreshState],
-      ["Узлов в списке", r.nodes ? esc(r.nodes) : "—"],
-      ["Авто-обновление", e && e.interval ? esc(prettyDuration(e.interval)) : "выключено"],
-    ].map(([k, v]) => '<div class="kv"><div class="kv-k">' + k + '</div><div class="kv-v">' + v + "</div></div>").join("");
-    return '<section class="card"><div class="card-head"><h2 class="card-title">Подписки</h2>' +
-      '<span class="spacer"></span>' +
-      '<m3e-button variant="filled" size="small" data-act="exit-refresh"' + (running || state.busy.has("exit") ? " disabled" : "") + ">Обновить</m3e-button></div>" +
-      "<div>" + rows + "</div>" +
-      (r.error ? '<div class="hint mt3">' + esc(r.error) + "</div>" : "") +
-      '<form class="stack mt4" id="exit-schedule">' +
-        '<label class="field"><span class="label">Интервал авто-обновления</span>' +
-          '<input class="input" id="exit-interval" name="interval" autocomplete="off" spellcheck="false" value="' +
-          esc(intervalField(e && e.interval)) + '" placeholder="24h, 6h, 0s — выключить"></label>' +
-        '<div class="row"><m3e-button variant="tonal" size="small" type="submit"' + (state.busy.has("exit") ? " disabled" : "") + ">Сохранить</m3e-button>" +
-        '<span class="hint">0s выключает авто-обновление, ручная кнопка работает всегда.</span></div>' +
-      "</form></section>";
+    if (!e) {
+      body = '<div class="hint">Загрузка…</div>';
+    } else if (e.error) {
+      body = '<div class="notice danger"><m3e-icon name="error" aria-hidden="true"></m3e-icon>' +
+        "<div><b>Контроллер не отвечает</b><div>" + esc(e.error) + "</div></div></div>";
+    } else {
+      // 299 nodes in one grid is a wall; the filter keeps it navigable without
+      // hiding the full list behind another click.
+      const q = (state.nodeQuery || "").trim().toLowerCase();
+      const all = e.nodes || [];
+      const shown = q ? all.filter((n) => n.name.toLowerCase().includes(q)) : all;
+      const nodes = nodeGroups(shown).map(([source, list]) => nodeGroupBlock(source, list)).join("") ||
+        '<div class="hint">Ничего не найдено.</div>';
+      body = '<div class="kv"><div class="kv-k">Сейчас</div><div class="kv-v mono">' + esc(e.now || "—") + "</div></div>" +
+        '<div class="kv"><div class="kv-k">Дом</div><div class="kv-v mono">' + esc(e.home || "—") + "</div></div>" +
+        '<div class="row mt4"><m3e-button variant="outlined" size="small" data-act="exit-probe"' +
+        (state.busy.has("exit") ? " disabled" : "") + ">Проверить все</m3e-button>" +
+        '<span class="hint">Пинг идёт через контроллер и занимает до 10 секунд.</span></div>' +
+        '<div class="search mt4"><m3e-icon name="search" aria-hidden="true"></m3e-icon>' +
+        '<input class="input" id="node-search" type="search" placeholder="Фильтр по узлу" autocomplete="off" value="' + esc(state.nodeQuery || "") + '"></div>' +
+        '<div class="row tight"><span class="hint">' + (q ? fmt(shown.length) + " из " + fmt(all.length) : nodeCount(all.length)) + "</span></div>" +
+        '<div class="node-groups mt4">' + nodes + "</div>";
+    }
+
+    return '<details class="disc" id="exit-card" data-open-key="network:now"' + (open ? " open" : "") + ">" +
+      "<summary>" + chevron() + '<span class="disc-title">Сейчас</span>' +
+        '<span class="disc-head-meta"><span class="hint">' + esc(meta) + "</span></span></summary>" +
+      '<div class="disc-body">' + body + "</div></details>";
   }
 
   // The list the exit is built from. The gateway owns the store; this only
   // edits it, so the builder and the panel never disagree about the source.
   const SUB_DEDUPE = [
-    ["strict", "strict — один узел на конфиг (298 записей → 32 сервера)"],
+    ["strict", "strict — один узел на конфиг"],
     ["host", "host — один узел на адрес сервера"],
     ["none", "none — все записи, включая дубли"],
   ];
 
-  function subsCard() {
+  function networkSubs() {
     const subs = state.subs;
+    const open = uiOpen("network:subs");
+    const unsupported = subs && subs.unsupported;
+    const items = (subs && subs.items) || [];
+    const meta = unsupported ? "не настроено" : fmt(items.length) + " " + plural(items.length, "адрес", "адреса", "адресов");
+    let body;
 
     if (!subs) {
-      return '<section class="card mt4"><div class="card-head"><h2 class="card-title">Подписки на узлы</h2></div>' +
-        '<div class="hint">Загрузка списка…</div></section>';
+      body = '<div class="hint">Загрузка списка…</div>';
+    } else if (unsupported) {
+      body = '<div class="notice"><m3e-icon name="info" aria-hidden="true"></m3e-icon>' +
+        "<div><b>Списка подписок в этой сборке нет</b><div>egress_refresh.subscriptions не задан, поэтому список узлов собирается другим способом. " +
+        "Секция останется пустой, пока конфигурация демона её не включит.</div></div></div>";
+    } else {
+      const draft = state.subDraft || { mode: "add", id: "", url: "", ua: "" };
+      const busy = state.busy.has("subs");
+      const rows = items.length
+        ? items.map((item) =>
+          '<div class="sub-row"><div class="sub-main"><b>' + esc(item.id) + '</b><span class="mono">' + esc(item.url) + "</span>" +
+          (item.ua ? '<span class="hint">UA: ' + esc(item.ua) + "</span>" : "") + "</div>" +
+          '<div class="row"><m3e-button variant="text" size="small" data-act="sub-edit" data-id="' + esc(item.id) + '"' +
+          (busy ? " disabled" : "") + ">Правка</m3e-button>" +
+          '<m3e-button variant="text" size="small" data-act="sub-del" data-id="' + esc(item.id) + '"' +
+          (busy ? " disabled" : "") + ">Удалить</m3e-button></div></div>").join("")
+        : '<div class="hint">Список пуст: добавьте адрес подписки, иначе сборке нечего читать.</div>';
+
+      const modeOptions = SUB_DEDUPE.map(([value, label]) =>
+        '<option value="' + value + '"' + (subs.dedupe === value ? " selected" : "") + ">" + esc(label) + "</option>").join("");
+
+      body = rows +
+        '<form class="stack mt4" id="sub-form">' +
+          '<div class="row">' +
+            '<label class="field field-grow"><span class="label">Имя</span>' +
+              '<input class="input" id="sub-id" name="id" autocomplete="off" spellcheck="false" value="' + esc(draft.id) + '"' +
+              (draft.mode === "edit" ? " readonly" : "") + ' placeholder="main"></label>' +
+            '<label class="field field-grow"><span class="label">Адрес</span>' +
+              '<input class="input" id="sub-url" name="url" autocomplete="off" spellcheck="false" value="' + esc(draft.url) + '" placeholder="https://…"></label>' +
+            '<label class="field field-grow"><span class="label">User-Agent</span>' +
+              '<input class="input" id="sub-ua" name="ua" autocomplete="off" spellcheck="false" value="' + esc(draft.ua) + '" placeholder="clash-verge/2.0"></label>' +
+          "</div>" +
+          '<div class="row"><m3e-button variant="filled" size="small" type="submit"' + (busy ? " disabled" : "") + ">" +
+            (draft.mode === "edit" ? "Сохранить" : "Добавить") + "</m3e-button>" +
+            (draft.mode === "edit"
+              ? '<m3e-button variant="text" size="small" type="button" data-act="sub-new">Отмена</m3e-button>'
+              : "") +
+            '<span class="hint">Имя можно не задавать: оно берётся из адреса.</span></div>' +
+        "</form>" +
+        '<div class="row mt4"><label class="field field-grow"><span class="label">Дубли</span>' +
+          '<select class="select" id="sub-dedupe"' + (busy ? " disabled" : "") + ">" + modeOptions + "</select></label>" +
+          '<span class="hint">Одна подписка часто отдаёт много записей на один сервер: 298 записей — это 32 адреса. ' +
+          "<b>none</b> оставит все.</span></div>" +
+        (subs.store ? '<p class="hint mt3">Список лежит в <span class="mono">' + esc(subs.store) +
+          "</span>. Сборщик получает копию при каждом обновлении.</p>" : "");
     }
 
-    const draft = state.subDraft || { mode: "add", id: "", url: "", ua: "" };
-
-    const busy = state.busy.has("subs");
-
-    const items = subs.items || [];
-
-    const rows = items.length
-      ? items.map((item) =>
-        '<div class="kv"><div class="kv-k">' + esc(item.id) + "</div>" +
-        '<div class="kv-v"><span class="mono">' + esc(item.url) + "</span>" +
-        (item.ua ? '<span class="hint"> · ' + esc(item.ua) + "</span>" : "") + "</div>" +
-        '<div class="row">' +
-        '<m3e-button variant="text" size="small" data-act="sub-edit" data-id="' + esc(item.id) + '"' + (busy ? " disabled" : "") + ">Правка</m3e-button>" +
-        '<m3e-button variant="text" size="small" data-act="sub-del" data-id="' + esc(item.id) + '"' + (busy ? " disabled" : "") + ">Удалить</m3e-button>" +
-        "</div></div>").join("")
-      : '<div class="hint">Список пуст: добавьте адрес подписки, иначе сборке нечего читать.</div>';
-
-    const modeOptions = SUB_DEDUPE.map(([value, label]) =>
-      '<option value="' + value + '"' + (subs.dedupe === value ? " selected" : "") + ">" + esc(label) + "</option>").join("");
-
-    return '<section class="card mt4"><div class="card-head"><h2 class="card-title">Подписки на узлы</h2>' +
-      '<span class="badge">' + items.length + '</span><span class="spacer"></span>' +
-      '<m3e-button variant="tonal" size="small" data-act="sub-new"' + (busy ? " disabled" : "") + ">Добавить</m3e-button></div>" +
-      "<div>" + rows + "</div>" +
-      '<div class="hint mt3">Список лежит в <span class="mono">' + esc(subs.store) +
-      "</span>. Сборщик получает его копию при каждом обновлении: править файл руками не нужно.</div>" +
-      '<form class="stack mt4" id="sub-form">' +
-        '<div class="row">' +
-          '<label class="field"><span class="label">Имя</span>' +
-            '<input class="input" id="sub-id" name="id" autocomplete="off" spellcheck="false" value="' + esc(draft.id) + '"' +
-            (draft.mode === "edit" ? " readonly" : "") + ' placeholder="main"></label>' +
-          '<label class="field"><span class="label">Адрес подписки</span>' +
-            '<input class="input" id="sub-url" name="url" autocomplete="off" spellcheck="false" value="' + esc(draft.url) + '" placeholder="https://…"></label>' +
-          '<label class="field"><span class="label">User-Agent</span>' +
-            '<input class="input" id="sub-ua" name="ua" autocomplete="off" spellcheck="false" value="' + esc(draft.ua) + '" placeholder="clash-verge/2.0"></label>' +
-        "</div>" +
-        '<div class="row"><m3e-button variant="filled" size="small" type="submit"' + (busy ? " disabled" : "") + ">" +
-          (draft.mode === "edit" ? "Сохранить" : "Добавить") + "</m3e-button>" +
-          (draft.mode === "edit"
-            ? '<m3e-button variant="text" size="small" type="button" data-act="sub-new">Отмена</m3e-button>'
-            : "") +
-          '<span class="hint">Имя можно не задавать: оно берётся из адреса подписки.</span></div>' +
-      "</form>" +
-      '<div class="stack mt4"><label class="field"><span class="label">Дубли</span>' +
-        '<select class="input" id="sub-dedupe"' + (busy ? " disabled" : "") + ">" + modeOptions + "</select></label>" +
-        '<div class="hint">Одна подписка часто отдаёт много записей на один и тот же сервер: 298 записей — это 32 адреса. ' +
-        "<b>none</b> оставит все 298, и каждый лишний узел будет проверяться при сборке.</div></div>" +
-      "</section>";
+    return '<details class="disc" data-open-key="network:subs"' + (open ? " open" : "") + ">" +
+      "<summary>" + chevron() + '<span class="disc-title">Подписки</span>' +
+        '<span class="disc-head-meta"><span class="hint">' + meta + "</span></span></summary>" +
+      '<div class="disc-body">' + body + "</div></details>";
   }
 
-  function viewExit() {
+  function networkRefresh() {
+    const e = state.exit;
+    const r = (e && e.refresh) || {};
+    const open = uiOpen("network:refresh");
+    const running = Boolean(r.running);
+    // An unrun refresh carries the zero time, which reads as a real date.
+    const finished = r.finished && !r.finished.startsWith("0001-01-01")
+      ? r.finished.slice(0, 16).replace("T", " ") : "";
+    const stateText = running ? "идёт сборка списка…"
+      : r.error ? "прошлая сборка не удалась"
+      : finished ? "список собран " + esc(finished)
+      : "сборка ещё не запускалась";
+
+    const rows = [
+      ["Подписки", stateText],
+      ["Узлов в списке", r.nodes ? esc(r.nodes) : "—"],
+      ["Авто-обновление", e && e.interval ? esc(prettyDuration(e.interval)) : "выключено"],
+    ].map(([k, v]) => '<div class="kv"><div class="kv-k">' + k + '</div><div class="kv-v">' + v + "</div></div>").join("");
+
+    return '<details class="disc" data-open-key="network:refresh"' + (open ? " open" : "") + ">" +
+      "<summary>" + chevron() + '<span class="disc-title">Обновление списка</span>' +
+        '<span class="disc-head-meta"><span class="hint">' +
+        (e && e.interval ? esc(prettyDuration(e.interval)) : "вручную") + "</span></span></summary>" +
+      '<div class="disc-body">' + rows +
+        (r.error ? '<div class="hint mt3">' + esc(r.error) + "</div>" : "") +
+        '<form class="row mt4" id="exit-schedule">' +
+          '<label class="field field-grow"><span class="label">Интервал авто-обновления</span>' +
+            '<input class="input" id="exit-interval" name="interval" autocomplete="off" spellcheck="false" value="' +
+            esc(intervalField(e && e.interval)) + '" placeholder="24h, 6h, 0s — выключить"></label>' +
+          '<m3e-button variant="tonal" size="small" type="submit"' + (state.busy.has("exit") ? " disabled" : "") +
+          ">Сохранить</m3e-button>" +
+          '<m3e-button variant="filled" size="small" type="button" data-act="exit-refresh"' +
+          (running || state.busy.has("exit") ? " disabled" : "") + ">Собрать сейчас</m3e-button>" +
+        "</form>" +
+        '<p class="hint mt3">0s выключает авто-обновление, ручная сборка работает всегда.</p>' +
+      "</div></details>";
+  }
+
+  function viewNetwork() {
     const e = state.exit;
     const lead = e && !e.error
-      ? "Селектор " + esc(e.group) + " · трафик через него идёт только у провайдеров, привязанных к этому транспорту"
-      : "Состояние выхода";
-    return pageHead("Выход", lead, refreshButton()) +
-      '<div class="cols"><div class="c7">' + exitCard() + '</div><div class="c5 stack">' + exitRefreshCard() + "</div></div>" + subsCard();
+      ? "Селектор " + esc(e.group) + " · трафик идёт через него только у провайдеров, привязанных к этому транспорту"
+      : "Куда уходит трафик и как собирается список узлов.";
+    return pageHead("Сеть", lead) +
+      '<div class="net-list">' + networkNow() + networkSubs() + networkRefresh() + "</div>";
+  }
+
+  // ---------------------------------------------------------------- view: settings
+
+  function axisRow(axis, label, values, current, hint) {
+    const buttons = values.map((v) => {
+      const value = String(v);
+      const text = v === true || v === "true" || v === "on" ? "вкл"
+        : v === false || v === "false" || v === "off" ? "выкл"
+        : v === "account" ? "аккаунт"
+        : v === "anonymous" ? "анонимно"
+        : v === "local" ? "локальный"
+        : v === "server" ? "сетевой"
+        : value;
+      return '<m3e-button variant="outlined" size="small" toggle' + (value === String(current) ? " selected" : "") +
+        (state.busy.has("global") ? " disabled" : "") +
+        ' data-act="set-global" data-axis="' + esc(axis) + '" data-value="' + esc(value) + '">' + esc(text) + "</m3e-button>";
+    }).join("");
+    return '<div class="axis"><div class="axis-text"><div class="card-title">' + esc(label) + "</div>" +
+      (hint ? '<div class="hint">' + esc(hint) + "</div>" : "") + "</div>" +
+      '<m3e-button-group variant="connected" aria-label="' + esc(label) + '">' + buttons + "</m3e-button-group></div>";
+  }
+
+  function timeoutsDisclosure(cur) {
+    const open = uiOpen("settings:timeouts");
+    const rows = [
+      ["first_event_timeout", "Первый байт", "Сколько ждать начало ответа"],
+      ["idle_timeout", "Простой", "Пауза в потоке до разрыва"],
+      ["reasoning_idle_timeout", "Простой в рассуждении", "Отдельный лимит для reasoning-моделей"],
+    ].map(([key, label, hint]) =>
+      '<div class="kv"><div class="kv-k"><div>' + esc(label) + '</div><div class="hint">' + esc(hint) + "</div></div>" +
+      '<div class="kv-v">' + esc(prettyDuration(cur[key])) + "</div></div>").join("");
+
+    return '<details class="disc" data-open-key="settings:timeouts"' + (open ? " open" : "") + ">" +
+      "<summary>" + chevron() + '<span class="disc-title">Таймауты</span>' +
+        '<span class="disc-head-meta"><span class="hint">только чтение</span></span></summary>' +
+      '<div class="disc-body">' + rows + "</div></details>";
+  }
+
+  function viewSettings() {
+    const o = state.options;
+    const cur = (o && o.current) || {};
+
+    const policy = [
+      axisRow("mode", "Режим шлюза", (o && o.modes) || [], cur.mode, "local — только петлевой интерфейс, server — доступ по сети"),
+      axisRow("credential", "Учётные данные", ["account", "anonymous"], cur.credential, "Значение по умолчанию для всех провайдеров"),
+      axisRow("key_rotation", "Ротация ключей", ["on", "off"], cur.key_rotation, "Переключаться между ключами пула на каждом запросе"),
+      axisRow("transport", "Транспорт", (o && o.transports) || [], cur.transport, "Как демон говорит с провайдером"),
+    ].join("");
+
+    const poll = POLL_CHOICES.map(([ms, label]) =>
+      '<m3e-button variant="outlined" size="small" toggle' + (ms === state.pollMs ? " selected" : "") +
+      ' data-act="set-poll" data-value="' + ms + '">' + esc(label) + "</m3e-button>").join("");
+
+    return pageHead("Параметры", "Оси конфигурации применяются сразу и сохраняются демоном.") +
+      '<div class="cols">' +
+        '<div class="c7 stack">' +
+          '<section class="card"><div class="card-head"><h2 class="card-title">Политика по умолчанию</h2></div>' + policy + "</section>" +
+          '<p class="hint">Семейство адресов — ось сети, она переключается в разделе <a href="#/network">Сеть</a>.</p>' +
+        "</div>" +
+        '<div class="c5 stack">' +
+          timeoutsDisclosure(cur) +
+          '<section class="card" id="panel-card"><div class="card-head"><h2 class="card-title">Панель</h2></div>' +
+            '<div class="axis-text"><div class="card-title">Обновление</div>' +
+            '<div class="hint">Как часто панель перечитывает состояние. Выключено — только кнопкой в шапке.</div></div>' +
+            '<div class="row mt3">' + poll + "</div></section>" +
+        "</div>" +
+      "</div>";
   }
 
   const VIEWS = {
     overview: viewOverview,
     providers: viewProviders,
     models: viewModels,
-    quota: viewQuota,
-    exit: viewExit,
+    network: viewNetwork,
     settings: viewSettings,
   };
 
@@ -1842,6 +2050,11 @@ dialog::backdrop { background:var(--scrim); }
 
     patchChildren(main, template);
     updateChrome();
+
+    // An open card restored from pmux_ui has no toggle event to ride on.
+    for (const d of main.querySelectorAll("details.prov[open]")) {
+      ensureQuota(d.getAttribute("data-open-key"));
+    }
   }
 
   // A write that succeeded marks the element it changed, so the change is
@@ -2184,6 +2397,11 @@ dialog::backdrop { background:var(--scrim); }
   });
 
   document.addEventListener("input", (event) => {
+    if (event.target.id === "node-search") {
+      state.nodeQuery = event.target.value;
+      render(true);
+      return;
+    }
     if (event.target.id !== "model-search") return;
     state.modelQuery = event.target.value;
     // Re-render without losing the caret: render() restores focus and selection.
@@ -2272,6 +2490,9 @@ dialog::backdrop { background:var(--scrim); }
         if (project) payload.project_id = project;
         await api("/oauth/exchange", { body: payload });
         state.oauth = null;
+        // The lazy quota cache still holds the pre-OAuth "unconfigured" answer.
+        state.quota = null;
+        quotaAt = 0;
         toast("Аккаунт подключён");
         await refreshCurrent(true);
       } catch (err) {
@@ -2305,15 +2526,40 @@ dialog::backdrop { background:var(--scrim); }
     updateChrome();
   }
 
+  const ROUTE_ALIASES = { quota: "providers", exit: "network" };
+
+  function rawRoute() {
+    return (location.hash || "").replace(/^#\/?/, "").split("?")[0];
+  }
+
+  function queryParam(name) {
+    const m = new RegExp("[?&]" + name + "=([^&]*)").exec(location.hash || "");
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+
   function routeFromHash() {
-    const raw = (location.hash || "").replace(/^#\/?/, "").split("?")[0];
-    return ROUTES.includes(raw) ? raw : "overview";
+    const raw = rawRoute();
+    const route = ROUTE_ALIASES[raw] || raw;
+    return ROUTES.includes(route) ? route : "overview";
+  }
+
+  // Old bookmarks keep working: quota is a section of the antigravity card now,
+  // and exit was renamed to network.
+  function applyAlias() {
+    const raw = rawRoute();
+    if (raw === "quota") {
+      setUiOpen("prov:antigravity", true);
+      ensureQuota("prov:antigravity");
+    }
+    if (raw === "exit") setUiOpen("network:now", true);
+    const route = ROUTE_ALIASES[raw];
+    if (route) history.replaceState(null, "", "#/" + route);
   }
 
   function go(route) {
     if (route === state.route) return;
     state.route = route;
-    state.providerFilter = "all";
+    state.providerFilter = route === "models" ? (queryParam("provider") || "all") : "all";
     state.modelQuery = "";
     state.lastSig = "";
     render(true);
@@ -2323,8 +2569,13 @@ dialog::backdrop { background:var(--scrim); }
   }
 
   window.addEventListener("hashchange", () => {
+    applyAlias();
     const route = routeFromHash();
-    if (route !== state.route) go(route);
+    if (route !== state.route) { go(route); return; }
+    if (route === "models") {
+      const filter = queryParam("provider") || "all";
+      if (filter !== state.providerFilter) { state.providerFilter = filter; render(true); }
+    }
   });
 
   // ---------------------------------------------------------------- boot
@@ -2365,8 +2616,10 @@ dialog::backdrop { background:var(--scrim); }
     } catch { /* private mode */ }
     state.pollMs = POLL_CHOICES.some(([ms]) => ms === poll) ? poll : POLL_MS;
 
+    if (!location.hash) history.replaceState(null, "", "#/overview");
+    applyAlias();
     state.route = routeFromHash();
-    if (!location.hash) location.replace("#/overview");
+    if (state.route === "models") state.providerFilter = queryParam("provider") || "all";
 
     updateChrome();
     refreshCurrent(true);
