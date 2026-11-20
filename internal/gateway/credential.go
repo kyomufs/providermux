@@ -194,4 +194,11 @@ type KeyRotationRegistry interface {
 	AddKey(id provider.ID, key string) bool
 	// RemoveFingerprint removes a key by fingerprint.
 	RemoveFingerprint(id provider.ID, fingerprint string) bool
+	// FindKey resolves a pool selector — key, fingerprint or one-based
+	// position — the way the request path would.
+	//
+	// Here rather than in the caller because the selector rules belong to the
+	// pool: the panel marks one account as primary and has to know which entry
+	// the pin actually names, without reimplementing the lookup.
+	FindKey(id provider.ID, selector string) (string, bool)
 }

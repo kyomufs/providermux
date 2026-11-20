@@ -276,3 +276,50 @@ func toAnySlice(in []string) []any {
 	}
 	return out
 }
+
+// TestDedupeKeysCollapsesOneAccount.
+//
+// The pool gathers keys from the section field and from settings.keys, and the
+// same Google account can arrive through both — or through the OAuth exchange
+// after it was already present. The two strings differ only in the project
+// suffix, so exact-string comparison kept both and the panel showed one account
+// twice. Identity is the token, not the token-and-project pair.
+func TestDedupeKeysCollapsesOneAccount(t *testing.T) {
+	raw := []any{"rt-1", "rt-1|proj", "rt-2|proj", "rt-2"}
+	got := dedupeKeys(provider.ID("antigravity"), raw)
+
+	if len(got) != 2 {
+		t.Fatalf("kept %d entries, want 2: %v", len(got), got)
+	}
+	if got[0] != "rt-1" || got[1] != "rt-2|proj" {
+		t.Fatalf("first occurrence should win, got %v", got)
+	}
+}
+
+// TestDedupeKeysLeavesOtherProvidersAlone — a bar is part of the key for every
+// provider but Antigravity, so folding it there would merge two real keys.
+func TestDedupeKeysLeavesOtherProvidersAlone(t *testing.T) {
+	raw := []any{"k|a", "k|b"}
+	got := dedupeKeys(provider.ID("opencode"), raw)
+
+	if len(got) != 2 {
+		t.Fatalf("kept %d entries, want 2: %v", len(got), got)
+	}
+}
+
+// TestAddKeyRejectsTheSameAccountUnderAnotherProject.
+func TestAddKeyRejectsTheSameAccountUnderAnotherProject(t *testing.T) {
+	reg := &keyRegistry{byProvider: map[provider.ID]*capability.KeyRotation{
+		"antigravity": newRotation(t, "rt-1"),
+	}}
+
+	if reg.AddKey("antigravity", "rt-1|project") {
+		t.Fatal("the same account was added a second time")
+	}
+	if got := reg.Keys("antigravity"); len(got) != 1 {
+		t.Fatalf("pool grew to %d entries: %v", len(got), got)
+	}
+	if !reg.AddKey("antigravity", "rt-2") {
+		t.Fatal("a different account was rejected")
+	}
+}

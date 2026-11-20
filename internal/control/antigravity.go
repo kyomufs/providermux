@@ -81,6 +81,11 @@ func (h *Handler) handleAntigravityQuota(w http.ResponseWriter, r *http.Request)
 			})
 			continue
 		}
+		// The summary names the account by its token, but the panel has to tie
+		// that name to a pool entry, and the pool is addressed by fingerprint.
+		// One identifier per account, or the same Google account appears as two
+		// different strings on neighbouring screens.
+		summary.AccountID = keyFingerprint(k)
 		resp.Accounts = append(resp.Accounts, *summary)
 	}
 

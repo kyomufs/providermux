@@ -71,6 +71,17 @@ func (s *stubKeys) RemoveFingerprint(id provider.ID, fingerprint string) bool {
 	return false
 }
 
+// FindKey mirrors the pool's selector rules for the checks: raw key first, then
+// the stub's "fp-" reference.
+func (s *stubKeys) FindKey(id provider.ID, selector string) (string, bool) {
+	for _, k := range s.keys[id] {
+		if k == selector || "fp-"+k == selector {
+			return k, true
+		}
+	}
+	return "", false
+}
+
 // newTestControl assembles the handler for checks.
 func newTestControl(t *testing.T) (*Handler, *http.ServeMux) {
 	t.Helper()

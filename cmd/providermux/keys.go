@@ -58,7 +58,7 @@ func newKeyRegistry(cfg *config.Config, providers *provider.Registry, log *state
 		}
 		r.order = append(r.order, id)
 
-		keys := keysFromConfig(pc)
+		keys := dedupeKeys(id, keysFromConfig(pc))
 		if len(keys) == 0 {
 			// No keys: the mechanism is not created, and the provider
 			// will run anonymously.
@@ -102,6 +102,52 @@ func keysFromConfig(pc config.ProviderConfig) []any {
 		}
 	}
 	return raw
+}
+
+// accountIdentity names the account a key belongs to.
+//
+// For most providers the key is its own identity. An Antigravity key may carry a
+// project after a bar — `refresh_token|project_id` — but the project is a request
+// parameter, not a second account: the same Google account connected twice
+// differs only in it. Treating the whole string as identity is what produced the
+// duplicate chip: the token from the environment had no project, the OAuth
+// exchange appended one, and exact-string comparison saw two keys. The provider
+// itself takes the project from its configuration, so collapsing the pair
+// changes nothing on the wire.
+func accountIdentity(id provider.ID, key string) string {
+	key = strings.TrimSpace(key)
+	if id != provider.ID("antigravity") {
+		return key
+	}
+	if i := strings.IndexByte(key, '|'); i >= 0 {
+		return key[:i]
+	}
+	return key
+}
+
+// dedupeKeys keeps one entry per account, first occurrence wins.
+//
+// The pool is built from two sources — the section field and the settings list —
+// and the same account can arrive through both, or through the OAuth flow after
+// it was already present. Within one build the second copy is dropped, so the
+// panel does not show the same account twice and rotation does not spend a turn
+// on it.
+func dedupeKeys(id provider.ID, raw []any) []any {
+	out := make([]any, 0, len(raw))
+	seen := make(map[string]bool, len(raw))
+	for _, v := range raw {
+		s, ok := v.(string)
+		if !ok || strings.TrimSpace(s) == "" {
+			continue
+		}
+		identity := accountIdentity(id, s)
+		if seen[identity] {
+			continue
+		}
+		seen[identity] = true
+		out = append(out, s)
+	}
+	return out
 }
 
 // rotationMap hands out the map for the request surface.
@@ -233,6 +279,15 @@ func (r *keyRegistry) AddKey(id provider.ID, key string) bool {
 	kr, ok := r.byProvider[id]
 	if !ok {
 		return false
+	}
+	// The same account under a different project is not a second key. Letting it
+	// in would leave the panel showing the account twice, and the operator has no
+	// way to tell the copies apart — the reference is identical.
+	identity := accountIdentity(id, key)
+	for _, existing := range kr.KeysSnapshot() {
+		if accountIdentity(id, existing) == identity {
+			return false
+		}
 	}
 	if !kr.Add(key) {
 		return false

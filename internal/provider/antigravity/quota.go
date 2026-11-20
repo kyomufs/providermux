@@ -104,9 +104,17 @@ type rawModelsResponse struct {
 	} `json:"models"`
 }
 
+// accountFingerprint names an account within the journal and the catalog cache.
+//
+// EIGHT hex characters, the same width as capability.Fingerprint. The quota card
+// used to print sixteen while the keys list printed eight, so one Google account
+// appeared as two different identifiers on neighbouring screens; the operator had
+// to learn that a7f236d6b8c64d7b and a7f236d6 were the same thing. A wider digest
+// buys nothing here — a collision between two accounts of one deployment is not a
+// real risk — and one width means one identifier everywhere.
 func accountFingerprint(token string) string {
 	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:8])
+	return hex.EncodeToString(sum[:4])
 }
 
 // Endpoints tried in order, matching @cortexkit/antigravity-auth-core.

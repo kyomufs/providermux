@@ -3,6 +3,7 @@ package control
 import (
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"providermux/internal/config"
@@ -206,6 +207,13 @@ type ProviderKeys struct {
 	// A pool can be configured and deliberately unsent, so this is a different
 	// question from whether the key list is empty.
 	Used bool `json:"key_used"`
+	// Pinned — the fingerprint of the key that requests go out with.
+	//
+	// Empty means "no pin": the first key of the pool is used. The panel needs
+	// the resolved fingerprint rather than the raw selector, because the pin may
+	// be a key, a fingerprint or a position, and only the daemon can resolve all
+	// three.
+	Pinned string `json:"pinned"`
 }
 
 // handleKeys answers with the list of keys.
@@ -235,13 +243,42 @@ func (h *Handler) keysResponse() KeysResponse {
 			// A key is on the wire whenever the pool is non-empty and the
 			// credential is not anonymous. Rotation is a separate question:
 			// one key can be sent without there being another to rotate to.
-			Used: len(keys) > 0 && (credential != config.CredentialAnonymous || credential == "" && h.KeyRotation.HasRotation(id)),
+			Used:   len(keys) > 0 && (credential != config.CredentialAnonymous || credential == "" && h.KeyRotation.HasRotation(id)),
+			Pinned: h.pinnedFingerprint(id, keys),
 		})
 	}
 	if resp.Providers == nil {
 		resp.Providers = []ProviderKeys{}
 	}
 	return resp
+}
+
+// pinnedFingerprint resolves the configured account pin to a fingerprint.
+//
+// The pin is a selector, not a key: it may be the key itself, a fingerprint or a
+// one-based position. The panel draws exactly one "primary" marker, so it needs
+// the answer in fingerprint form; leaving the resolution to the client would
+// duplicate the pool rules in JavaScript.
+func (h *Handler) pinnedFingerprint(id provider.ID, fingerprints []string) string {
+	if h.Config == nil || h.KeyRotation == nil {
+		return ""
+	}
+	pin := strings.TrimSpace(h.Config.AccountFor(string(id)))
+	if pin == "" {
+		return ""
+	}
+	key, ok := h.KeyRotation.FindKey(id, pin)
+	if !ok {
+		return ""
+	}
+	// Keys and KeyFingerprints are built from one snapshot in one order, so the
+	// position of the key is the position of its fingerprint.
+	for i, k := range h.KeyRotation.Keys(id) {
+		if k == key && i < len(fingerprints) {
+			return fingerprints[i]
+		}
+	}
+	return ""
 }
 
 // credentialOf reports the credential in force and whether rotation can act.
