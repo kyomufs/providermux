@@ -498,7 +498,7 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 .mini-table th:last-child, .mini-table td:last-child { padding-right:0; }
 .mini-table .table-wrap { margin:0; }
 
-/* ============ pills, chips, badges, flags ============ */
+/* ============ pills, badges, flags ============ */
 .pill {
   display:inline-flex; align-items:center; gap:6px;
   height:24px; padding:0 10px; border-radius:var(--r-full);
@@ -1552,7 +1552,7 @@ dialog::backdrop { background:var(--scrim); }
     return groups || '<div class="hint">Групп нет.</div>';
   }
 
-  function oauthDisclosure(configured) {
+  function oauthDisclosure() {
     const o = state.oauth;
     const link = o && o.url
       ? '<a class="link" href="' + esc(o.url) + '" target="_blank" rel="noreferrer noopener">Открыть вручную ↗</a>'
@@ -1560,15 +1560,12 @@ dialog::backdrop { background:var(--scrim); }
     const open = uiOpen("prov:antigravity:oauth");
     const busy = state.busy.has("oauth");
     return '<details class="disc disc-flat" data-open-key="prov:antigravity:oauth"' + (open ? " open" : "") + ">" +
-      "<summary>" + chevron() + '<span class="disc-title">Аккаунт Google</span>' +
-        '<span class="disc-head-meta"><span class="pill ' + (configured ? "ok" : "") + '">' +
-          (configured ? "подключён" : "не подключён") + "</span></span></summary>" +
+      "<summary>" + chevron() + '<span class="disc-title">Добавить аккаунт Google</span>' +
+        "</summary>" +
       '<div class="disc-body">' +
         '<div class="oauth">' +
           '<div class="oauth-head"><div class="oauth-copy"><b>Вход через Google</b>' +
-            '<span class="hint">' + (configured
-              ? "Вход добавит ещё один аккаунт в список ключей."
-              : "Подключите аккаунт, чтобы видеть окна квот.") + "</span></div>" +
+            '<span class="hint">Один аккаунт — один ключ: повторный вход того же аккаунта не создаёт второй.</span></div>' +
             '<m3e-button variant="filled" size="small" data-act="oauth-start"' +
               (busy ? " disabled" : "") + ">Начать вход</m3e-button></div>" +
           (link ? '<div class="oauth-link">' + link + '<span class="hint">если вкладка не открылась</span></div>' : "") +
@@ -1665,7 +1662,7 @@ dialog::backdrop { background:var(--scrim); }
                 '<m3e-icon name="close" aria-hidden="true"></m3e-icon></m3e-icon-button>' +
             "</span></div>";
         }).join("")
-      : '<div class="hint">Ключей нет — провайдер работает анонимно.</div>';
+      : '<div class="hint">Ключей нет.</div>';
 
     const rotation = '<button class="switch" type="button" role="switch" aria-checked="' + (opt.key_rotation === "on") +
       '" aria-label="Ротация ключей"' +
@@ -1694,7 +1691,7 @@ dialog::backdrop { background:var(--scrim); }
     // quota card split one concept across two places and made the account look
     // undeletable: the cross sat in another section.
     const addBlock = p.id === "antigravity"
-      ? oauthDisclosure(keys.length > 0) +
+      ? oauthDisclosure() +
         '<details class="disc disc-flat" data-open-key="prov:antigravity:manual"><summary>' + chevron() +
         '<span class="disc-title">Вставить токен вручную</span></summary><div class="disc-body">' + keyForm + "</div></details>"
       : keyForm;
