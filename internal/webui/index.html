@@ -608,7 +608,25 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 .win-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:5px; }
 .win-head b { font-size:12.5px; font-weight:550; }
 .win-head span { font-size:11.5px; color:var(--on-surface-variant); font-variant-numeric:tabular-nums; }
-.group + .group { margin-top:var(--s4); }
+.group + .group { margin-top:var(--s4); padding-top:var(--s4); border-top:1px solid var(--outline-variant); }
+.acct-tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.acct-tab { display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:var(--r-full);
+  border:1px solid var(--outline-variant); background:transparent; color:var(--on-surface-variant);
+  font:inherit; font-size:11.5px; font-weight:550; cursor:pointer; max-width:100%; }
+.acct-tab .dot { width:6px; height:6px; border-radius:50%; background:currentColor; opacity:.5; }
+.acct-tab[aria-selected="true"] { background:var(--secondary-container); color:var(--on-secondary-container); border-color:transparent; }
+.acct-tab[aria-selected="true"] .dot { opacity:1; background:var(--primary); }
+.acct-tab:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+.acct-idline { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; margin:0 0 12px; }
+.acct-mail { font-size:12px; font-weight:600; }
+.oauth { padding:12px; border-radius:var(--r-md); background:var(--surface-container-low); border:1px solid var(--outline-variant); }
+.oauth-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.oauth-copy b { display:block; font-size:13px; }
+.oauth-copy .hint { display:block; margin-top:2px; }
+.oauth-link { display:flex; align-items:center; gap:8px; margin-top:8px; }
+.oauth-form { display:flex; flex-direction:column; gap:10px; }
+.oauth-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+@media (max-width:560px) { .oauth-head { flex-direction:column; } }
 .group-title { display:flex; align-items:center; gap:8px; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; font-weight:650; color:var(--on-surface-variant); }
 .account-head { display:flex; align-items:center; gap:10px; margin-bottom:2px; flex-wrap:wrap; }
 .account-id { font-family:var(--mono); font-size:11px; color:var(--on-surface-variant); overflow-wrap:anywhere; }
@@ -1425,6 +1443,13 @@ dialog::backdrop { background:var(--scrim); }
   }, true);
 
   document.addEventListener("click", (event) => {
+    const tab = event.target.closest("[data-act='quota-acct']");
+    if (tab) {
+      uiState["quota:acct"] = tab.getAttribute("data-account") || "";
+      try { localStorage.setItem(UI_KEY, JSON.stringify(uiState)); } catch { /* private mode */ }
+      render(true);
+      return;
+    }
     const el = event.target.closest("[data-act='quota-load']");
     if (!el) return;
     event.preventDefault();
@@ -1464,16 +1489,36 @@ dialog::backdrop { background:var(--scrim); }
       (clamp01(fraction) * 100).toFixed(1) + '%"></div></div>';
   }
 
+  const WINDOW_TEXT = {
+    "Weekly Limit Remaining": "Недельный лимит",
+    "Five Hour Limit Remaining": "Пятичасовой лимит"
+  };
+  function windowText(w) { return WINDOW_TEXT[w.display_name] || w.display_name || w.window || ""; }
+
   function quotaAccounts(q) {
     const accounts = q.accounts || [];
     if (!accounts.length) {
       return '<div class="hint">Аккаунт подключён, но квот в ответе нет. Нажмите «Обновить» — внешний API иногда отвечает пусто.</div>';
     }
-    return accounts.map((acc) => {
-      const groups = (acc.groups || []).map((g) => {
+    const key = (a) => a.email || a.account_id;
+    let idx = accounts.findIndex((a) => key(a) === uiState["quota:acct"]);
+    if (idx < 0) idx = 0;
+    const acc = accounts[idx];
+    const tabs = accounts.length > 1
+      ? '<div class="acct-tabs" role="tablist" aria-label="Аккаунты">' + accounts.map((a, i) =>
+          '<button type="button" role="tab" class="acct-tab" aria-selected="' + (i === idx) + '"' +
+          ' data-act="quota-acct" data-account="' + esc(key(a)) + '" title="' + esc(key(a)) + '">' +
+          '<span class="dot"></span>' + esc(String(key(a)).split("@")[0]) + "</button>").join("") + "</div>"
+      : "";
+    return tabs + '<div class="acct-idline"><span class="acct-mail">' + esc(key(acc)) + "</span>" +
+      '<span class="account-id">' + esc(acc.account_id) + "</span></div>" + accountGroups(acc);
+  }
+
+  function accountGroups(acc) {
+    const groups = (acc.groups || []).map((g) => {
         const windows = (g.windows || []).map((w) => {
           const left = clamp01(w.remaining_fraction);
-          return '<div class="win"><div class="win-head"><b>' + esc(w.display_name || w.window) + "</b>" +
+          return '<div class="win"><div class="win-head"><b>' + esc(windowText(w)) + "</b>" +
             "<span>" + pctLabel(left) + " · сброс " + esc(untilTime(w.reset_time)) + "</span></div>" +
             quotaWindow(left) + "</div>";
         }).join("");
@@ -1482,39 +1527,44 @@ dialog::backdrop { background:var(--scrim); }
           (g.description ? '<div class="hint">' + esc(g.description) + "</div>" : "") + windows + "</div>";
       }).join("");
 
-      return '<div class="account-head"><span class="pill accent"><span class="dot"></span>' +
-        esc(acc.email || acc.account_id) + '</span><span class="account-id">' + esc(acc.account_id) + "</span></div>" +
-        (groups || '<div class="hint">Групп нет.</div>');
-    }).join("");
+    return groups || '<div class="hint">Групп нет.</div>';
   }
 
   function oauthDisclosure(configured) {
     const o = state.oauth;
     const link = o && o.url
-      ? '<a class="link" href="' + esc(o.url) + '" target="_blank" rel="noreferrer noopener">Страница согласия ↗</a>'
+      ? '<a class="link" href="' + esc(o.url) + '" target="_blank" rel="noreferrer noopener">Открыть вручную ↗</a>'
       : "";
     const open = uiOpen("prov:antigravity:oauth");
+    const busy = state.busy.has("oauth");
     return '<details class="disc disc-flat" data-open-key="prov:antigravity:oauth"' + (open ? " open" : "") + ">" +
-      "<summary>" + chevron() + '<span class="disc-title">Подключение аккаунта</span>' +
-        '<span class="disc-head-meta"><span class="hint">OAuth</span></span></summary>' +
+      "<summary>" + chevron() + '<span class="disc-title">Аккаунт Google</span>' +
+        '<span class="disc-head-meta"><span class="pill ' + (configured ? "ok" : "") + '">' +
+          (configured ? "подключён" : "не подключён") + "</span></span></summary>" +
       '<div class="disc-body">' +
-        (configured ? '<p class="hint">Аккаунт уже подключён. Пройдите OAuth заново, чтобы сменить его или обновить доступ.</p>' : "") +
-        '<ol class="steps">' +
-          '<li><div><b>Нажмите «Начать»</b><span>Ссылка на согласие откроется в новой вкладке.</span></div></li>' +
-          '<li><div><b>Разрешите доступ</b><span>После редиректа скопируйте адрес из строки браузера — в нём есть <code>code</code>.</span></div></li>' +
-          '<li><div><b>Вставьте сюда</b><span>Ссылка целиком тоже подойдёт: код вытащим сами.</span></div></li>' +
-        "</ol>" +
-        '<div class="row mt3"><m3e-button variant="tonal" size="small" data-act="oauth-start"' +
-          (state.busy.has("oauth") ? " disabled" : "") + ">Начать</m3e-button>" + link + "</div>" +
-        '<form class="stack mt3" id="oauth-form">' +
-          '<label class="field"><span class="label">Код или адрес редиректа</span>' +
-            '<input class="input" id="oauth-code" name="code" autocomplete="off" spellcheck="false" placeholder="https://…?code=…"></label>' +
-          '<label class="field"><span class="label">Project ID (необязательно)</span>' +
-            '<input class="input" id="oauth-project" name="project" autocomplete="off" spellcheck="false" placeholder="project-id"></label>' +
-          '<div class="row"><m3e-button variant="filled" size="small" type="submit"' +
-            (state.busy.has("oauth") ? " disabled" : "") + ">Подтвердить</m3e-button>" +
-          '<span class="hint">Токены хранит демон, в браузер они не попадают.</span></div>' +
-        "</form>" +
+        '<div class="oauth">' +
+          '<div class="oauth-head"><div class="oauth-copy"><b>Вход через Google</b>' +
+            '<span class="hint">' + (configured
+              ? "Повторный вход заменит текущий аккаунт."
+              : "Подключите аккаунт, чтобы видеть окна квот.") + "</span></div>" +
+            '<m3e-button variant="filled" size="small" data-act="oauth-start"' +
+              (busy ? " disabled" : "") + ">Начать вход</m3e-button></div>" +
+          (link ? '<div class="oauth-link">' + link + '<span class="hint">если вкладка не открылась</span></div>' : "") +
+          '<ol class="steps mt3">' +
+            '<li><div><b>Откройте согласие</b><span>Войдите в нужный Google-аккаунт и разрешите доступ.</span></div></li>' +
+            '<li><div><b>Скопируйте адрес</b><span>После редиректа браузер уйдёт на localhost — адрес содержит <code>code</code>.</span></div></li>' +
+            '<li><div><b>Вставьте сюда</b><span>Подойдёт и ссылка целиком, и голый код.</span></div></li>' +
+          "</ol>" +
+          '<form class="oauth-form mt3" id="oauth-form">' +
+            '<label class="field"><span class="label">Адрес редиректа или код</span>' +
+              '<input class="input" id="oauth-code" name="code" autocomplete="off" spellcheck="false" placeholder="https://…?code=…"></label>' +
+            '<label class="field"><span class="label">Project ID <span class="hint">необязательно</span></span>' +
+              '<input class="input" id="oauth-project" name="project" autocomplete="off" spellcheck="false" placeholder="project-id"></label>' +
+            '<div class="oauth-actions"><m3e-button variant="tonal" size="small" type="submit"' +
+              (busy ? " disabled" : "") + ">Подключить</m3e-button>" +
+              '<span class="hint">Токены хранит демон, в браузер они не попадают.</span></div>' +
+          "</form>" +
+        "</div>" +
       "</div></details>";
   }
 
