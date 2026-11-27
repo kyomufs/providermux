@@ -2573,7 +2573,11 @@ dialog::backdrop { background: color-mix(in oklab, #000 55%, transparent); }
   function toast(message, kind) {
     const box = $("#snack");
     const text = $("#snack-text");
-    text.textContent = message;
+    // A daemon error can be a whole log line, and the snackbar is one row. The
+    // full text stays in the section that also shows the error.
+    const full = String(message);
+    text.textContent = truncate(full, 200);
+    box.title = text.textContent === full ? "" : full;
     box.classList.toggle("err", kind === "err");
     box.classList.add("show");
     window.clearTimeout(toastTimer);

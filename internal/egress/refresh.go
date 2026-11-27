@@ -178,7 +178,15 @@ func (f *Refresher) run(ctx context.Context) (Report, error) {
 	cmd := exec.CommandContext(ctx, f.cfg.Command, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return Report{}, fmt.Errorf("%s: %w: %s", f.cfg.Command, err, tail(string(out), 300))
+		// The tool logs through the core it embeds, so a failed run leaves a wall
+		// of timestamped lines. The panel shows the error in a toast and in one
+		// row, and that wall is unreadable in both; the tool's own verdict line
+		// says why the run failed. The rest is kept in the daemon log, where its
+		// length costs nothing.
+		if f.cfg.Log != nil {
+			f.cfg.Log.Warn("egress refresh: %s", tail(string(out), 2000))
+		}
+		return Report{}, fmt.Errorf("%s: %s", filepath.Base(f.cfg.Command), verdictLine(f.cfg.Command, string(out), err))
 	}
 
 	profile := filepath.Join(f.cfg.Out, profileFile)
@@ -343,6 +351,27 @@ func tail(s string, n int) string {
 		return strings.Join(strings.Fields(s), " ")
 	}
 	return strings.Join(strings.Fields(s[len(s)-n:]), " ")
+}
+
+// verdictLine is the part of a failed run's output that a person can act on.
+//
+// The tool prints one line of its own, prefixed with its name: "no nodes passed
+// checks (http); sub.yaml left untouched" and the like. That line is the reason
+// the run failed. Everything else around it is the core's log — timestamps,
+// startup banners, shutdown notices — which the daemon log keeps in full.
+func verdictLine(command, out string, err error) string {
+	prefix := filepath.Base(command) + ": "
+	verdict := ""
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, prefix) {
+			verdict = strings.TrimPrefix(line, prefix)
+		}
+	}
+	if verdict != "" {
+		return verdict
+	}
+	return err.Error() + ": " + tail(out, 160)
 }
 
 // manifestDoc is the part of the tool's manifest the panel needs. The rest of

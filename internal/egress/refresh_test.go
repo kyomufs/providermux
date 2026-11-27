@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"providermux/internal/state"
 	"providermux/internal/subscriptions"
 )
 
@@ -298,5 +299,60 @@ func TestTheManifestIsReadWithoutARebuild(t *testing.T) {
 	}
 	if got := strings.Join(f.NodeSources()["node-a"], ","); got != "first" {
 		t.Errorf("node-a is grouped under %q, want first, without any rebuild", got)
+	}
+}
+
+// The panel shows a failed rebuild in a toast, so the error has to be the
+// tool's own verdict rather than the core log that surrounds it: a wall of
+// timestamped lines does not fit a toast and says nothing about the cause.
+func TestAFailedBuildReportsTheVerdictAndLogsTheRest(t *testing.T) {
+	recorder := &reloadRecorder{now: "DIRECT"}
+	srv := recorder.server(t)
+	rot, err := NewRotator(RotatorConfig{Controller: srv.URL, Group: "egress", ProbeCount: 2})
+	if err != nil {
+		t.Fatalf("building the rotator: %v", err)
+	}
+	logPath := filepath.Join(t.TempDir(), "app.log")
+	logger, err := state.OpenLogger(logPath)
+	if err != nil {
+		t.Fatalf("opening the log: %v", err)
+	}
+	defer logger.Close()
+	// The production command is proxprobe, and the tool prefixes its own lines
+	// with that name, so the test binary carries the same name.
+	tool := filepath.Join(t.TempDir(), "proxprobe")
+	script := `#!/bin/sh
+cat >&2 <<'NOISE'
+time="2026-11-28T02:47:21+03:00" level=info msg="Initial configuration complete, total time: 5ms" http: checked 90/143
+time="2026-11-28T02:47:26+03:00" level=warning msg="Mihomo shutting down"
+proxprobe: no nodes passed checks (http); sub.yaml left untouched
+NOISE
+exit 1
+`
+	if err := os.WriteFile(tool, []byte(script), 0o755); err != nil {
+		t.Fatalf("writing the tool: %v", err)
+	}
+
+	f, err := NewRefresher(RefreshConfig{Command: tool, Out: t.TempDir(), Rotator: rot, Sources: store(t), Log: logger})
+	if err != nil {
+		t.Fatalf("building the refresher: %v", err)
+	}
+
+	report, err := f.Run(context.Background())
+	if err == nil {
+		t.Fatal("a failed build reported success")
+	}
+	want := "proxprobe: no nodes passed checks (http); sub.yaml left untouched"
+	if report.Error != want {
+		t.Errorf("error is %q, want the tool's verdict %q", report.Error, want)
+	}
+
+	// The noise is not lost: the daemon log keeps the whole output.
+	body, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("reading the log: %v", err)
+	}
+	if !strings.Contains(string(body), "Mihomo shutting down") {
+		t.Errorf("the log lost the tool's output:\n%s", body)
 	}
 }
