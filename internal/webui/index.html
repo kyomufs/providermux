@@ -305,6 +305,7 @@ main.enter { animation:pmux-enter 260ms var(--ease); }
 .node-dot { flex:none; width:6px; height:6px; border-radius:50%; background:var(--outline-variant); }
 .node-dot.ok { background:var(--ok); }
 .node-dot.err { background:var(--error); }
+.node-dot.idle { background:var(--outline); }
 .node-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .node.new { box-shadow:inset 2px 0 0 var(--primary); }
 .node-ms { flex:none; font-family:var(--mono); font-size:11px; color:var(--on-surface-variant); font-variant-numeric:tabular-nums; }
@@ -511,6 +512,7 @@ td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
 .pill.err { color:var(--error); border-color:color-mix(in srgb, var(--error) 38%, transparent); background:color-mix(in srgb, var(--error-container) 60%, transparent); }
 .pill.accent { color:var(--primary); border-color:color-mix(in srgb, var(--primary) 36%, transparent); background:color-mix(in srgb, var(--primary-container) 45%, transparent); }
 .pill.warn { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 38%, transparent); background:color-mix(in srgb, var(--warn-container) 55%, transparent); }
+.pill.idle { color:var(--on-surface-variant); border-color:color-mix(in srgb, var(--outline) 34%, transparent); background:color-mix(in srgb, var(--surface-container-high) 70%, transparent); }
 /* Key rows: one account per row, reference and actions on the same line. */
 .key-list { display:flex; flex-direction:column; margin-top:6px; }
 .key-row {
@@ -768,6 +770,310 @@ dialog::backdrop { background:var(--scrim); }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { animation-duration:.001ms !important; transition-duration:.001ms !important; }
 }
+
+/* ============================================================
+   redesign layer: "signal deck"
+   A paper-and-ink operations console. Mono labels, one acid
+   accent, thin rules, no floating blobs.
+   ============================================================ */
+:root {
+  --surface: light-dark(#f2f0e7, #080b09);
+  --surface-lowest: light-dark(#fbfaf3, #0f1410);
+  --surface-low: light-dark(#e9e6da, #0c100d);
+  --surface-container: light-dark(#e3dfd1, #141a15);
+  --surface-high: light-dark(#d9d4c4, #1b231c);
+  --surface-highest: light-dark(#cec8b6, #232d25);
+  --on-surface: light-dark(#151914, #edf2e9);
+  --on-surface-variant: light-dark(#5a6057, #9aa79c);
+  --outline: light-dark(#777d71, #6b786e);
+  --outline-variant: light-dark(#d2ccbc, #28332b);
+  --primary: light-dark(#31543a, #c9f56a);
+  --on-primary: light-dark(#f5ffe9, #101607);
+  --primary-container: light-dark(#dcebc4, #2a3a14);
+  --on-primary-container: light-dark(#1c2a0c, #e7ffbd);
+  --secondary: light-dark(#2a5a55, #8fd8c8);
+  --secondary-container: light-dark(#d2e8e2, #1d3a35);
+  --on-secondary-container: light-dark(#17332f, #d8f5ec);
+  --tertiary: light-dark(#8a4a12, #f2b25e);
+  --tertiary-container: light-dark(#f6dfc2, #3a2a12);
+  --on-tertiary-container: light-dark(#3a2508, #ffe2bb);
+  --ok: light-dark(#2f6b3f, #7ee2a1);
+  --ok-container: light-dark(#d8eeda, #18351f);
+  --on-ok-container: light-dark(#16351d, #c9f7d6);
+  --warn: light-dark(#8a5a00, #f2c46a);
+  --warn-container: light-dark(#f5e3bc, #3a2e12);
+  --on-warn-container: light-dark(#3a2a00, #ffe9bd);
+  --error: light-dark(#a52a20, #ff8a7e);
+  --error-container: light-dark(#f6d8d3, #3d1c18);
+  --on-error-container: light-dark(#3d0f0b, #ffd9d4);
+  --inverse-surface: light-dark(#151914, #edf2e9);
+  --inverse-on-surface: light-dark(#f2f0e7, #151914);
+  --accent: light-dark(#5f7d1d, #c9f56a);
+  --accent-soft: light-dark(#e3efc2, #263614);
+  --accent-ink: #101607;
+  --hero: light-dark(#0c110d, #0e1410);
+  --hero-ink: #f1f5ea;
+  --r-xs:2px; --r-sm:4px; --r-md:6px; --r-lg:10px; --r-xl:14px; --r-2xl:18px; --r-full:999px;
+  --display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --font: "Inter", "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", "SFMono-Regular", "Cascadia Code", "Roboto Mono", ui-monospace, monospace;
+  --shadow: 0 1px 0 color-mix(in oklab, var(--outline) 12%, transparent);
+}
+
+/* top command bar replaces the left rail */
+.appbar {
+  height:var(--appbar-h); padding:0 28px; gap:22px;
+  background:color-mix(in oklab, var(--surface) 92%, transparent);
+  border-bottom:1px solid var(--outline-variant);
+  backdrop-filter:blur(16px) saturate(1.1);
+}
+.brand { gap:10px; }
+.brand-mark {
+  width:30px; height:30px; border-radius:7px;
+  background:var(--accent); color:var(--accent-ink);
+  box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--accent-ink) 14%, transparent);
+}
+.brand-name {
+  font-family:var(--mono); font-size:12.5px; font-weight:600;
+  letter-spacing:.01em; text-transform:lowercase;
+}
+.brand-sub {
+  font-family:var(--mono); font-size:9px; line-height:13px;
+  letter-spacing:.07em; text-transform:uppercase;
+  color:var(--on-surface-variant);
+}
+.rail {
+  position:static; width:auto; height:auto; flex-direction:row; align-items:stretch;
+  gap:0; padding:0; margin:0 0 0 4px; border:0; background:transparent;
+  overflow:visible; flex:none;
+}
+.rail-group { display:none; }
+.rail-item {
+  width:auto; min-height:var(--appbar-h); padding:0 13px;
+  border-radius:0; border-bottom:2px solid transparent;
+  font-family:var(--mono); font-size:10px; font-weight:500;
+  letter-spacing:.07em; text-transform:uppercase;
+  color:var(--on-surface-variant); gap:0; white-space:nowrap;
+}
+.rail-item m3e-icon { display:none; }
+.rail-item:hover { background:transparent; color:var(--on-surface); }
+.rail-item[aria-current="page"] {
+  background:transparent; color:var(--on-surface);
+  border-bottom-color:var(--accent); font-weight:600;
+}
+.rail-foot {
+  margin:0; padding:0 8px; border:0; background:transparent;
+  display:flex; flex-direction:row; align-items:center; gap:7px;
+  font-family:var(--mono); font-size:9px; line-height:1.3;
+  letter-spacing:.05em; text-transform:uppercase; white-space:nowrap;
+  color:var(--on-surface-variant);
+}
+.rail-foot b { font-family:var(--mono); font-size:10px; color:var(--on-surface); font-weight:600; }
+.rail-foot span { font-size:9px; color:var(--on-surface-variant); }
+.appbar-spacer { flex:1 1 auto; }
+.stamp { font-family:var(--mono); font-size:9px; letter-spacing:.04em; color:var(--on-surface-variant); }
+
+.shell { display:block; min-height:calc(100dvh - var(--appbar-h)); }
+main {
+  max-width:1320px; margin:0 auto;
+  padding:34px 40px 84px;
+}
+
+/* page furniture */
+.page-head {
+  display:flex; align-items:flex-end; justify-content:space-between;
+  gap:24px; padding-bottom:18px; margin-bottom:20px;
+  border-bottom:1px solid var(--outline-variant);
+}
+.page-head h1 {
+  font-family:var(--display); font-size:clamp(36px, 4.2vw, 54px);
+  line-height:.96; font-weight:600; letter-spacing:-.035em;
+  margin:0;
+}
+.page-head .lead {
+  margin:8px 0 0; font-size:12.5px; line-height:1.55;
+  color:var(--on-surface-variant); max-width:66ch;
+}
+.page-head > .appbar-actions, .page-head > .row { flex:none; }
+.eyebrow {
+  font-family:var(--mono); font-size:9.5px; line-height:13px;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--on-surface-variant);
+}
+
+/* surfaces */
+.card {
+  background:var(--surface-lowest);
+  border:1px solid var(--outline-variant);
+  border-radius:var(--r-lg);
+  padding:20px;
+  box-shadow:none;
+}
+.card-head {
+  border-bottom:1px solid var(--outline-variant);
+  padding-bottom:11px; margin-bottom:15px; min-height:0;
+}
+.card-title {
+  font-family:var(--mono); font-size:10.5px; line-height:15px;
+  font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+}
+.disc {
+  border:1px solid var(--outline-variant); border-radius:var(--r-md);
+  background:var(--surface-lowest);
+}
+.disc > summary { padding:14px 16px; }
+.disc-title { font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; }
+.disc-head-meta { font-family:var(--mono); font-size:9.5px; color:var(--on-surface-variant); }
+.disc-body { padding:0 16px 16px; }
+
+/* hero: a dark instrument panel */
+.status-card {
+  position:relative; overflow:hidden;
+  background:var(--hero); color:var(--hero-ink);
+  border:1px solid var(--hero); border-radius:var(--r-lg);
+  padding:26px 28px;
+}
+.status-card::before {
+  content:""; position:absolute; width:520px; height:520px;
+  right:-190px; top:-250px; border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle, color-mix(in oklab, var(--accent) 24%, transparent), transparent 64%);
+}
+.status-card > * { position:relative; z-index:1; }
+.status-band { align-items:flex-end; gap:28px; }
+.status-card .eyebrow { color:color-mix(in oklab, var(--hero-ink) 58%, transparent); }
+.status-card .live-dot {
+  background:var(--accent);
+  box-shadow:0 0 0 4px color-mix(in oklab, var(--accent) 16%, transparent);
+}
+.status-listen { color:var(--hero-ink); font-size:clamp(22px,2.4vw,32px); letter-spacing:-.03em; }
+.status-meta {
+  color:color-mix(in oklab, var(--hero-ink) 55%, transparent);
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.05em; text-transform:uppercase;
+}
+.status-card .pill {
+  background:color-mix(in oklab, var(--hero-ink) 8%, transparent);
+  border-color:color-mix(in oklab, var(--hero-ink) 18%, transparent);
+  color:var(--hero-ink);
+}
+.status-card .pill.ok {
+  color:var(--accent); border-color:color-mix(in oklab, var(--accent) 42%, transparent);
+  background:color-mix(in oklab, var(--accent) 8%, transparent);
+}
+.status-card .pill.err { color:#ff9a8d; border-color:color-mix(in oklab, #ff9a8d 42%, transparent); }
+.status-card .status-counts { gap:22px; }
+.status-card .ring-track { stroke:color-mix(in oklab, var(--hero-ink) 14%, transparent); }
+.status-card .ring-value { stroke:var(--accent); }
+.status-card .count b { color:var(--hero-ink); font-family:var(--mono); font-size:22px; }
+.status-card .count span {
+  color:color-mix(in oklab, var(--hero-ink) 52%, transparent);
+  font-family:var(--mono); font-size:8.5px; letter-spacing:.07em; text-transform:uppercase;
+}
+.status-card .addr-row { border-color:color-mix(in oklab, var(--hero-ink) 12%, transparent); }
+.status-card .addr-meta { color:color-mix(in oklab, var(--hero-ink) 52%, transparent); }
+.status-card .mono { color:var(--hero-ink); }
+.status-card .disc {
+  background:color-mix(in oklab, var(--hero-ink) 4%, transparent);
+  border-color:color-mix(in oklab, var(--hero-ink) 14%, transparent);
+}
+.status-card .disc-title { color:var(--hero-ink); }
+
+/* chart */
+.chart-plot { height:150px; }
+.chart-lines { inset:18px 0 20px; border-color:color-mix(in oklab, var(--outline-variant) 72%, transparent); }
+.chart-bar { max-width:40px; border-radius:3px 3px 1px 1px; }
+.chart-bar .ok, .chart-bar > .ok { background:var(--accent); }
+.chart-col:hover .chart-bar { filter:brightness(1.06); }
+.chart-day { font-family:var(--mono); font-size:9px; letter-spacing:.04em; }
+.chart-count { font-family:var(--mono); font-size:9.5px; }
+.mix-legend { font-family:var(--mono); font-size:9px; letter-spacing:.04em; text-transform:uppercase; }
+
+/* tables */
+table { font-size:12px; }
+thead th {
+  font-family:var(--mono); font-size:9px; letter-spacing:.08em;
+  background:var(--surface-low); color:var(--on-surface-variant);
+}
+th, td { padding:9px 16px; }
+tbody tr:hover { background:color-mix(in oklab, var(--surface-container) 62%, transparent); }
+.cell-name { font-weight:550; }
+.cell-id { font-size:10.5px; color:var(--on-surface-variant); }
+
+/* provider accordions */
+.prov {
+  border-radius:var(--r-md); background:var(--surface-lowest);
+  border:1px solid var(--outline-variant);
+}
+.prov[open] { border-color:color-mix(in oklab, var(--accent) 48%, var(--outline-variant)); }
+.prov > summary { min-height:62px; padding:10px 16px; }
+.prov > summary:hover { background:var(--surface-low); }
+.prov-glyph {
+  width:30px; height:30px; border-radius:6px;
+  background:var(--surface-container); color:var(--primary);
+  font-family:var(--mono); font-weight:600;
+}
+.prov-name b { font-size:13.5px; letter-spacing:-.01em; }
+.prov-name span { font-family:var(--mono); font-size:9px; letter-spacing:.04em; }
+.prov-body { padding:4px 16px 16px; }
+.param { grid-template-columns:1fr 220px; border-color:var(--outline-variant); }
+.param-label b { font-size:12px; }
+.key-row { border-color:var(--outline-variant); }
+
+/* node matrix */
+.node-grid { gap:6px; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); }
+.node {
+  border:1px solid var(--outline-variant); border-radius:6px;
+  padding:8px 9px; background:var(--surface-lowest);
+  transition:background 90ms linear, border-color 90ms linear;
+}
+.node:hover { background:var(--surface-low); border-color:var(--outline); }
+.node.now { background:var(--accent-soft); border-color:color-mix(in oklab, var(--accent) 55%, var(--outline-variant)); }
+.node-dot { width:7px; height:7px; }
+.node-name { font-family:var(--mono); font-size:10.5px; }
+.node-ms { font-family:var(--mono); font-size:10px; }
+.node-group-name { font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase; }
+
+/* controls */
+.input, .select, .search input, .field input, .field select {
+  border-radius:6px; border-color:var(--outline-variant);
+  background:var(--surface-lowest);
+}
+.input:focus, .select:focus, .field input:focus { border-color:var(--accent); }
+m3e-button { --m3e-button-container-shape: 6px; }
+m3e-button-group { --m3e-connected-button-group-shape: 6px; }
+.pill { border-radius:4px; font-family:var(--mono); font-size:9px; letter-spacing:.04em; }
+.badge { border-radius:3px; font-family:var(--mono); font-size:8.5px; letter-spacing:.05em; }
+
+/* motion */
+main.enter { animation:deck-in 320ms var(--ease-ef-default, cubic-bezier(.2,0,0,1)) both; }
+@keyframes deck-in {
+  from { opacity:0; transform:translateY(6px); }
+  to { opacity:1; transform:none; }
+}
+
+@media (max-width: 1280px) {
+  .rail-foot span { display:none; }
+  .rail-item { padding:0 10px; }
+}
+@media (max-width: 1120px) {
+  main { padding:26px 26px 72px; }
+  .appbar { gap:12px; }
+  .stamp { display:none; }
+  .rail-item { padding:0 8px; font-size:9px; }
+}
+@media (max-width: 940px) {
+  .appbar { padding:0 16px; gap:12px; }
+  .rail { display:none; }
+  main { padding:22px 18px 92px; }
+  .page-head h1 { font-size:38px; }
+  .status-card { padding:22px; }
+}
+@media (max-width: 620px) {
+  .page-head { align-items:flex-start; flex-direction:column; gap:10px; }
+  .page-head h1 { font-size:32px; }
+  .status-card { padding:18px; }
+  .status-listen { font-size:20px; }
+  .node-grid { grid-template-columns:1fr; }
+}
+
 </style>
 </head>
 <body>
@@ -782,7 +1088,15 @@ dialog::backdrop { background:var(--scrim); }
       <span class="brand-sub" id="brand-sub">локальный шлюз</span>
     </span>
   </a>
+  <nav class="rail" aria-label="Разделы">
+    <a class="rail-item" href="#/overview" data-route="overview"><m3e-icon name="dashboard" optical-size="24" aria-hidden="true"></m3e-icon>Обзор</a>
+    <a class="rail-item" href="#/models" data-route="models"><m3e-icon name="view_list" optical-size="24" aria-hidden="true"></m3e-icon>Модели</a>
+    <a class="rail-item" href="#/providers" data-route="providers"><m3e-icon name="dns" optical-size="24" aria-hidden="true"></m3e-icon>Провайдеры</a>
+    <a class="rail-item" href="#/network" data-route="network"><m3e-icon name="public" optical-size="24" aria-hidden="true"></m3e-icon>Сеть</a>
+    <a class="rail-item" href="#/settings" data-route="settings"><m3e-icon name="tune" optical-size="24" aria-hidden="true"></m3e-icon>Параметры</a>
+  </nav>
   <div class="appbar-spacer"></div>
+  <div class="rail-foot" id="rail-meta"></div>
   <span class="stamp" id="stamp"></span>
   <div class="appbar-actions">
     <span class="pill" id="health" role="status" aria-live="polite"><span class="dot"></span><span id="health-text">связь…</span></span>
@@ -801,17 +1115,6 @@ dialog::backdrop { background:var(--scrim); }
 </header>
 
 <div class="shell">
-  <nav class="rail" aria-label="Разделы">
-    <div class="rail-group">Мониторинг</div>
-    <a class="rail-item" href="#/overview" data-route="overview"><m3e-icon name="dashboard" optical-size="24" aria-hidden="true"></m3e-icon>Обзор</a>
-    <a class="rail-item" href="#/models" data-route="models"><m3e-icon name="view_list" optical-size="24" aria-hidden="true"></m3e-icon>Модели</a>
-    <div class="rail-group">Управление</div>
-    <a class="rail-item" href="#/providers" data-route="providers"><m3e-icon name="dns" optical-size="24" aria-hidden="true"></m3e-icon>Провайдеры</a>
-    <a class="rail-item" href="#/network" data-route="network"><m3e-icon name="public" optical-size="24" aria-hidden="true"></m3e-icon>Сеть</a>
-    <a class="rail-item" href="#/settings" data-route="settings"><m3e-icon name="tune" optical-size="24" aria-hidden="true"></m3e-icon>Параметры</a>
-    <div class="rail-foot" id="rail-meta"></div>
-  </nav>
-
   <main id="main" tabindex="-1">
     <div class="page-head"><div><h1>Обзор</h1><p class="lead">Загрузка состояния шлюза…</p></div></div>
     <div class="cols">
@@ -1212,7 +1515,8 @@ dialog::backdrop { background:var(--scrim); }
   }
 
   function pageHead(title, lead) {
-    return '<div class="page-head"><div><h1>' + esc(title) + "</h1>" +
+    const index = String(ROUTES.indexOf(state.route) + 1).padStart(2, "0");
+    return '<div class="page-head"><div><span class="eyebrow">' + index + " / " + esc(title) + "</span><h1>" + esc(title) + "</h1>" +
       (lead ? '<p class="lead">' + lead + "</p>" : "") + "</div></div>";
   }
 
@@ -1803,6 +2107,9 @@ dialog::backdrop { background:var(--scrim); }
   function probePill(name) {
     const probe = state.probes && state.probes[name];
     if (!probe) return "";
+    if (probe.measured === false) {
+      return '<span class="pill idle" title="' + esc(probe.error || "не измерен") + '">не измерен</span>';
+    }
     if (probe.error) return '<span class="pill err" title="' + esc(probe.error) + '">не отвечает</span>';
     return '<span class="pill ok">' + esc(String(probe.delay)) + " мс</span>";
   }
@@ -1842,8 +2149,9 @@ dialog::backdrop { background:var(--scrim); }
 
   function nodeChip(node) {
     const probe = state.probes && state.probes[node.name];
-    const ms = probe ? (probe.error ? "—" : String(probe.delay) + " мс") : "";
-    const dot = !probe ? "" : probe.error ? " err" : " ok";
+    const idle = probe && probe.measured === false;
+    const ms = !probe ? "" : idle || probe.error ? "—" : String(probe.delay) + " мс";
+    const dot = !probe ? "" : idle ? " idle" : probe.error ? " err" : " ok";
     return '<div class="node' + (node.now ? " now" : "") + '">' +
       '<span class="node-dot' + dot + '"></span>' +
       '<button class="node-pick" type="button" data-act="exit-select" data-name="' + esc(node.name) + '"' +
@@ -2392,12 +2700,15 @@ dialog::backdrop { background:var(--scrim); }
         const answer = await api("/_control/exit/probe", { body: { name } });
         const probes = Object.assign({}, state.probes || {});
         for (const node of (answer && answer.nodes) || []) {
-          probes[node.name] = { delay: node.delay, error: node.error || "" };
+          probes[node.name] = { delay: node.delay, measured: node.measured !== false, error: node.error || "" };
         }
         state.probes = probes;
-        const dead = ((answer && answer.nodes) || []).filter((n) => n.error).length;
-        toast(name ? (dead ? name + ": не отвечает" : name + ": " + probes[name].delay + " мс")
-          : "Проверено узлов: " + ((answer && answer.nodes) || []).length + (dead ? ", молчат: " + dead : ""));
+        const nodes = (answer && answer.nodes) || [];
+        const dead = nodes.filter((n) => n.error && n.measured !== false).length;
+        const idle = nodes.filter((n) => n.measured === false).length;
+        toast(name
+          ? (idle ? name + ": не измерен" : dead ? name + ": не отвечает" : name + ": " + probes[name].delay + " мс")
+          : "Проверено узлов: " + nodes.length + (dead ? ", молчат: " + dead : "") + (idle ? ", не измерено: " + idle : ""));
         settled($("#exit-card"));
       } catch (err) {
         toast(err.message, "err");
@@ -2420,11 +2731,15 @@ dialog::backdrop { background:var(--scrim); }
         const answer = await api("/_control/exit/probe", { body: { names } });
         const probes = Object.assign({}, state.probes || {});
         for (const node of (answer && answer.nodes) || []) {
-          probes[node.name] = { delay: node.delay, error: node.error || "" };
+          probes[node.name] = { delay: node.delay, measured: node.measured !== false, error: node.error || "" };
         }
         state.probes = probes;
-        const dead = ((answer && answer.nodes) || []).filter((n) => n.error).length;
-        toast(source + ": проверено " + names.length + (dead ? ", молчат " + dead : ", все отвечают"));
+        const nodes = (answer && answer.nodes) || [];
+        const dead = nodes.filter((n) => n.error && n.measured !== false).length;
+        const idle = nodes.filter((n) => n.measured === false).length;
+        toast(source + ": проверено " + names.length +
+          (dead ? ", молчат " + dead : "") + (idle ? ", не измерено " + idle : "") +
+          (!dead && !idle ? ", все отвечают" : ""));
         settled($("#exit-card"));
       } catch (err) {
         toast(err.message, "err");
