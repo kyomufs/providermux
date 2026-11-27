@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"providermux/internal/egress"
@@ -79,6 +80,15 @@ type ExitControl interface {
 // the whole subscription and is answered by a job, not by the request.
 const exitBudget = 10 * time.Second
 
+// exitProbeWorkers bounds how many nodes are measured at once.
+//
+// The controller answers a delay only after it has fetched the probe URL
+// through the node, so a sequential walk spends the whole budget on the first
+// dozen names and reports the rest as unmeasured. Twelve workers fit a typical
+// 50-100 node group into ten seconds without turning the panel into a burst
+// the controller cannot serve.
+const exitProbeWorkers = 12
+
 // handleExitStatus reports the exit and its nodes.
 func (h *Handler) handleExitStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -151,27 +161,46 @@ func (h *Handler) handleExitProbe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type result struct {
-		Name  string `json:"name"`
-		Delay int    `json:"delay"`
-		Error string `json:"error,omitempty"`
+		Name     string `json:"name"`
+		Delay    int    `json:"delay"`
+		Measured bool   `json:"measured"`
+		Error    string `json:"error,omitempty"`
 	}
-	out := make([]result, 0, len(names))
-	for _, name := range names {
-		delay, err := h.Exit.Delay(ctx, name)
-		item := result{Name: name, Delay: delay}
-		if err != nil {
-			item.Error = err.Error()
-		}
-		out = append(out, item)
-		if ctx.Err() != nil {
-			// Out of budget: the remaining nodes are reported as unmeasured
-			// rather than as dead, which is a different statement.
-			for _, rest := range names[len(out):] {
-				out = append(out, result{Name: rest, Error: "not measured: the budget expired"})
+	// The order of the answer is the order of the request: the panel renders
+	// rows by name, and a shuffled answer would make the table jump.
+	out := make([]result, len(names))
+	sem := make(chan struct{}, exitProbeWorkers)
+	var wg sync.WaitGroup
+	for i, name := range names {
+		wg.Add(1)
+		go func(i int, name string) {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				out[i] = result{Name: name, Error: "not measured: the budget expired"}
+				return
 			}
-			break
-		}
+			if ctx.Err() != nil {
+				out[i] = result{Name: name, Error: "not measured: the budget expired"}
+				return
+			}
+			delay, err := h.Exit.Delay(ctx, name)
+			if err != nil {
+				if ctx.Err() != nil {
+					// The request was cut by the panel budget, not by the node:
+					// an unmeasured node is not a dead one.
+					out[i] = result{Name: name, Error: "not measured: the budget expired"}
+					return
+				}
+				out[i] = result{Name: name, Measured: true, Error: err.Error()}
+				return
+			}
+			out[i] = result{Name: name, Delay: delay, Measured: true}
+		}(i, name)
 	}
+	wg.Wait()
 	writeJSON(w, http.StatusOK, map[string]any{"nodes": out})
 }
 

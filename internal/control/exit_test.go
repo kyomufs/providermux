@@ -3,11 +3,13 @@ package control
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -412,5 +414,129 @@ echo "$3/config.yaml: 2 nodes + DIRECT"
 	}
 	if got := byName["DIRECT"]; len(got) != 0 {
 		t.Errorf("DIRECT carries sources %v, want none: it comes from no subscription", got)
+	}
+}
+
+// TestEveryNodeIsProbedConcurrently pins the reason the panel used to show a
+// wall of failures: a sequential walk spent the ten-second budget on the first
+// dozen nodes. The fake controller holds each request long enough that a
+// sequential implementation can never have two in flight.
+func TestEveryNodeIsProbedConcurrently(t *testing.T) {
+	const count = 24
+	var inFlight, maxInFlight int32
+	names := make([]string, count)
+	mux := http.NewServeMux()
+	for i := range names {
+		names[i] = fmt.Sprintf("node-%02d", i)
+	}
+	mux.HandleFunc("/proxies/egress", func(w http.ResponseWriter, r *http.Request) {
+		writeTest(t, w, map[string]any{"all": names, "now": names[0]})
+	})
+	for _, name := range names {
+		name := name
+		mux.HandleFunc("/proxies/"+name+"/delay", func(w http.ResponseWriter, r *http.Request) {
+			cur := atomic.AddInt32(&inFlight, 1)
+			for {
+				max := atomic.LoadInt32(&maxInFlight)
+				if cur <= max || atomic.CompareAndSwapInt32(&maxInFlight, max, cur) {
+					break
+				}
+			}
+			time.Sleep(20 * time.Millisecond)
+			atomic.AddInt32(&inFlight, -1)
+			writeTest(t, w, map[string]any{"delay": 120})
+		})
+	}
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	rot, err := egress.NewRotator(egress.RotatorConfig{
+		Controller: srv.URL,
+		Group:      "egress",
+		ProbeCount: 3,
+	})
+	if err != nil {
+		t.Fatalf("building the rotator: %v", err)
+	}
+	h := &Handler{Exit: &egress.Exit{Rotator: rot}}
+	body, err := json.Marshal(map[string]any{"names": names})
+	if err != nil {
+		t.Fatalf("encoding the request: %v", err)
+	}
+
+	rec := call(t, h, http.MethodPost, "exit/probe", string(body))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status is %d, want 200: %s", rec.Code, rec.Body)
+	}
+	if got := atomic.LoadInt32(&maxInFlight); got < 2 {
+		t.Fatalf("max in-flight requests = %d, want at least 2: the probe is sequential", got)
+	}
+
+	var answer struct {
+		Nodes []struct {
+			Name     string `json:"name"`
+			Delay    int    `json:"delay"`
+			Measured bool   `json:"measured"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil {
+		t.Fatalf("decoding the answer: %v: %s", err, rec.Body)
+	}
+	if len(answer.Nodes) != count {
+		t.Fatalf("got %d results, want %d", len(answer.Nodes), count)
+	}
+	for i, node := range answer.Nodes {
+		if node.Name != names[i] {
+			t.Fatalf("result %d is %q, want %q: the answer lost the request order", i, node.Name, names[i])
+		}
+		if !node.Measured || node.Delay != 120 {
+			t.Errorf("node %q = measured %v, delay %d; want measured true, delay 120", node.Name, node.Measured, node.Delay)
+		}
+	}
+}
+
+// blockingExit keeps the handler waiting until its request context expires.
+// Embedding the real type supplies the methods the probe path does not call.
+type blockingExit struct{ *egress.Exit }
+
+func (blockingExit) Delay(ctx context.Context, name string) (int, error) {
+	<-ctx.Done()
+	return 0, ctx.Err()
+}
+
+func TestExpiredBudgetIsNotReportedAsADeadNode(t *testing.T) {
+	h := &Handler{Exit: blockingExit{}}
+	req := httptest.NewRequest(http.MethodPost, Prefix+"exit/probe", strings.NewReader(`{"names":["node-a","node-b"]}`))
+	ctx, cancel := context.WithTimeout(req.Context(), 50*time.Millisecond)
+	defer cancel()
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+	mux := http.NewServeMux()
+	h.Routes(mux)
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status is %d, want 200: %s", rec.Code, rec.Body)
+	}
+	var answer struct {
+		Nodes []struct {
+			Name     string `json:"name"`
+			Measured bool   `json:"measured"`
+			Error    string `json:"error"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil {
+		t.Fatalf("decoding the answer: %v: %s", err, rec.Body)
+	}
+	if len(answer.Nodes) != 2 {
+		t.Fatalf("got %d results, want 2", len(answer.Nodes))
+	}
+	for _, node := range answer.Nodes {
+		if node.Measured {
+			t.Errorf("node %q is marked measured after the budget expired", node.Name)
+		}
+		if !strings.Contains(node.Error, "not measured") {
+			t.Errorf("node %q error = %q, want a not-measured reason", node.Name, node.Error)
+		}
 	}
 }
